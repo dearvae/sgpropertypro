@@ -33,12 +33,13 @@ class ScrapeResponse(BaseModel):
     bedrooms: Optional[str] = None
     bathrooms: Optional[str] = None
     main_image_url: Optional[str] = None
-    image_urls: Optional[list[str]] = None  # 前两张房源图
+    image_urls: Optional[list[str]] = None  # 第一张主图 + 第二张户型图
     floor_plan_url: Optional[str] = None
     basic_info: Optional[str] = None
     listing_agent_name: Optional[str] = None  # 卖家中介姓名
     listing_agent_phone: Optional[str] = None  # 卖家中介电话
     listing_type: Optional[str] = None  # 'sale' | 'rent' 出售 vs 出租
+    lease_tenure: Optional[str] = None  # 地契：99年地契、999年地契、永久地契
 
 
 def _normalize_propertyguru_url(url: str) -> str:
@@ -47,6 +48,20 @@ def _normalize_propertyguru_url(url: str) -> str:
     if not url.startswith("http"):
         url = "https://" + url
     return url.rstrip("/")
+
+
+def _detect_lease_tenure(body: str) -> Optional[str]:
+    """从页面内容识别地契/租期，仅对出售房源有意义"""
+    body_lower = body.lower()
+    # 永久/Freehold 优先
+    if re.search(r"freehold|永久|永久地契", body_lower):
+        return "永久地契"
+    # 999 必须先于 99 检查，避免误判
+    if re.search(r"999\s*[- ]?year|999\s*年|999年地契", body_lower):
+        return "999年地契"
+    if re.search(r"\b99\s*[- ]?year|\b99\s*年|99年地契|leasehold", body_lower):
+        return "99年地契"
+    return None
 
 
 def _detect_listing_type(url: str, body: str) -> Optional[str]:
@@ -177,7 +192,7 @@ async def scrape_property(req: ScrapeRequest):
                 basic_info_parts.append(bathrooms)
             basic_info = " | ".join(basic_info_parts) if basic_info_parts else None
 
-            # 收集前两张房源图（排除户型图、logo、网站图标等）
+            # 收集第一张主图 + 第二张户型图（排除 logo、网站图标等）
             def _is_logo_or_ui(src: str, alt: str) -> bool:
                 """排除 logo、favicon、品牌图等非房源图"""
                 if not src:
@@ -197,7 +212,7 @@ async def scrape_property(req: ScrapeRequest):
             if og_image and _is_logo_or_ui(og_image, ""):
                 og_image = None
 
-            # 优先从主图区域抓取：Property Guru 主图通常在 listing-gallery、listing-detail 等
+            # 优先从主图区域抓取第一张房源图（排除户型图）
             gallery_selectors = [
                 '[data-automation-id*="listing-gallery"] img',
                 '[data-automation-id*="listing-detail"] img',
@@ -212,12 +227,12 @@ async def scrape_property(req: ScrapeRequest):
             ]
             seen_srcs: set[str] = set()
             for selector in gallery_selectors:
-                if len(image_urls) >= 2 and main_image_url:
+                if len(image_urls) >= 1 and main_image_url:
                     break
                 try:
                     imgs = await page.locator(selector).all()
                     for img in imgs[:12]:
-                        if len(image_urls) >= 2 and main_image_url:
+                        if len(image_urls) >= 1 and main_image_url:
                             break
                         src = await img.get_attribute("src")
                         alt = await img.get_attribute("alt") or ""
@@ -237,7 +252,7 @@ async def scrape_property(req: ScrapeRequest):
                         seen_srcs.add(src)
                         if not main_image_url:
                             main_image_url = src
-                        if len(image_urls) < 2:
+                        if len(image_urls) < 1:
                             image_urls.append(src)
                 except Exception:
                     pass
@@ -245,18 +260,61 @@ async def scrape_property(req: ScrapeRequest):
             # 若仍未找到，才用 og:image 作为兜底（且确认不是 logo）
             if og_image and not main_image_url:
                 main_image_url = og_image
-            if og_image and len(image_urls) < 2 and og_image not in image_urls:
+            if og_image and len(image_urls) < 1 and og_image not in image_urls:
                 image_urls.insert(0, og_image)
 
-            # Floor plan: 含 floor/plan 的图
-            floor_imgs = await page.locator(
-                'img[src*="floor"], img[src*="plan"], [alt*="floor" i] img, [alt*="plan" i] img'
-            ).all()
-            for img in floor_imgs[:3]:
-                src = await img.get_attribute("src")
-                if src:
-                    floor_plan_url = src
-                    break
+            # Floor plan: 优先从 Property Guru 媒体画廊的 floorPlans-section 抓取（可能在 modal 内）
+            floor_plan_selectors = [
+                'img[da-id="media-gallery-floorPlans"]',
+                'img.floorPlans',
+                '.floorPlans-section img',
+                'img.media-image.floorPlans',
+            ]
+            for sel in floor_plan_selectors:
+                try:
+                    if await page.locator(sel).count() > 0:
+                        src = await page.locator(sel).first.get_attribute("src", timeout=2000)
+                        if src:
+                            floor_plan_url = src
+                            break
+                except Exception:
+                    pass
+            # 若 modal 未打开导致找不到，尝试点击打开媒体画廊
+            if not floor_plan_url:
+                try:
+                    gallery_loc = page.locator(
+                        '[data-automation-id*="media-gallery"], [data-automation-id*="gallery"], '
+                        '[class*="media-gallery"] button, [class*="photo-gallery"] button, '
+                        'button:has-text("View"), a:has-text("View all"), [class*="gallery"] [role="button"]'
+                    ).first
+                    if await gallery_loc.count() > 0:
+                        await gallery_loc.click()
+                        await page.wait_for_timeout(1500)
+                        for sel in floor_plan_selectors:
+                            try:
+                                if await page.locator(sel).count() > 0:
+                                    src = await page.locator(sel).first.get_attribute("src", timeout=2000)
+                                    if src:
+                                        floor_plan_url = src
+                                        break
+                            except Exception:
+                                pass
+                except Exception:
+                    pass
+            # 兜底：含 floor/plan 的图
+            if not floor_plan_url:
+                floor_imgs = await page.locator(
+                    'img[src*="floor"], img[src*="plan"], [alt*="floor" i] img, [alt*="plan" i] img'
+                ).all()
+                for img in floor_imgs[:3]:
+                    src = await img.get_attribute("src")
+                    if src:
+                        floor_plan_url = src
+                        break
+
+            # image_urls: 第一张主图 + 第二张户型图
+            if floor_plan_url and floor_plan_url not in image_urls:
+                image_urls.append(floor_plan_url)
 
             # 卖家中介：姓名与电话（Property Guru 常见结构）
             listing_agent_name: Optional[str] = None
@@ -327,6 +385,10 @@ async def scrape_property(req: ScrapeRequest):
                     pass
 
             listing_type = _detect_listing_type(url, body)
+            # 地契仅对出售房源有意义，租房不抓取
+            lease_tenure = None
+            if listing_type == "sale":
+                lease_tenure = _detect_lease_tenure(body)
 
             await browser.close()
 
@@ -344,6 +406,7 @@ async def scrape_property(req: ScrapeRequest):
                 listing_agent_name=listing_agent_name,
                 listing_agent_phone=listing_agent_phone,
                 listing_type=listing_type,
+                lease_tenure=lease_tenure,
             )
 
         except Exception as e:

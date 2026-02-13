@@ -84,7 +84,7 @@ export default function AgentDashboard() {
           />
         )}
         {activeTab === 'pending' && (
-          <PendingAppointmentsSection pendingAppointments={pendingAppointments} />
+          <PendingAppointmentsSection pendingAppointments={pendingAppointments} properties={properties} />
         )}
         {activeTab === 'schedule' && (
           <AgentScheduleSection appointments={allAppointments} />
@@ -189,6 +189,7 @@ function CustomerGroupsSection({
           listing_agent_name: scraped.listing_agent_name || undefined,
           listing_agent_phone: scraped.listing_agent_phone || undefined,
           listing_type: scraped.listing_type || undefined,
+          lease_tenure: scraped.lease_tenure || undefined,
         })
         propId = existing.id
       } else {
@@ -207,6 +208,7 @@ function CustomerGroupsSection({
           listing_agent_name: scraped.listing_agent_name || undefined,
           listing_agent_phone: scraped.listing_agent_phone || undefined,
           listing_type: scraped.listing_type || undefined,
+          lease_tenure: scraped.lease_tenure || undefined,
         })
         propId = created.id
       }
@@ -437,10 +439,46 @@ function normalizeSourceUrl(url: string): string {
 
 function PendingAppointmentsSection({
   pendingAppointments,
+  properties,
 }: {
   pendingAppointments: ReturnType<typeof usePendingAppointments>
+  properties: ReturnType<typeof useProperties>
 }) {
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
+  const [refreshingPropertyId, setRefreshingPropertyId] = useState<string | null>(null)
+
+  const handleRefreshProperty = async (prop: Property) => {
+    const url = prop.source_url || prop.link
+    if (!url || !url.includes('propertyguru.com')) {
+      alert('该房源无 Property Guru 链接，无法刷新')
+      return
+    }
+    setRefreshingPropertyId(prop.id)
+    try {
+      const scraped = await scrapeProperty(normalizeSourceUrl(url))
+      await properties.update.mutateAsync({
+        id: prop.id,
+        title: scraped.title,
+        link: scraped.link,
+        basic_info: scraped.basic_info || undefined,
+        price: scraped.price || undefined,
+        size_sqft: scraped.size_sqft || undefined,
+        bedrooms: scraped.bedrooms || undefined,
+        bathrooms: scraped.bathrooms || undefined,
+        main_image_url: scraped.main_image_url || undefined,
+        image_urls: scraped.image_urls || undefined,
+        floor_plan_url: scraped.floor_plan_url || undefined,
+        listing_agent_name: scraped.listing_agent_name || undefined,
+        listing_agent_phone: scraped.listing_agent_phone || undefined,
+        listing_type: scraped.listing_type || undefined,
+        lease_tenure: scraped.lease_tenure || undefined,
+      })
+    } catch (e) {
+      alert((e as Error).message || '刷新失败')
+    } finally {
+      setRefreshingPropertyId(null)
+    }
+  }
 
   const toggleGroup = (gid: string) => {
     setExpandedGroups((prev) => {
@@ -516,7 +554,12 @@ function PendingAppointmentsSection({
                                 </span>
                               )}
                             </div>
-                            <p className="text-stone-500 text-xs mt-1">时间待定</p>
+                            <p className="text-stone-500 text-xs mt-1">
+                              时间待定
+                              {prop?.listing_type === 'sale' && prop?.lease_tenure && (
+                                <span className="ml-1.5 text-stone-400">· {prop.lease_tenure}</span>
+                              )}
+                            </p>
                             {p.notes && (
                               <p className="text-stone-600 text-xs mt-1 bg-stone-50 px-2 py-1 rounded border border-stone-100">
                                 备注：{p.notes}
@@ -551,6 +594,26 @@ function PendingAppointmentsSection({
                             )}
                           </div>
                           <div className="shrink-0 flex flex-col items-end gap-2">
+                            {prop && (prop.source_url || prop.link)?.includes('propertyguru.com') && (
+                              <button
+                                onClick={() => handleRefreshProperty(prop)}
+                                disabled={refreshingPropertyId === prop.id}
+                                className="text-xs text-stone-400 hover:text-stone-700 disabled:opacity-50 flex items-center gap-1"
+                                title="重新抓取最新信息"
+                              >
+                                {refreshingPropertyId === prop.id ? (
+                                  <svg className="animate-spin h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                  </svg>
+                                ) : (
+                                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5">
+                                    <path fillRule="evenodd" d="M4.755 10.059a7.5 7.5 0 0112.548-3.364l1.903 1.903h-3.183a.75.75 0 100 1.5h4.992a.75.75 0 00.75-.75V4.356a.75.75 0 00-1.5 0v3.18l-1.9-1.9A9 9 0 003.306 9.67a.75.75 0 011.45.388zm15.408 3.352a.75.75 0 00-.919.53 7.5 7.5 0 01-12.548 3.364l-1.902-1.903h3.183a.75.75 0 000-1.5H2.984a.75.75 0 00-.75.75v4.992a.75.75 0 001.5 0v-3.18l1.9 1.9a9 9 0 0015.059 4.035.75.75 0 00-.53-.918z" clipRule="evenodd" />
+                                  </svg>
+                                )}
+                                刷新
+                              </button>
+                            )}
                             <select
                               value={p.status}
                               onChange={(e) => {
@@ -616,6 +679,40 @@ function AppointmentsSection({
   const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null)
   const [editStartTime, setEditStartTime] = useState('')
   const [editNotes, setEditNotes] = useState('')
+  const [refreshingPropertyId, setRefreshingPropertyId] = useState<string | null>(null)
+
+  const handleRefreshProperty = async (prop: Property) => {
+    const url = prop.source_url || prop.link
+    if (!url || !url.includes('propertyguru.com')) {
+      alert('该房源无 Property Guru 链接，无法刷新')
+      return
+    }
+    setRefreshingPropertyId(prop.id)
+    try {
+      const scraped = await scrapeProperty(normalizeSourceUrl(url))
+      await properties.update.mutateAsync({
+        id: prop.id,
+        title: scraped.title,
+        link: scraped.link,
+        basic_info: scraped.basic_info || undefined,
+        price: scraped.price || undefined,
+        size_sqft: scraped.size_sqft || undefined,
+        bedrooms: scraped.bedrooms || undefined,
+        bathrooms: scraped.bathrooms || undefined,
+        main_image_url: scraped.main_image_url || undefined,
+        image_urls: scraped.image_urls || undefined,
+        floor_plan_url: scraped.floor_plan_url || undefined,
+        listing_agent_name: scraped.listing_agent_name || undefined,
+        listing_agent_phone: scraped.listing_agent_phone || undefined,
+        listing_type: scraped.listing_type || undefined,
+        lease_tenure: scraped.lease_tenure || undefined,
+      })
+    } catch (e) {
+      alert((e as Error).message || '刷新失败')
+    } finally {
+      setRefreshingPropertyId(null)
+    }
+  }
 
   const handleScrapeAndAdd = async () => {
     setScrapeError(null)
@@ -649,6 +746,7 @@ function AppointmentsSection({
           listing_agent_name: scraped.listing_agent_name || undefined,
           listing_agent_phone: scraped.listing_agent_phone || undefined,
           listing_type: scraped.listing_type || undefined,
+          lease_tenure: scraped.lease_tenure || undefined,
         })
         setPropId(existing.id)
       } else {
@@ -667,6 +765,7 @@ function AppointmentsSection({
           listing_agent_name: scraped.listing_agent_name || undefined,
           listing_agent_phone: scraped.listing_agent_phone || undefined,
           listing_type: scraped.listing_type || undefined,
+          lease_tenure: scraped.lease_tenure || undefined,
         })
         setPropId(created.id)
       }
@@ -1118,6 +1217,9 @@ function AppointmentsSection({
                       <p className="text-stone-500 text-xs mt-1">
                         {(a.customer_groups as CustomerGroup)?.name} ·{' '}
                         {new Date(a.start_time).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        {prop?.listing_type === 'sale' && prop?.lease_tenure && (
+                          <span className="ml-1.5 text-stone-400">· {prop.lease_tenure}</span>
+                        )}
                       </p>
                       {a.notes && (
                         <p className="text-stone-600 text-xs mt-1 bg-stone-50 px-2 py-1 rounded border border-stone-100">
@@ -1153,6 +1255,26 @@ function AppointmentsSection({
                       )}
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
+                      {prop && (prop.source_url || prop.link)?.includes('propertyguru.com') && (
+                        <button
+                          onClick={() => handleRefreshProperty(prop)}
+                          disabled={refreshingPropertyId === prop.id}
+                          className="text-xs text-stone-400 hover:text-stone-700 disabled:opacity-50 flex items-center gap-1"
+                          title="重新抓取最新信息"
+                        >
+                          {refreshingPropertyId === prop.id ? (
+                            <svg className="animate-spin h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                            </svg>
+                          ) : (
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5">
+                              <path fillRule="evenodd" d="M4.755 10.059a7.5 7.5 0 0112.548-3.364l1.903 1.903h-3.183a.75.75 0 100 1.5h4.992a.75.75 0 00.75-.75V4.356a.75.75 0 00-1.5 0v3.18l-1.9-1.9A9 9 0 003.306 9.67a.75.75 0 011.45.388zm15.408 3.352a.75.75 0 00-.919.53 7.5 7.5 0 01-12.548 3.364l-1.902-1.903h3.183a.75.75 0 000-1.5H2.984a.75.75 0 00-.75.75v4.992a.75.75 0 001.5 0v-3.18l1.9 1.9a9 9 0 0015.059 4.035.75.75 0 00-.53-.918z" clipRule="evenodd" />
+                            </svg>
+                          )}
+                          刷新
+                        </button>
+                      )}
                       <button
                         onClick={() => handleOpenEdit(a)}
                         className="text-xs text-stone-400 hover:text-stone-700"

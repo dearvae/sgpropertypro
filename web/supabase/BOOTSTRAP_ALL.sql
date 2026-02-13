@@ -52,6 +52,7 @@ alter table public.properties add column if not exists image_urls jsonb default 
 alter table public.properties add column if not exists listing_agent_name text;
 alter table public.properties add column if not exists listing_agent_phone text;
 alter table public.properties add column if not exists listing_type text check (listing_type in ('sale', 'rent'));
+alter table public.properties add column if not exists lease_tenure text;
 create unique index if not exists idx_properties_agent_source_url on public.properties(agent_id, source_url) where source_url is not null;
 
 create table if not exists public.appointments (
