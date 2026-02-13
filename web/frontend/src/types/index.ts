@@ -37,6 +37,26 @@ export type Appointment = {
   start_time: string
   end_time: string
   status: 'scheduled' | 'completed' | 'cancelled'
+  notes?: string | null
+  created_at: string
+  updated_at: string
+  properties?: Property
+  customer_groups?: CustomerGroup
+}
+
+/** 待预约状态 */
+export type PendingAppointmentStatus =
+  | 'not_scheduled'  // 还未预约
+  | 'consulted'      // 已咨询
+  | 'to_consult'     // 待咨询
+  | 'awaiting_agent_reply' // 待对方中介回复正在确认时间
+
+export type PendingAppointment = {
+  id: string
+  property_id: string
+  customer_group_id: string
+  status: PendingAppointmentStatus
+  notes?: string | null
   created_at: string
   updated_at: string
   properties?: Property

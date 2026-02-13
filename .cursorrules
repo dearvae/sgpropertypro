@@ -96,6 +96,7 @@ If needed, you can further use the `web_scraper.py` file to scrape the web page 
 - You have a python venv in ./venv. Always use (activate) it when doing python development. First, to check whether 'uv' is available, use `which uv`. If that's the case, first activate the venv, and then use `uv pip install` to install packages. Otherwise, fall back to `pip`.
 - 数据库相关配置放在项目根 .env（已 gitignore）：SUPABASE_PROJECT_REF（项目 ID）、SUPABASE_DB_PASSWORD。迁移/修复脚本会从 .env 自动读取。参考 .env.example。
 - **数据库迁移（必做）**：每次新增或修改数据库表/列/SQL 迁移脚本时，**必须在本轮对话中立即执行**。执行方式：`cd propertyassistance && python3 web/run-migration-xxx.py`（需在 .env 中配置 SUPABASE_PROJECT_REF、SUPABASE_DB_PASSWORD）。否则会出现 "Could not find the column in schema cache" 等错误。
+- **使用前需执行**：当文档（如 README、SUPABASE_SETUP、注释等）中出现「使用前需执行 XXX」「需先执行 XXX」「before use run XXX」等类似说明时，应**主动帮用户执行**该操作（如数据库迁移、脚本、命令等），而非仅提示用户手动执行。
 - Include info useful for debugging in the program output.
 - Read the file before you try to edit it.
 - Due to Cursor's limit, when you use `git` and `gh` and need to submit a multiline commit message, first write the message in a file, and then use `git commit -F <filename>` or similar command to commit. And then remove the file. Include "[Cursor] " in the commit message and PR title.

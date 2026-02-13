@@ -177,23 +177,72 @@ async def scrape_property(req: ScrapeRequest):
                 basic_info_parts.append(bathrooms)
             basic_info = " | ".join(basic_info_parts) if basic_info_parts else None
 
-            # 收集前两张房源图（排除户型图）
+            # 收集前两张房源图（排除户型图、logo、网站图标等）
+            def _is_logo_or_ui(src: str, alt: str) -> bool:
+                """排除 logo、favicon、品牌图等非房源图"""
+                if not src:
+                    return True
+                s = src.lower()
+                a = (alt or "").lower()
+                skip = ["logo", "favicon", "brand", "icon", "avatar", "placeholder"]
+                return any(x in s or x in a for x in skip)
+
             og_image = await page.evaluate(
                 """() => {
                 const m = document.querySelector('meta[property="og:image"]');
                 return m ? m.getAttribute('content') : '';
             }"""
             )
-            imgs = await page.locator(
-                'img[src*="pgimgs"], img[src*="propertyguru"], [class*="gallery"] img, [class*="carousel"] img'
-            ).all()
-            for img in imgs[:8]:
-                src = await img.get_attribute("src")
-                if src and ("floor" not in src.lower() and "plan" not in src.lower()) and src not in image_urls:
-                    if len(image_urls) < 2:
-                        image_urls.append(src)
-                    if not main_image_url:
-                        main_image_url = src
+            # og:image 可能是网站 logo，仅当不含 logo 且无更好选择时使用
+            if og_image and _is_logo_or_ui(og_image, ""):
+                og_image = None
+
+            # 优先从主图区域抓取：Property Guru 主图通常在 listing-gallery、listing-detail 等
+            gallery_selectors = [
+                '[data-automation-id*="listing-gallery"] img',
+                '[data-automation-id*="listing-detail"] img',
+                '[class*="listing-gallery"] img',
+                '[class*="listing-images"] img',
+                '[class*="property-gallery"] img',
+                '[class*="photo-gallery"] img',
+                'img[src*="pgimgs.com/listing"]',
+                'img[src*="pgimgs"]',
+                '[class*="gallery"] img',
+                '[class*="carousel"] img',
+            ]
+            seen_srcs: set[str] = set()
+            for selector in gallery_selectors:
+                if len(image_urls) >= 2 and main_image_url:
+                    break
+                try:
+                    imgs = await page.locator(selector).all()
+                    for img in imgs[:12]:
+                        if len(image_urls) >= 2 and main_image_url:
+                            break
+                        src = await img.get_attribute("src")
+                        alt = await img.get_attribute("alt") or ""
+                        if not src or src in seen_srcs:
+                            continue
+                        if "floor" in src.lower() or "plan" in src.lower():
+                            continue
+                        if _is_logo_or_ui(src, alt):
+                            continue
+                        # 可选：排除过小图片（logo 通常 < 80px）
+                        try:
+                            box = await img.bounding_box()
+                            if box and (box["width"] < 60 or box["height"] < 60):
+                                continue
+                        except Exception:
+                            pass
+                        seen_srcs.add(src)
+                        if not main_image_url:
+                            main_image_url = src
+                        if len(image_urls) < 2:
+                            image_urls.append(src)
+                except Exception:
+                    pass
+
+            # 若仍未找到，才用 og:image 作为兜底（且确认不是 logo）
             if og_image and not main_image_url:
                 main_image_url = og_image
             if og_image and len(image_urls) < 2 and og_image not in image_urls:
@@ -212,30 +261,66 @@ async def scrape_property(req: ScrapeRequest):
             # 卖家中介：姓名与电话（Property Guru 常见结构）
             listing_agent_name: Optional[str] = None
             listing_agent_phone: Optional[str] = None
+            # 1. 优先从 tel: 链接提取电话
             tel_links = await page.locator('a[href^="tel:"]').all()
-            for tel in tel_links[:5]:
+            for tel in tel_links[:8]:
                 href = await tel.get_attribute("href")
                 if href:
-                    phone = href.replace("tel:", "").strip().replace(" ", "").replace("-", "")
+                    phone = re.sub(r"[\s\-]", "", href.replace("tel:", "").strip())
                     if re.search(r"^\+?[\d]{8,15}$", phone):
                         listing_agent_phone = phone
+                        # 尝试从同一区域获取中介姓名（父级容器内找非按钮文字）
+                        if not listing_agent_name:
+                            try:
+                                parent = tel.locator("xpath=ancestor::*[contains(@class, 'agent') or contains(@class, 'contact') or contains(@class, 'listing')][1]")
+                                if await parent.count() > 0:
+                                    parent_txt = await parent.first.text_content(timeout=300)
+                                    if parent_txt:
+                                        skip_words = {"contact", "call", "whatsapp", "phone", "sms", "enquire", "view"}
+                                        for part in re.split(r"[\s\n]+", parent_txt.replace(phone, "")):
+                                            s = part.strip()
+                                            if 2 <= len(s) <= 40 and not re.search(r"^[\d\+\-]+$", s) and s.lower() not in skip_words:
+                                                listing_agent_name = s
+                                                break
+                            except Exception:
+                                pass
                         break
+            # 2. 正则从 HTML 中提取 tel:
             if not listing_agent_phone:
-                tel_match = re.search(r'tel:(\+?[\d\s\-]{8,20})', body)
+                tel_match = re.search(r'tel:(\+?[\d\s\-\.]{8,25})', body)
                 if tel_match:
-                    listing_agent_phone = re.sub(r"[\s\-]", "", tel_match.group(1))
+                    p = re.sub(r"[\s\-\.]", "", tel_match.group(1))
+                    if re.search(r"^\+?[\d]{8,15}$", p):
+                        listing_agent_phone = p
+            # 3. 兜底：新加坡常见格式 +65 8/9xxx xxxx 或 8 位手机号
+            if not listing_agent_phone:
+                sg_phone_patterns = [
+                    r"(?:\+65|65)\s*(\d[\d\s]{6,11})",
+                    r"(\+65\s*\d{4}\s*\d{4})",
+                    r"(?:contact|call|phone|tel)[:\s]*(\+?[\d\s\-]{8,20})",
+                ]
+                for pat in sg_phone_patterns:
+                    m = re.search(pat, body, re.I)
+                    if m:
+                        p = re.sub(r"[\s\-]", "", m.group(1))
+                        if re.search(r"^\+?[\d]{8,15}$", p):
+                            listing_agent_phone = p if p.startswith("+") else (f"+65{p}" if len(p) == 8 and p[0] in "89" else p)
+                            break
+            # 4. 中介姓名
             agent_selectors = [
                 '[data-automation-id*="agent"]',
                 '[data-automation-id*="listing-agent"]',
                 '[class*="listing-agent"]',
                 '[class*="agent-name"]',
+                '[class*="contact-agent"]',
                 'a[href*="/agent/"]',
+                '[class*="seller"]',
             ]
             for sel in agent_selectors:
                 try:
                     el = page.locator(sel).first
                     txt = await el.text_content(timeout=500)
-                    if txt and len(txt.strip()) > 1 and len(txt.strip()) < 80:
+                    if txt and 2 <= len(txt.strip()) <= 80 and not re.search(r"^[\d\+]+$", txt.strip()):
                         listing_agent_name = txt.strip()
                         break
                 except Exception:

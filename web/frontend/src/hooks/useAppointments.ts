@@ -41,10 +41,12 @@ export function useAppointments(customerGroupId?: string) {
       customer_group_id: string
       start_time: string
       end_time: string
+      notes?: string | null
     }) => {
+      const { property_id, customer_group_id, start_time, end_time, notes } = a
       const { data, error } = await supabase
         .from('appointments')
-        .insert(a)
+        .insert({ property_id, customer_group_id, start_time, end_time, notes: notes || null })
         .select('*, properties(*), customer_groups(*)')
         .single()
       if (error) throw error

@@ -1,16 +1,25 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { UserMenu } from '@/components/UserMenu'
 import { useCustomerGroups } from '@/hooks/useCustomerGroups'
 import { useProperties } from '@/hooks/useProperties'
 import { useAppointments } from '@/hooks/useAppointments'
+import { usePendingAppointments } from '@/hooks/usePendingAppointments'
 import { useRealtimeAppointments } from '@/hooks/useRealtimeAppointments'
 import { checkAppointmentConflict } from '@/lib/conflictCheck'
 import { scrapeProperty } from '@/lib/scrapeApi'
+import { getWhatsAppChatUrl } from '@/lib/whatsapp'
 import { AgentFeedbackSection } from '@/pages/AgentFeedback'
-import type { CustomerGroup, Property, Appointment } from '@/types'
+import type { CustomerGroup, Property, Appointment, PendingAppointment, PendingAppointmentStatus } from '@/types'
+
+const PENDING_STATUS_OPTIONS: { value: PendingAppointmentStatus; label: string }[] = [
+  { value: 'not_scheduled', label: '还未预约' },
+  { value: 'to_consult', label: '待咨询' },
+  { value: 'consulted', label: '已咨询' },
+  { value: 'awaiting_agent_reply', label: '待对方中介回复正在确认时间' },
+]
 
 export default function AgentDashboard() {
-  const [activeTab, setActiveTab] = useState<'groups' | 'appointments' | 'schedule' | 'feedback'>('groups')
+  const [activeTab, setActiveTab] = useState<'groups' | 'appointments' | 'pending' | 'schedule' | 'feedback'>('groups')
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null)
   const [showAddAppointment, setShowAddAppointment] = useState(false)
 
@@ -18,6 +27,7 @@ export default function AgentDashboard() {
   const properties = useProperties()
   const appointments = useAppointments(selectedGroupId || undefined)
   const allAppointments = useAppointments() // 用于冲突预检（需检查同一 agent 下全部预约）
+  const pendingAppointments = usePendingAppointments()
   useRealtimeAppointments(selectedGroupId || undefined)
 
   const baseUrl = typeof window !== 'undefined' ? `${window.location.origin}/view/` : ''
@@ -32,7 +42,7 @@ export default function AgentDashboard() {
           </div>
         </div>
         <div className="max-w-5xl mx-auto px-6 flex gap-1 border-t border-stone-100">
-          {(['groups', 'appointments', 'schedule', 'feedback'] as const).map((tab) => (
+          {(['groups', 'appointments', 'pending', 'schedule', 'feedback'] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -44,6 +54,7 @@ export default function AgentDashboard() {
             >
               {tab === 'groups' && '客户分组'}
               {tab === 'appointments' && '预约'}
+              {tab === 'pending' && '待预约'}
               {tab === 'schedule' && '时间表'}
               {tab === 'feedback' && '建议反馈'}
             </button>
@@ -56,6 +67,8 @@ export default function AgentDashboard() {
           <CustomerGroupsSection
             groups={groups}
             baseUrl={baseUrl}
+            properties={properties}
+            pendingAppointments={pendingAppointments}
           />
         )}
         {activeTab === 'appointments' && (
@@ -70,6 +83,9 @@ export default function AgentDashboard() {
             setShowAddAppointment={setShowAddAppointment}
           />
         )}
+        {activeTab === 'pending' && (
+          <PendingAppointmentsSection pendingAppointments={pendingAppointments} />
+        )}
         {activeTab === 'schedule' && (
           <AgentScheduleSection appointments={allAppointments} />
         )}
@@ -82,11 +98,20 @@ export default function AgentDashboard() {
 function CustomerGroupsSection({
   groups,
   baseUrl,
+  properties,
+  pendingAppointments,
 }: {
   groups: ReturnType<typeof useCustomerGroups>
   baseUrl: string
+  properties: ReturnType<typeof useProperties>
+  pendingAppointments: ReturnType<typeof usePendingAppointments>
 }) {
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [addPendingForGroupId, setAddPendingForGroupId] = useState<string | null>(null)
+  const [addPendingLink, setAddPendingLink] = useState('')
+  const [addPendingNotes, setAddPendingNotes] = useState('')
+  const [addPendingLoading, setAddPendingLoading] = useState(false)
+  const [addPendingError, setAddPendingError] = useState<string | null>(null)
   const [newName, setNewName] = useState('')
   const [newDescription, setNewDescription] = useState('')
   const [newIntent, setNewIntent] = useState<'buy' | 'rent'>('buy')
@@ -129,6 +154,75 @@ function CustomerGroupsSection({
       setEditingId(null)
     } catch (e) {
       alert((e as Error).message)
+    }
+  }
+
+  const handleAddPending = async () => {
+    if (!addPendingForGroupId || !addPendingLink.trim()) {
+      setAddPendingError('请输入 Property Guru 链接')
+      return
+    }
+    const sourceUrl = normalizeSourceUrl(addPendingLink)
+    if (!sourceUrl.includes('propertyguru.com')) {
+      setAddPendingError('仅支持 Property Guru 链接')
+      return
+    }
+    setAddPendingError(null)
+    setAddPendingLoading(true)
+    try {
+      const scraped = await scrapeProperty(sourceUrl)
+      const existing = await properties.findBySourceUrl(sourceUrl)
+      let propId: string
+      if (existing) {
+        await properties.update.mutateAsync({
+          id: existing.id,
+          title: scraped.title,
+          link: scraped.link,
+          basic_info: scraped.basic_info || undefined,
+          price: scraped.price || undefined,
+          size_sqft: scraped.size_sqft || undefined,
+          bedrooms: scraped.bedrooms || undefined,
+          bathrooms: scraped.bathrooms || undefined,
+          main_image_url: scraped.main_image_url || undefined,
+          image_urls: scraped.image_urls || undefined,
+          floor_plan_url: scraped.floor_plan_url || undefined,
+          listing_agent_name: scraped.listing_agent_name || undefined,
+          listing_agent_phone: scraped.listing_agent_phone || undefined,
+          listing_type: scraped.listing_type || undefined,
+        })
+        propId = existing.id
+      } else {
+        const created = await properties.create.mutateAsync({
+          title: scraped.title,
+          link: scraped.link,
+          basic_info: scraped.basic_info || undefined,
+          source_url: sourceUrl,
+          price: scraped.price || undefined,
+          size_sqft: scraped.size_sqft || undefined,
+          bedrooms: scraped.bedrooms || undefined,
+          bathrooms: scraped.bathrooms || undefined,
+          main_image_url: scraped.main_image_url || undefined,
+          image_urls: scraped.image_urls || undefined,
+          floor_plan_url: scraped.floor_plan_url || undefined,
+          listing_agent_name: scraped.listing_agent_name || undefined,
+          listing_agent_phone: scraped.listing_agent_phone || undefined,
+          listing_type: scraped.listing_type || undefined,
+        })
+        propId = created.id
+      }
+      await pendingAppointments.create.mutateAsync({
+        property_id: propId,
+        customer_group_id: addPendingForGroupId,
+        status: 'not_scheduled',
+        notes: addPendingNotes.trim() || null,
+      })
+      setAddPendingForGroupId(null)
+      setAddPendingLink('')
+      setAddPendingNotes('')
+    } catch (e) {
+      setAddPendingError((e as Error).message)
+    } finally {
+      setAddPendingLoading(false)
     }
   }
 
@@ -203,6 +297,62 @@ function CustomerGroupsSection({
         </div>
       )}
 
+      {addPendingForGroupId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => { setAddPendingForGroupId(null); setAddPendingError(null) }}>
+          <div
+            className="bg-white rounded-sm shadow-lg p-6 w-full max-w-md mx-4 border border-stone-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-sm font-medium text-stone-900 mb-3">
+              新增待预约 · {groups.data?.find((g) => g.id === addPendingForGroupId)?.name ?? ''}
+            </h3>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-stone-600">房源链接</label>
+                <input
+                  value={addPendingLink}
+                  onChange={(e) => { setAddPendingLink(e.target.value); setAddPendingError(null) }}
+                  placeholder="粘贴 Property Guru 链接"
+                  className="w-full mt-1 px-3 py-2 border border-stone-200 rounded-sm text-sm"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="text-xs text-stone-600">备注（可选）</label>
+                <input
+                  value={addPendingNotes}
+                  onChange={(e) => setAddPendingNotes(e.target.value)}
+                  placeholder="正在跟对方讨论、待确认时间等"
+                  className="w-full mt-1 px-3 py-2 border border-stone-200 rounded-sm text-sm"
+                />
+              </div>
+              {addPendingError && <p className="text-xs text-red-600">{addPendingError}</p>}
+            </div>
+            <div className="flex gap-2 mt-4">
+              <button
+                onClick={handleAddPending}
+                disabled={addPendingLoading}
+                className="px-4 py-2 text-sm border border-stone-300 rounded-sm hover:bg-stone-100 disabled:opacity-50 flex items-center gap-2"
+              >
+                {addPendingLoading && (
+                  <svg className="animate-spin h-4 w-4 text-stone-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                )}
+                添加
+              </button>
+              <button
+                onClick={() => { setAddPendingForGroupId(null); setAddPendingError(null) }}
+                className="px-4 py-2 text-sm text-stone-500 hover:text-stone-700"
+              >
+                取消
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="space-y-3">
         {groups.data?.map((g) => (
           <div
@@ -241,7 +391,13 @@ function CustomerGroupsSection({
                   {g.description && <p className="text-stone-600 text-xs mt-1">{g.description}</p>}
                   <p className="text-stone-500 text-xs mt-1 font-mono">{baseUrl}{g.share_token}</p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
+                  <button
+                    onClick={() => setAddPendingForGroupId(g.id)}
+                    className="text-sm text-amber-600 hover:text-amber-700"
+                  >
+                    新增待预约
+                  </button>
                   <button
                     onClick={() => handleStartEdit(g)}
                     className="text-sm text-stone-500 hover:text-stone-700"
@@ -273,18 +429,159 @@ function CustomerGroupsSection({
   )
 }
 
-/** 将电话号码标准化为 WhatsApp API 格式（国际码+数字，无空格） */
-function normalizePhoneForWhatsApp(phone: string): string {
-  const digits = phone.replace(/\D/g, '')
-  if (digits.startsWith('65') && digits.length >= 10) return digits
-  if (digits.length === 8 && !digits.startsWith('65')) return '65' + digits
-  return digits || phone
-}
-
 function normalizeSourceUrl(url: string): string {
   let u = url.trim()
   if (!u.startsWith('http')) u = 'https://' + u
   return u.replace(/\/$/, '')
+}
+
+function PendingAppointmentsSection({
+  pendingAppointments,
+}: {
+  pendingAppointments: ReturnType<typeof usePendingAppointments>
+}) {
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
+
+  const toggleGroup = (gid: string) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev)
+      const currentlyExpanded = prev.size === 0 || prev.has(gid)
+      if (currentlyExpanded) {
+        if (prev.size === 0) groupIds.forEach((id) => { if (id !== gid) next.add(id) })
+        next.delete(gid)
+      } else {
+        next.add(gid)
+      }
+      return next
+    })
+  }
+
+  const list = pendingAppointments.data ?? []
+  const byCustomer = list.reduce<Record<string, PendingAppointment[]>>((acc, p: PendingAppointment) => {
+    const gid = p.customer_group_id
+    if (!acc[gid]) acc[gid] = []
+    acc[gid].push(p)
+    return acc
+  }, {})
+
+  const groupIds = Object.keys(byCustomer)
+  const isGroupExpanded = (gid: string) => expandedGroups.size === 0 || expandedGroups.has(gid)
+
+  return (
+    <section>
+      <h2 className="text-sm font-medium text-stone-700 mb-4">待预约</h2>
+      <div className="space-y-2">
+        {groupIds.length === 0 ? (
+          <div className="py-12 text-center text-stone-500 text-sm border border-dashed border-stone-200 rounded-sm">
+            暂无待预约，在客户分组卡片旁点击「新增待预约」添加
+          </div>
+        ) : (
+          groupIds.map((gid: string) => {
+            const items = byCustomer[gid] ?? []
+            const groupName = (items[0]?.customer_groups as CustomerGroup)?.name ?? '—'
+            const isExpanded = isGroupExpanded(gid)
+            return (
+              <div key={gid} className="border border-stone-200 rounded-sm bg-white overflow-hidden">
+                <button
+                  onClick={() => toggleGroup(gid)}
+                  className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-stone-50"
+                >
+                  <span className="font-medium text-stone-900 text-sm">{groupName}</span>
+                  <span className="text-stone-500 text-xs">{items.length} 条</span>
+                  <svg
+                    className={`w-5 h-5 text-stone-500 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                  >
+                    <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+                  </svg>
+                </button>
+                {isExpanded && (
+                  <div className="border-t border-stone-100 divide-y divide-stone-100">
+                    {items.map((p: PendingAppointment) => {
+                      const prop = p.properties as Property | undefined
+                      const agentName = prop?.listing_agent_name
+                      const agentPhone = prop?.listing_agent_phone
+                      const hasAgent = agentName || agentPhone
+                      const whatsappUrl = agentPhone ? getWhatsAppChatUrl(agentPhone) : null
+                      return (
+                        <div key={p.id} className="p-4 flex justify-between gap-4 bg-white">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="font-medium text-stone-900 text-sm">{prop?.title ?? '—'}</p>
+                              {prop?.listing_type && (
+                                <span className={`px-1.5 py-0.5 rounded text-xs ${prop.listing_type === 'rent' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>
+                                  {prop.listing_type === 'rent' ? '出租' : '出售'}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-stone-500 text-xs mt-1">时间待定</p>
+                            {p.notes && (
+                              <p className="text-stone-600 text-xs mt-1 bg-stone-50 px-2 py-1 rounded border border-stone-100">
+                                备注：{p.notes}
+                              </p>
+                            )}
+                            {hasAgent && (
+                              <div className="mt-2 flex flex-wrap items-center gap-2">
+                                <span className="text-xs text-stone-600">
+                                  卖家中介：
+                                  {agentName && <span className="font-medium text-stone-700">{agentName}</span>}
+                                  {agentName && agentPhone && <span className="text-stone-400 mx-1">·</span>}
+                                  {agentPhone && (
+                                    <a href={`tel:${agentPhone}`} className="text-emerald-600 hover:text-emerald-700 font-medium hover:underline">
+                                      {agentPhone}
+                                    </a>
+                                  )}
+                                </span>
+                                {whatsappUrl && (
+                                  <a
+                                    href={whatsappUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-sm bg-[#25D366] text-white hover:bg-[#20BD5A]"
+                                  >
+                                    <svg viewBox="0 0 24 24" className="w-4 h-4" fill="currentColor">
+                                      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+                                    </svg>
+                                    WhatsApp
+                                  </a>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                          <div className="shrink-0 flex flex-col items-end gap-2">
+                            <select
+                              value={p.status}
+                              onChange={(e) => {
+                                const v = e.target.value as PendingAppointmentStatus
+                                pendingAppointments.update.mutate({ id: p.id, status: v })
+                              }}
+                              className="text-xs border border-stone-200 rounded-sm px-2 py-1.5 bg-white"
+                            >
+                              {PENDING_STATUS_OPTIONS.map((o) => (
+                                <option key={o.value} value={o.value}>{o.label}</option>
+                              ))}
+                            </select>
+                            <button
+                              onClick={() => pendingAppointments.remove.mutate(p.id)}
+                              className="text-xs text-stone-400 hover:text-red-600"
+                            >
+                              删除
+                            </button>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )
+          })
+        )}
+      </div>
+    </section>
+  )
 }
 
 function AppointmentsSection({
@@ -309,12 +606,16 @@ function AppointmentsSection({
   const [propId, setPropId] = useState('')
   const [groupId, setGroupId] = useState('')
   const [startTime, setStartTime] = useState('')
+  const [notes, setNotes] = useState('')
   const [conflictError, setConflictError] = useState<string | null>(null)
   const [propertyInputMode, setPropertyInputMode] = useState<'select' | 'byLink'>('select')
   const [propertyLinkInput, setPropertyLinkInput] = useState('')
   const [scrapeLoading, setScrapeLoading] = useState(false)
   const [scrapeError, setScrapeError] = useState<string | null>(null)
   const [scrapeSuccess, setScrapeSuccess] = useState(false)
+  const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null)
+  const [editStartTime, setEditStartTime] = useState('')
+  const [editNotes, setEditNotes] = useState('')
 
   const handleScrapeAndAdd = async () => {
     setScrapeError(null)
@@ -330,35 +631,45 @@ function AppointmentsSection({
     }
     setScrapeLoading(true)
     try {
+      const scraped = await scrapeProperty(sourceUrl)
       const existing = await properties.findBySourceUrl(sourceUrl)
       if (existing) {
+        await properties.update.mutateAsync({
+          id: existing.id,
+          title: scraped.title,
+          link: scraped.link,
+          basic_info: scraped.basic_info || undefined,
+          price: scraped.price || undefined,
+          size_sqft: scraped.size_sqft || undefined,
+          bedrooms: scraped.bedrooms || undefined,
+          bathrooms: scraped.bathrooms || undefined,
+          main_image_url: scraped.main_image_url || undefined,
+          image_urls: scraped.image_urls || undefined,
+          floor_plan_url: scraped.floor_plan_url || undefined,
+          listing_agent_name: scraped.listing_agent_name || undefined,
+          listing_agent_phone: scraped.listing_agent_phone || undefined,
+          listing_type: scraped.listing_type || undefined,
+        })
         setPropId(existing.id)
-        setScrapeSuccess(true)
-        setTimeout(() => {
-          setPropertyInputMode('select')
-          setPropertyLinkInput('')
-          setScrapeSuccess(false)
-        }, 600)
-        return
+      } else {
+        const created = await properties.create.mutateAsync({
+          title: scraped.title,
+          link: scraped.link,
+          basic_info: scraped.basic_info || undefined,
+          source_url: sourceUrl,
+          price: scraped.price || undefined,
+          size_sqft: scraped.size_sqft || undefined,
+          bedrooms: scraped.bedrooms || undefined,
+          bathrooms: scraped.bathrooms || undefined,
+          main_image_url: scraped.main_image_url || undefined,
+          image_urls: scraped.image_urls || undefined,
+          floor_plan_url: scraped.floor_plan_url || undefined,
+          listing_agent_name: scraped.listing_agent_name || undefined,
+          listing_agent_phone: scraped.listing_agent_phone || undefined,
+          listing_type: scraped.listing_type || undefined,
+        })
+        setPropId(created.id)
       }
-      const scraped = await scrapeProperty(sourceUrl)
-      const created = await properties.create.mutateAsync({
-        title: scraped.title,
-        link: scraped.link,
-        basic_info: scraped.basic_info || undefined,
-        source_url: sourceUrl,
-        price: scraped.price || undefined,
-        size_sqft: scraped.size_sqft || undefined,
-        bedrooms: scraped.bedrooms || undefined,
-        bathrooms: scraped.bathrooms || undefined,
-        main_image_url: scraped.main_image_url || undefined,
-        image_urls: scraped.image_urls || undefined,
-        floor_plan_url: scraped.floor_plan_url || undefined,
-        listing_agent_name: scraped.listing_agent_name || undefined,
-        listing_agent_phone: scraped.listing_agent_phone || undefined,
-        listing_type: scraped.listing_type || undefined,
-      })
-      setPropId(created.id)
       setScrapeSuccess(true)
       setTimeout(() => {
         setPropertyInputMode('select')
@@ -372,6 +683,26 @@ function AppointmentsSection({
     }
   }
 
+  // 实时计算新增预约是否有时间冲突（用于红色标签展示）
+  const createConflictInfo = useMemo(() => {
+    if (!startTime || !propId || !groupId) return null
+    const startDate = new Date(startTime)
+    const endDate = new Date(startDate.getTime() + 15 * 60 * 1000)
+    const startIso = startDate.toISOString()
+    const endIso = endDate.toISOString()
+    const existing = (allAppointments.data ?? []).map((a) => ({
+      id: a.id,
+      start_time: a.start_time,
+      end_time: a.end_time,
+    }))
+    const { hasConflict, conflictingWith } = checkAppointmentConflict(startIso, endIso, existing)
+    if (!hasConflict) return null
+    if (conflictingWith) {
+      return `与已有预约冲突：${new Date(conflictingWith.start_time).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`
+    }
+    return '请调整时间后再提交'
+  }, [startTime, propId, groupId, allAppointments.data])
+
   const handleCreate = async () => {
     setConflictError(null)
     if (!propId || !groupId || !startTime) {
@@ -382,34 +713,19 @@ function AppointmentsSection({
     const endDate = new Date(startDate.getTime() + 15 * 60 * 1000)
     const startIso = startDate.toISOString()
     const endIso = endDate.toISOString()
-    // 前端冲突预检
-    const existing = (allAppointments.data ?? []).map((a) => ({
-      id: a.id,
-      start_time: a.start_time,
-      end_time: a.end_time,
-    }))
-    const { hasConflict, conflictingWith } = checkAppointmentConflict(startIso, endIso, existing)
-    if (hasConflict && conflictingWith) {
-      setConflictError(
-        `与已有预约冲突：${new Date(conflictingWith.start_time).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}，请调整时段`
-      )
-      return
-    }
-    if (hasConflict) {
-      setConflictError('请调整时间后再提交')
-      return
-    }
     try {
       await appointments.create.mutateAsync({
         property_id: propId,
         customer_group_id: groupId,
         start_time: startIso,
         end_time: endIso,
+        notes: notes.trim() || null,
       })
       setShowAddAppointment(false)
       setPropId('')
       setGroupId('')
       setStartTime('')
+      setNotes('')
       setConflictError(null)
     } catch (e: unknown) {
       const err = e as { message?: string }
@@ -417,6 +733,74 @@ function AppointmentsSection({
         setConflictError('时间与已有预约冲突，请调整时段')
       } else {
         alert(err?.message || '创建失败')
+      }
+    }
+  }
+
+  const handleOpenEdit = (a: Appointment) => {
+    setEditingAppointment(a)
+    const d = new Date(a.start_time)
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    const h = String(d.getHours()).padStart(2, '0')
+    const min = String(d.getMinutes()).padStart(2, '0')
+    setEditStartTime(`${y}-${m}-${day}T${h}:${min}`)
+    setEditNotes(a.notes || '')
+    setConflictError(null)
+  }
+
+  // 实时计算编辑预约是否有时间冲突（用于红色标签展示）
+  const editConflictInfo = useMemo(() => {
+    if (!editingAppointment || !editStartTime) return null
+    const startDate = new Date(editStartTime)
+    const endDate = new Date(startDate.getTime() + 15 * 60 * 1000)
+    const startIso = startDate.toISOString()
+    const endIso = endDate.toISOString()
+    const existing = (allAppointments.data ?? []).map((a) => ({
+      id: a.id,
+      start_time: a.start_time,
+      end_time: a.end_time,
+    }))
+    const { hasConflict, conflictingWith } = checkAppointmentConflict(
+      startIso,
+      endIso,
+      existing,
+      editingAppointment.id
+    )
+    if (!hasConflict) return null
+    if (conflictingWith) {
+      return `与已有预约冲突：${new Date(conflictingWith.start_time).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`
+    }
+    return '请调整时间后再提交'
+  }, [editingAppointment, editStartTime, allAppointments.data])
+
+  const handleSaveEdit = async () => {
+    if (!editingAppointment) return
+    setConflictError(null)
+    if (!editStartTime) {
+      alert('请选择时间')
+      return
+    }
+    const startDate = new Date(editStartTime)
+    const endDate = new Date(startDate.getTime() + 15 * 60 * 1000)
+    const startIso = startDate.toISOString()
+    const endIso = endDate.toISOString()
+    try {
+      await appointments.update.mutateAsync({
+        id: editingAppointment.id,
+        start_time: startIso,
+        end_time: endIso,
+        notes: editNotes.trim() || null,
+      })
+      setEditingAppointment(null)
+      setConflictError(null)
+    } catch (e: unknown) {
+      const err = e as { message?: string }
+      if (err?.message?.includes('APPOINTMENT_CONFLICT') || err?.message?.includes('冲突')) {
+        setConflictError('时间与已有预约冲突，请调整时段')
+      } else {
+        alert(err?.message || '更新失败')
       }
     }
   }
@@ -555,6 +939,11 @@ function AppointmentsSection({
           </div>
           <div>
             <label className="text-xs text-stone-600">看房时间（每 15 分钟一个时段）</label>
+            {createConflictInfo && (
+              <span className="ml-2 inline-flex items-center px-2.5 py-1 rounded text-xs font-medium bg-red-100 text-red-700 border border-red-200" title={createConflictInfo}>
+                时间冲突
+              </span>
+            )}
             <div className="flex flex-wrap gap-2 mt-1">
               <input
                 type="date"
@@ -608,6 +997,16 @@ function AppointmentsSection({
               </select>
             </div>
           </div>
+          <div>
+            <label className="text-xs text-stone-600">备注（可选，客户可见）</label>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="如：带钥匙、提前10分钟到、客户特殊需求等"
+              rows={2}
+              className="w-full mt-1 px-3 py-2 border border-stone-200 rounded-sm text-sm resize-none"
+            />
+          </div>
           <button
             onClick={handleCreate}
             disabled={appointments.create.isPending || (propertyInputMode === 'byLink' && scrapeLoading)}
@@ -615,6 +1014,63 @@ function AppointmentsSection({
           >
             创建
           </button>
+        </div>
+      )}
+
+      {editingAppointment && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={() => setEditingAppointment(null)}>
+          <div
+            className="bg-white rounded-sm border border-stone-200 p-5 w-full max-w-sm shadow-lg"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-sm font-medium text-stone-900 mb-3">编辑预约</h3>
+            {conflictError && (
+              <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-sm border border-red-200 mb-3">
+                {conflictError}
+              </p>
+            )}
+            {editConflictInfo && !conflictError && (
+              <span className="inline-flex items-center px-2.5 py-1 rounded text-xs font-medium bg-red-100 text-red-700 border border-red-200 mb-3" title={editConflictInfo}>
+                时间冲突
+              </span>
+            )}
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-stone-600">看房时间</label>
+                <input
+                  type="datetime-local"
+                  value={editStartTime}
+                  onChange={(e) => { setEditStartTime(e.target.value); setConflictError(null) }}
+                  className="w-full mt-1 px-3 py-2 border border-stone-200 rounded-sm text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-stone-600">备注（可选）</label>
+                <textarea
+                  value={editNotes}
+                  onChange={(e) => setEditNotes(e.target.value)}
+                  placeholder="如：带钥匙、提前10分钟到"
+                  rows={2}
+                  className="w-full mt-1 px-3 py-2 border border-stone-200 rounded-sm text-sm resize-none"
+                />
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={handleSaveEdit}
+                  disabled={appointments.update.isPending}
+                  className="flex-1 text-sm px-4 py-2 border border-stone-300 rounded-sm hover:bg-stone-100 disabled:opacity-50"
+                >
+                  保存
+                </button>
+                <button
+                  onClick={() => setEditingAppointment(null)}
+                  className="text-sm px-4 py-2 border border-stone-200 rounded-sm hover:bg-stone-100"
+                >
+                  取消
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -628,9 +1084,16 @@ function AppointmentsSection({
                 const agentName = prop?.listing_agent_name
                 const agentPhone = prop?.listing_agent_phone
                 const hasAgent = agentName || agentPhone
-                const whatsappUrl = agentPhone
-                  ? `https://wa.me/${normalizePhoneForWhatsApp(agentPhone)}`
-                  : null
+                const whatsappUrl = agentPhone ? getWhatsAppChatUrl(agentPhone) : null
+                const existingForConflict = (allAppointments.data ?? [])
+                  .filter((x) => x.status !== 'cancelled')
+                  .map((x) => ({ id: x.id, start_time: x.start_time, end_time: x.end_time }))
+                const { hasConflict: hasConflictTag } = checkAppointmentConflict(
+                  a.start_time,
+                  a.end_time,
+                  existingForConflict,
+                  a.id
+                )
                 return (
                   <div
                     key={a.id}
@@ -646,17 +1109,32 @@ function AppointmentsSection({
                             {prop.listing_type === 'rent' ? '出租' : '出售'}
                           </span>
                         )}
+                        {hasConflictTag && (
+                          <span className="px-2.5 py-1 rounded text-xs font-medium bg-red-100 text-red-700 border border-red-200">
+                            时间冲突
+                          </span>
+                        )}
                       </div>
                       <p className="text-stone-500 text-xs mt-1">
                         {(a.customer_groups as CustomerGroup)?.name} ·{' '}
                         {new Date(a.start_time).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                       </p>
+                      {a.notes && (
+                        <p className="text-stone-600 text-xs mt-1 bg-stone-50 px-2 py-1 rounded border border-stone-100">
+                          备注：{a.notes}
+                        </p>
+                      )}
                       {hasAgent && (
                         <div className="mt-2 flex flex-wrap items-center gap-2">
                           <span className="text-xs text-stone-600">
                             卖家中介：
-                            {agentName ? ` ${agentName}` : ''}
-                            {agentPhone ? ` · ${agentPhone}` : ''}
+                            {agentName && <span className="font-medium text-stone-700">{agentName}</span>}
+                            {agentName && agentPhone && <span className="text-stone-400 mx-1">·</span>}
+                            {agentPhone && (
+                              <a href={`tel:${agentPhone}`} className="text-emerald-600 hover:text-emerald-700 font-medium hover:underline">
+                                {agentPhone}
+                              </a>
+                            )}
                           </span>
                           {whatsappUrl && (
                             <a
@@ -674,12 +1152,20 @@ function AppointmentsSection({
                         </div>
                       )}
                     </div>
-                    <button
-                      onClick={() => appointments.remove.mutate(a.id)}
-                      className="text-xs text-stone-400 hover:text-red-600 shrink-0"
-                    >
-                      删除
-                    </button>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        onClick={() => handleOpenEdit(a)}
+                        className="text-xs text-stone-400 hover:text-stone-700"
+                      >
+                        编辑
+                      </button>
+                      <button
+                        onClick={() => appointments.remove.mutate(a.id)}
+                        className="text-xs text-stone-400 hover:text-red-600"
+                      >
+                        删除
+                      </button>
+                    </div>
                   </div>
                 )
               })}

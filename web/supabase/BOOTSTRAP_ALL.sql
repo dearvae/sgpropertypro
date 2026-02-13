@@ -181,22 +181,9 @@ $$;
 grant execute on function public.save_client_appointment_note(text, uuid, text) to anon;
 grant execute on function public.save_client_appointment_note(text, uuid, text) to authenticated;
 
--- ========== 4. 预约冲突检测 ==========
-create or replace function public.check_appointment_conflict()
-returns trigger as $$
-declare v_agent_id uuid; v_conflict_count int;
-begin
-  select agent_id into v_agent_id from public.properties where id = new.property_id;
-  select count(*) into v_conflict_count from public.appointments a join public.properties p on p.id = a.property_id
-  where p.agent_id = v_agent_id and a.id != coalesce(new.id, '00000000-0000-0000-0000-000000000000'::uuid) and a.status != 'cancelled'
-  and (a.start_time, a.end_time) overlaps (new.start_time, new.end_time);
-  if v_conflict_count > 0 then raise exception 'APPOINTMENT_CONFLICT: 与已有预约时间冲突，请调整时段' using errcode = 'P0001'; end if;
-  return new;
-end;
-$$ language plpgsql;
-
-drop trigger if exists before_appointment_insert_update on public.appointments;
-create trigger before_appointment_insert_update before insert or update on public.appointments for each row execute procedure public.check_appointment_conflict();
+-- ========== 4. 预约冲突 ==========
+-- 允许同一时段存在多个预约，前端展示红色「时间冲突」标签
+-- （旧版冲突检测触发器已移除，见 016_allow_appointment_conflicts）
 
 -- ========== 5. 中介建议/反馈 ==========
 create table if not exists public.agent_feedback (

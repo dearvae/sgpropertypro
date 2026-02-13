@@ -20,6 +20,8 @@
 5. `supabase/migrations/005_realtime.sql`
 6. `supabase/migrations/006_customer_group_description.sql`
 7. `supabase/migrations/007_property_scraping_fields.sql`（房源抓取字段）
+8. `supabase/migrations/015_pending_appointments.sql`（待预约功能）
+9. `supabase/migrations/016_allow_appointment_conflicts.sql`（**必做**：允许时间冲突的预约共存，否则无法保存冲突时段）
 
 或使用 Supabase CLI 执行迁移：
 
