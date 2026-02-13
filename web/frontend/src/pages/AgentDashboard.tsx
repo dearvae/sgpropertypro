@@ -1659,6 +1659,11 @@ type ScheduleBlock = {
   propertyCount: number
 }
 
+/** 时间轴条目：预约块或空闲时段 */
+type TimelineItem =
+  | { type: 'appointment'; block: ScheduleBlock }
+  | { type: 'free'; startTime: string; endTime: string; durationMinutes: number }
+
 const MERGE_GAP_MS = 30 * 60 * 1000 // 30 分钟内视为相邻，可合并
 
 function mergeAppointmentsIntoBlocks(appointments: Appointment[]): ScheduleBlock[] {
@@ -1714,6 +1719,51 @@ function mergeAppointmentsIntoBlocks(appointments: Appointment[]): ScheduleBlock
   }
   blocks.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
   return blocks
+}
+
+/** 合并同一天内、同一客户的连续时间块（中间在路上的时间算作陪客户） */
+function mergeConsecutiveSameCustomerBlocks(blocks: ScheduleBlock[]): ScheduleBlock[] {
+  if (blocks.length === 0) return []
+  const merged: ScheduleBlock[] = []
+  let current = { ...blocks[0], appointments: [...blocks[0].appointments], propertyCount: blocks[0].propertyCount }
+  for (let i = 1; i < blocks.length; i++) {
+    const next = blocks[i]
+    if (next.customerGroupId === current.customerGroupId) {
+      current.endTime = next.endTime
+      current.appointments.push(...next.appointments)
+      current.propertyCount = current.appointments.length
+    } else {
+      merged.push(current)
+      current = { ...next, appointments: [...next.appointments], propertyCount: next.propertyCount }
+    }
+  }
+  merged.push(current)
+  return merged
+}
+
+/** 为某天的预约块插入空闲时段，生成时间轴条目列表（仅在不同客户之间显示空闲） */
+function buildTimelineWithFreeSlots(blocks: ScheduleBlock[]): TimelineItem[] {
+  if (blocks.length === 0) return []
+  const items: TimelineItem[] = []
+  for (let i = 0; i < blocks.length; i++) {
+    const block = blocks[i]
+    items.push({ type: 'appointment', block })
+    if (i < blocks.length - 1) {
+      const thisEnd = new Date(block.endTime).getTime()
+      const nextStart = new Date(blocks[i + 1].startTime).getTime()
+      const gapMs = nextStart - thisEnd
+      const gapMinutes = Math.round(gapMs / 60000)
+      if (gapMinutes > 0) {
+        items.push({
+          type: 'free',
+          startTime: block.endTime,
+          endTime: blocks[i + 1].startTime,
+          durationMinutes: gapMinutes,
+        })
+      }
+    }
+  }
+  return items
 }
 
 function AgentScheduleSection({
@@ -1783,31 +1833,68 @@ function AgentScheduleSection({
             : '暂无未来预约'}
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-6">
           {sortedDates.map((dateStr) => {
             const date = new Date(dateStr)
             const dayName = dayNames[date.getDay()]
             const blocksForDate = byDate[dateStr]
+            const mergedBlocks = mergeConsecutiveSameCustomerBlocks(blocksForDate)
+            const timelineItems = buildTimelineWithFreeSlots(mergedBlocks)
+            const totalMinutes = timelineItems.reduce((sum, item) => {
+              if (item.type === 'appointment') {
+                const s = new Date(item.block.startTime).getTime()
+                const e = new Date(item.block.endTime).getTime()
+                return sum + (e - s) / 60000
+              }
+              return sum + item.durationMinutes
+            }, 0)
+            const minDayHeight = Math.max(280, Math.min(500, totalMinutes * 4))
+
             return (
               <div
                 key={dateStr}
-                className="border border-stone-200 rounded-lg bg-white overflow-hidden shadow-sm"
+                className="border border-stone-200 rounded-xl bg-white overflow-hidden shadow-sm"
               >
-                <div className="px-4 py-2.5 bg-stone-50 border-b border-stone-100 flex items-center justify-between">
+                <div className="px-4 py-3 bg-stone-50 border-b border-stone-100 flex items-center justify-between">
                   <span className="font-medium text-stone-800 text-sm">
                     {date.toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', year: 'numeric' })}
                   </span>
                   <span className="text-stone-500 text-xs">{dayName}</span>
                 </div>
-                <div className="p-3 space-y-2">
-                  {blocksForDate.map((block) => {
+                <div
+                  className="flex flex-col p-2 gap-1"
+                  style={{ minHeight: minDayHeight }}
+                >
+                  {timelineItems.map((item, idx) => {
+                    const durationMinutes = item.type === 'appointment'
+                      ? (new Date(item.block.endTime).getTime() - new Date(item.block.startTime).getTime()) / 60000
+                      : item.durationMinutes
+                    const flexRatio = Math.max(durationMinutes, 5)
+
+                    if (item.type === 'free') {
+                      const start = new Date(item.startTime)
+                      const end = new Date(item.endTime)
+                      const timeStr = `${start.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })} – ${end.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })}`
+                      return (
+                        <div
+                          key={`free-${idx}-${item.startTime}`}
+                          className="flex-shrink-0 flex items-center justify-center rounded-lg bg-emerald-50/80 border border-dashed border-emerald-200/70"
+                          style={{ flex: `${flexRatio} 1 0`, minHeight: 48 }}
+                        >
+                          <p className="text-emerald-700 text-sm">{timeStr}（约 {item.durationMinutes} 分钟）</p>
+                        </div>
+                      )
+                    }
+
+                    const block = item.block
                     const start = new Date(block.startTime)
                     const end = new Date(block.endTime)
                     const timeStr = `${start.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })} – ${end.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })}`
                     return (
                       <div
                         key={`${block.customerGroupId}-${block.startTime}`}
-                        className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-amber-50 border border-amber-200/60"
+                        className="flex-shrink-0 flex items-center gap-3 px-4 py-3 rounded-lg bg-amber-50 border border-amber-200/60"
+                        style={{ flex: `${flexRatio} 1 0`, minHeight: 64 }}
                       >
                         <div className="flex-1 min-w-0">
                           <p className="text-xs text-stone-500 mb-0.5">
@@ -1825,7 +1912,7 @@ function AgentScheduleSection({
                             )}
                           </p>
                         </div>
-                        <div className="shrink-0 flex gap-1">
+                        <div className="shrink-0 flex gap-1 flex-wrap">
                           {block.appointments.slice(0, 3).map((a) => {
                             const prop = a.properties as Property | undefined
                             return (
