@@ -1,0 +1,36 @@
+# Python
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Environment & secrets
+.env
+.env.local
+.env.*.local
+
+# Node / frontend (web module)
+node_modules/
+dist/
+.vite/
+*.log
+npm-debug.log*
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Supabase
+supabase/.branches/
+supabase/.temp/
