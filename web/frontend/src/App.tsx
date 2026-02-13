@@ -3,11 +3,14 @@ import { AuthProvider, useAuth } from './hooks/useAuth'
 import Login from './pages/Login'
 import AgentDashboard from './pages/AgentDashboard'
 import ClientView from './pages/ClientView'
+import ClientLanding from './pages/ClientLanding'
 
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
+function ProtectedRoute({ children, clientRedirect }: { children: React.ReactNode; clientRedirect?: React.ReactNode }) {
   const { user, loading } = useAuth()
   if (loading) return <div className="min-h-screen flex items-center justify-center text-stone-500">加载中...</div>
   if (!user) return <Navigate to="/login" replace />
+  const role = (user.user_metadata?.role as string) || 'agent'
+  if (role === 'client' && clientRedirect) return <>{clientRedirect}</>
   return <>{children}</>
 }
 
@@ -17,7 +20,7 @@ function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<Login />} />
-          <Route path="/" element={<ProtectedRoute><AgentDashboard /></ProtectedRoute>} />
+          <Route path="/" element={<ProtectedRoute clientRedirect={<ClientLanding />}><AgentDashboard /></ProtectedRoute>} />
           <Route path="/view/:token" element={<ClientView />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

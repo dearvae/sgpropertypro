@@ -6,6 +6,7 @@ export default function Login() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [isSignUp, setIsSignUp] = useState(false)
+  const [role, setRole] = useState<'agent' | 'client'>('agent')
   const [error, setError] = useState('')
   const { signIn, signUp } = useAuth()
   const navigate = useNavigate()
@@ -14,7 +15,7 @@ export default function Login() {
     e.preventDefault()
     setError('')
     const { error } = isSignUp
-      ? await signUp(email, password, 'agent')
+      ? await signUp(email, password, role)
       : await signIn(email, password)
     if (error) {
       setError(error.message)
@@ -42,6 +43,19 @@ export default function Login() {
               placeholder="you@example.com"
             />
           </div>
+          {isSignUp && (
+            <div>
+              <label className="block text-sm text-stone-700 mb-1">身份</label>
+              <select
+                value={role}
+                onChange={(e) => setRole(e.target.value as 'agent' | 'client')}
+                className="w-full px-3 py-2 border border-stone-200 rounded-sm bg-white text-stone-900 text-sm"
+              >
+                <option value="agent">中介</option>
+                <option value="client">客户</option>
+              </select>
+            </div>
+          )}
           <div>
             <label htmlFor="password" className="block text-sm text-stone-700 mb-1">密码</label>
             <input

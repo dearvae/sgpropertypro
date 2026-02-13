@@ -5,6 +5,7 @@ import { useProperties } from '@/hooks/useProperties'
 import { useAppointments } from '@/hooks/useAppointments'
 import { useNotes } from '@/hooks/useNotes'
 import { useRealtimeAppointments } from '@/hooks/useRealtimeAppointments'
+import { checkAppointmentConflict } from '@/lib/conflictCheck'
 import type { CustomerGroup, Property, Appointment } from '@/types'
 
 export default function AgentDashboard() {
@@ -16,6 +17,7 @@ export default function AgentDashboard() {
   const groups = useCustomerGroups()
   const properties = useProperties()
   const appointments = useAppointments(selectedGroupId || undefined)
+  const allAppointments = useAppointments() // 用于冲突预检（需检查同一 agent 下全部预约）
   const notes = useNotes()
   useRealtimeAppointments(selectedGroupId || undefined)
 
@@ -71,6 +73,7 @@ export default function AgentDashboard() {
             groups={groups}
             properties={properties}
             appointments={appointments}
+            allAppointments={allAppointments}
             selectedGroupId={selectedGroupId}
             setSelectedGroupId={setSelectedGroupId}
             showAddAppointment={showAddAppointment}
@@ -337,6 +340,7 @@ function AppointmentsSection({
   groups,
   properties,
   appointments,
+  allAppointments,
   selectedGroupId,
   setSelectedGroupId,
   showAddAppointment,
@@ -345,6 +349,7 @@ function AppointmentsSection({
   groups: ReturnType<typeof useCustomerGroups>
   properties: ReturnType<typeof useProperties>
   appointments: ReturnType<typeof useAppointments>
+  allAppointments: ReturnType<typeof useAppointments>
   selectedGroupId: string | null
   setSelectedGroupId: (id: string | null) => void
   showAddAppointment: boolean
@@ -354,28 +359,54 @@ function AppointmentsSection({
   const [groupId, setGroupId] = useState('')
   const [startTime, setStartTime] = useState('')
   const [endTime, setEndTime] = useState('')
+  const [conflictError, setConflictError] = useState<string | null>(null)
 
   const handleCreate = async () => {
+    setConflictError(null)
     if (!propId || !groupId || !startTime || !endTime) {
       alert('请填写完整')
+      return
+    }
+    const startIso = new Date(startTime).toISOString()
+    const endIso = new Date(endTime).toISOString()
+    if (new Date(endIso) <= new Date(startIso)) {
+      setConflictError('结束时间须晚于开始时间')
+      return
+    }
+    // 前端冲突预检
+    const existing = (allAppointments.data ?? []).map((a) => ({
+      id: a.id,
+      start_time: a.start_time,
+      end_time: a.end_time,
+    }))
+    const { hasConflict, conflictingWith } = checkAppointmentConflict(startIso, endIso, existing)
+    if (hasConflict && conflictingWith) {
+      setConflictError(
+        `与已有预约冲突：${new Date(conflictingWith.start_time).toLocaleString('zh-CN')} - ${new Date(conflictingWith.end_time).toLocaleString('zh-CN', { hour: '2-digit', minute: '2-digit' })}，请调整时段`
+      )
+      return
+    }
+    if (hasConflict) {
+      setConflictError('请调整时间后再提交')
       return
     }
     try {
       await appointments.create.mutateAsync({
         property_id: propId,
         customer_group_id: groupId,
-        start_time: new Date(startTime).toISOString(),
-        end_time: new Date(endTime).toISOString(),
+        start_time: startIso,
+        end_time: endIso,
       })
       setShowAddAppointment(false)
       setPropId('')
       setGroupId('')
       setStartTime('')
       setEndTime('')
+      setConflictError(null)
     } catch (e: unknown) {
       const err = e as { message?: string }
       if (err?.message?.includes('APPOINTMENT_CONFLICT') || err?.message?.includes('冲突')) {
-        alert('时间与已有预约冲突，请调整时段')
+        setConflictError('时间与已有预约冲突，请调整时段')
       } else {
         alert(err?.message || '创建失败')
       }
@@ -416,11 +447,16 @@ function AppointmentsSection({
 
       {showAddAppointment && (
         <div className="mb-6 p-4 border border-stone-200 rounded-sm bg-white space-y-3">
+          {conflictError && (
+            <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-sm border border-red-200">
+              {conflictError}
+            </p>
+          )}
           <div>
             <label className="text-xs text-stone-600">房源</label>
             <select
               value={propId}
-              onChange={(e) => setPropId(e.target.value)}
+              onChange={(e) => { setPropId(e.target.value); setConflictError(null) }}
               className="w-full mt-1 px-3 py-2 border border-stone-200 rounded-sm text-sm"
             >
               <option value="">选择房源</option>
@@ -433,7 +469,7 @@ function AppointmentsSection({
             <label className="text-xs text-stone-600">客户分组</label>
             <select
               value={groupId}
-              onChange={(e) => setGroupId(e.target.value)}
+              onChange={(e) => { setGroupId(e.target.value); setConflictError(null) }}
               className="w-full mt-1 px-3 py-2 border border-stone-200 rounded-sm text-sm"
             >
               <option value="">选择分组</option>
@@ -448,7 +484,7 @@ function AppointmentsSection({
               <input
                 type="datetime-local"
                 value={startTime}
-                onChange={(e) => setStartTime(e.target.value)}
+                onChange={(e) => { setStartTime(e.target.value); setConflictError(null) }}
                 className="w-full mt-1 px-3 py-2 border border-stone-200 rounded-sm text-sm"
               />
             </div>
@@ -457,7 +493,7 @@ function AppointmentsSection({
               <input
                 type="datetime-local"
                 value={endTime}
-                onChange={(e) => setEndTime(e.target.value)}
+                onChange={(e) => { setEndTime(e.target.value); setConflictError(null) }}
                 className="w-full mt-1 px-3 py-2 border border-stone-200 rounded-sm text-sm"
               />
             </div>
