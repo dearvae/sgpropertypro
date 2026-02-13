@@ -1,16 +1,16 @@
 import { useState } from 'react'
-import { useAuth } from '@/hooks/useAuth'
+import { UserMenu } from '@/components/UserMenu'
 import { useCustomerGroups } from '@/hooks/useCustomerGroups'
 import { useProperties } from '@/hooks/useProperties'
 import { useAppointments } from '@/hooks/useAppointments'
-import { useNotes } from '@/hooks/useNotes'
 import { useRealtimeAppointments } from '@/hooks/useRealtimeAppointments'
 import { checkAppointmentConflict } from '@/lib/conflictCheck'
+import { scrapeProperty } from '@/lib/scrapeApi'
+import { AgentFeedbackSection } from '@/pages/AgentFeedback'
 import type { CustomerGroup, Property, Appointment } from '@/types'
 
 export default function AgentDashboard() {
-  const { user, signOut } = useAuth()
-  const [activeTab, setActiveTab] = useState<'groups' | 'properties' | 'appointments' | 'client'>('groups')
+  const [activeTab, setActiveTab] = useState<'groups' | 'appointments' | 'schedule' | 'feedback'>('groups')
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null)
   const [showAddAppointment, setShowAddAppointment] = useState(false)
 
@@ -18,7 +18,6 @@ export default function AgentDashboard() {
   const properties = useProperties()
   const appointments = useAppointments(selectedGroupId || undefined)
   const allAppointments = useAppointments() // 用于冲突预检（需检查同一 agent 下全部预约）
-  const notes = useNotes()
   useRealtimeAppointments(selectedGroupId || undefined)
 
   const baseUrl = typeof window !== 'undefined' ? `${window.location.origin}/view/` : ''
@@ -29,17 +28,11 @@ export default function AgentDashboard() {
         <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
           <h1 className="text-lg font-medium text-stone-900">看房预约管理</h1>
           <div className="flex items-center gap-4">
-            <span className="text-sm text-stone-500">{user?.email}</span>
-            <button
-              onClick={() => signOut()}
-              className="text-sm text-stone-500 hover:text-stone-700 border border-stone-200 rounded-sm px-3 py-1.5"
-            >
-              退出
-            </button>
+            <UserMenu />
           </div>
         </div>
         <div className="max-w-5xl mx-auto px-6 flex gap-1 border-t border-stone-100">
-          {(['groups', 'properties', 'appointments', 'client'] as const).map((tab) => (
+          {(['groups', 'appointments', 'schedule', 'feedback'] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -50,9 +43,9 @@ export default function AgentDashboard() {
               }`}
             >
               {tab === 'groups' && '客户分组'}
-              {tab === 'properties' && '房源'}
               {tab === 'appointments' && '预约'}
-              {tab === 'client' && '客户视图'}
+              {tab === 'schedule' && '时间表'}
+              {tab === 'feedback' && '建议反馈'}
             </button>
           ))}
         </div>
@@ -64,9 +57,6 @@ export default function AgentDashboard() {
             groups={groups}
             baseUrl={baseUrl}
           />
-        )}
-        {activeTab === 'properties' && (
-          <PropertiesSection properties={properties} notes={notes} />
         )}
         {activeTab === 'appointments' && (
           <AppointmentsSection
@@ -80,9 +70,10 @@ export default function AgentDashboard() {
             setShowAddAppointment={setShowAddAppointment}
           />
         )}
-        {activeTab === 'client' && (
-          <ClientViewPreview groups={groups} baseUrl={baseUrl} />
+        {activeTab === 'schedule' && (
+          <AgentScheduleSection appointments={allAppointments} />
         )}
+        {activeTab === 'feedback' && <AgentFeedbackSection />}
       </main>
     </div>
   )
@@ -95,24 +86,46 @@ function CustomerGroupsSection({
   groups: ReturnType<typeof useCustomerGroups>
   baseUrl: string
 }) {
+  const [showCreateModal, setShowCreateModal] = useState(false)
   const [newName, setNewName] = useState('')
+  const [newDescription, setNewDescription] = useState('')
+  const [newIntent, setNewIntent] = useState<'buy' | 'rent'>('buy')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
+  const [editIntent, setEditIntent] = useState<'buy' | 'rent'>('buy')
+
+  const handleOpenCreateModal = () => {
+    setNewName('')
+    setNewDescription('')
+    setNewIntent('buy')
+    setShowCreateModal(true)
+  }
 
   const handleCreate = async () => {
-    if (!newName.trim()) return
+    if (!newName.trim()) {
+      alert('请输入分组名称')
+      return
+    }
     try {
-      await groups.create.mutateAsync(newName.trim())
+      await groups.create.mutateAsync({ name: newName.trim(), description: newDescription.trim() || undefined, intent: newIntent })
+      setShowCreateModal(false)
       setNewName('')
+      setNewDescription('')
     } catch (e) {
       alert((e as Error).message)
     }
   }
 
+  const handleStartEdit = (g: { id: string; name: string; intent: 'buy' | 'rent' | null }) => {
+    setEditingId(g.id)
+    setEditName(g.name)
+    setEditIntent(g.intent || 'buy')
+  }
+
   const handleUpdate = async () => {
     if (!editingId || !editName.trim()) return
     try {
-      await groups.update.mutateAsync({ id: editingId, name: editName.trim() })
+      await groups.update.mutateAsync({ id: editingId, name: editName.trim(), intent: editIntent })
       setEditingId(null)
     } catch (e) {
       alert((e as Error).message)
@@ -122,21 +135,73 @@ function CustomerGroupsSection({
   return (
     <section>
       <h2 className="text-sm font-medium text-stone-700 mb-4">客户分组</h2>
-      <div className="flex gap-2 mb-6">
-        <input
-          value={newName}
-          onChange={(e) => setNewName(e.target.value)}
-          placeholder="分组名称"
-          className="flex-1 max-w-xs px-3 py-2 border border-stone-200 rounded-sm text-sm"
-        />
-        <button
-          onClick={handleCreate}
-          disabled={groups.create.isPending}
-          className="px-4 py-2 text-sm border border-stone-300 rounded-sm hover:bg-stone-100"
-        >
-          新建
-        </button>
-      </div>
+      <button
+        onClick={handleOpenCreateModal}
+        className="mb-6 text-sm border border-stone-300 rounded-sm px-4 py-2 hover:bg-stone-100"
+      >
+        新建
+      </button>
+
+      {showCreateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowCreateModal(false)}>
+          <div
+            className="bg-white rounded-sm shadow-lg p-6 w-full max-w-md mx-4 border border-stone-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-sm font-medium text-stone-900 mb-4">新建客户分组</h3>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-stone-600">分组名称</label>
+                <input
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  placeholder="例如：张先生"
+                  className="w-full mt-1 px-3 py-2 border border-stone-200 rounded-sm text-sm"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="text-xs text-stone-600">客户需求 <span className="text-amber-600">*必选</span></label>
+                <div className="flex gap-4 mt-2">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="radio" name="intent" value="buy" checked={newIntent === 'buy'} onChange={() => setNewIntent('buy')} className="text-emerald-600" />
+                    <span className="text-sm">买房</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="radio" name="intent" value="rent" checked={newIntent === 'rent'} onChange={() => setNewIntent('rent')} className="text-emerald-600" />
+                    <span className="text-sm">租房</span>
+                  </label>
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-stone-600">描述 / 备注</label>
+                <textarea
+                  value={newDescription}
+                  onChange={(e) => setNewDescription(e.target.value)}
+                  placeholder="预算范围、备注等..."
+                  rows={3}
+                  className="w-full mt-1 px-3 py-2 border border-stone-200 rounded-sm text-sm resize-none"
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 mt-6">
+              <button
+                onClick={handleCreate}
+                disabled={groups.create.isPending}
+                className="px-4 py-2 text-sm border border-stone-300 rounded-sm hover:bg-stone-100"
+              >
+                创建
+              </button>
+              <button
+                onClick={() => setShowCreateModal(false)}
+                className="px-4 py-2 text-sm text-stone-500 hover:text-stone-700"
+              >
+                取消
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="space-y-3">
         {groups.data?.map((g) => (
@@ -145,27 +210,40 @@ function CustomerGroupsSection({
             className="border border-stone-200 rounded-sm bg-white p-4 flex items-center justify-between"
           >
             {editingId === g.id ? (
-              <div className="flex gap-2 flex-1">
+              <div className="flex flex-wrap items-center gap-2 flex-1">
                 <input
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
-                  className="flex-1 px-2 py-1 border border-stone-200 rounded-sm text-sm"
+                  className="flex-1 min-w-[100px] px-2 py-1 border border-stone-200 rounded-sm text-sm"
                 />
+                <div className="flex items-center gap-2">
+                  <label className="flex items-center gap-1 text-xs cursor-pointer">
+                    <input type="radio" name={`edit-intent-${g.id}`} checked={editIntent === 'buy'} onChange={() => setEditIntent('buy')} />
+                    买房
+                  </label>
+                  <label className="flex items-center gap-1 text-xs cursor-pointer">
+                    <input type="radio" name={`edit-intent-${g.id}`} checked={editIntent === 'rent'} onChange={() => setEditIntent('rent')} />
+                    租房
+                  </label>
+                </div>
                 <button onClick={handleUpdate} className="text-sm text-stone-600">保存</button>
                 <button onClick={() => setEditingId(null)} className="text-sm text-stone-400">取消</button>
               </div>
             ) : (
               <>
                 <div>
-                  <p className="font-medium text-stone-900 text-sm">{g.name}</p>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="font-medium text-stone-900 text-sm">{g.name}</p>
+                    <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${g.intent === 'rent' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>
+                      {g.intent === 'rent' ? '租房' : '买房'}
+                    </span>
+                  </div>
+                  {g.description && <p className="text-stone-600 text-xs mt-1">{g.description}</p>}
                   <p className="text-stone-500 text-xs mt-1 font-mono">{baseUrl}{g.share_token}</p>
                 </div>
                 <div className="flex gap-2">
                   <button
-                    onClick={() => {
-                      setEditingId(g.id)
-                      setEditName(g.name)
-                    }}
+                    onClick={() => handleStartEdit(g)}
                     className="text-sm text-stone-500 hover:text-stone-700"
                   >
                     编辑
@@ -195,145 +273,18 @@ function CustomerGroupsSection({
   )
 }
 
-function PropertiesSection({
-  properties,
-  notes,
-}: {
-  properties: ReturnType<typeof useProperties>
-  notes: ReturnType<typeof useNotes>
-}) {
-  const [showAdd, setShowAdd] = useState(false)
-  const [title, setTitle] = useState('')
-  const [link, setLink] = useState('')
-  const [basicInfo, setBasicInfo] = useState('')
-  const [addNotePropId, setAddNotePropId] = useState<string | null>(null)
-  const [noteContent, setNoteContent] = useState('')
-  const [noteVisibility, setNoteVisibility] = useState<'client_visible' | 'internal'>('internal')
+/** 将电话号码标准化为 WhatsApp API 格式（国际码+数字，无空格） */
+function normalizePhoneForWhatsApp(phone: string): string {
+  const digits = phone.replace(/\D/g, '')
+  if (digits.startsWith('65') && digits.length >= 10) return digits
+  if (digits.length === 8 && !digits.startsWith('65')) return '65' + digits
+  return digits || phone
+}
 
-  const handleCreateProperty = async () => {
-    if (!title.trim()) return
-    try {
-      await properties.create.mutateAsync({ title: title.trim(), link: link || undefined, basic_info: basicInfo || undefined })
-      setShowAdd(false)
-      setTitle('')
-      setLink('')
-      setBasicInfo('')
-    } catch (e) {
-      alert((e as Error).message)
-    }
-  }
-
-  const handleAddNote = async () => {
-    if (!addNotePropId || !noteContent.trim()) return
-    try {
-      await notes.create.mutateAsync({
-        property_id: addNotePropId,
-        content: noteContent.trim(),
-        visibility: noteVisibility,
-      })
-      setAddNotePropId(null)
-      setNoteContent('')
-    } catch (e) {
-      alert((e as Error).message)
-    }
-  }
-
-  const propertyNotes = (propId: string) => notes.data?.filter((n) => n.property_id === propId) ?? []
-
-  return (
-    <section>
-      <h2 className="text-sm font-medium text-stone-700 mb-4">房源</h2>
-      {!showAdd ? (
-        <button
-          onClick={() => setShowAdd(true)}
-          className="mb-6 text-sm border border-stone-300 rounded-sm px-4 py-2 hover:bg-stone-100"
-        >
-          添加房源
-        </button>
-      ) : (
-        <div className="mb-6 p-4 border border-stone-200 rounded-sm bg-white space-y-3">
-          <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="房源标题"
-            className="w-full px-3 py-2 border border-stone-200 rounded-sm text-sm"
-          />
-          <input
-            value={link}
-            onChange={(e) => setLink(e.target.value)}
-            placeholder="房源链接（可选）"
-            className="w-full px-3 py-2 border border-stone-200 rounded-sm text-sm"
-          />
-          <textarea
-            value={basicInfo}
-            onChange={(e) => setBasicInfo(e.target.value)}
-            placeholder="基本信息（可选）"
-            rows={2}
-            className="w-full px-3 py-2 border border-stone-200 rounded-sm text-sm"
-          />
-          <div className="flex gap-2">
-            <button onClick={handleCreateProperty} disabled={properties.create.isPending} className="text-sm px-4 py-1.5 border border-stone-300 rounded-sm">
-              保存
-            </button>
-            <button onClick={() => setShowAdd(false)} className="text-sm text-stone-500">取消</button>
-          </div>
-        </div>
-      )}
-
-      <div className="space-y-3">
-        {properties.data?.map((p) => (
-          <div key={p.id} className="border border-stone-200 rounded-sm bg-white p-4">
-            <p className="font-medium text-stone-900 text-sm">{p.title}</p>
-            {p.link && (
-              <a href={p.link} target="_blank" rel="noreferrer" className="text-xs text-stone-500 hover:text-stone-700">
-                {p.link}
-              </a>
-            )}
-            {p.basic_info && <p className="text-stone-500 text-sm mt-1">{p.basic_info}</p>}
-            <div className="mt-3">
-              {propertyNotes(p.id).map((n) => (
-                <div key={n.id} className="text-xs text-stone-600 flex items-center gap-2 py-1">
-                  <span className={n.visibility === 'client_visible' ? 'text-stone-700' : 'text-stone-400'}>
-                    [{n.visibility === 'client_visible' ? '客户可见' : '内部'}]
-                  </span>
-                  {n.content}
-                  <button onClick={() => notes.remove.mutate(n.id)} className="text-stone-400 hover:text-red-600">删</button>
-                </div>
-              ))}
-              {addNotePropId === p.id ? (
-                <div className="mt-2 flex gap-2 items-start">
-                  <textarea
-                    value={noteContent}
-                    onChange={(e) => setNoteContent(e.target.value)}
-                    placeholder="备注内容"
-                    rows={2}
-                    className="flex-1 px-2 py-1 border border-stone-200 rounded-sm text-xs"
-                  />
-                  <select
-                    value={noteVisibility}
-                    onChange={(e) => setNoteVisibility(e.target.value as 'client_visible' | 'internal')}
-                    className="text-xs border border-stone-200 rounded-sm"
-                  >
-                    <option value="internal">内部</option>
-                    <option value="client_visible">客户可见</option>
-                  </select>
-                  <button onClick={handleAddNote} className="text-xs px-2 py-1 border rounded-sm">添加</button>
-                  <button onClick={() => setAddNotePropId(null)} className="text-xs text-stone-400">取消</button>
-                </div>
-              ) : (
-                <button
-                  onClick={() => setAddNotePropId(p.id)}
-                  className="mt-2 text-xs text-stone-500 hover:text-stone-700"
-                >
-                  + 添加备注
-                </button>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
-    </section>
-  )
+function normalizeSourceUrl(url: string): string {
+  let u = url.trim()
+  if (!u.startsWith('http')) u = 'https://' + u
+  return u.replace(/\/$/, '')
 }
 
 function AppointmentsSection({
@@ -358,21 +309,79 @@ function AppointmentsSection({
   const [propId, setPropId] = useState('')
   const [groupId, setGroupId] = useState('')
   const [startTime, setStartTime] = useState('')
-  const [endTime, setEndTime] = useState('')
   const [conflictError, setConflictError] = useState<string | null>(null)
+  const [propertyInputMode, setPropertyInputMode] = useState<'select' | 'byLink'>('select')
+  const [propertyLinkInput, setPropertyLinkInput] = useState('')
+  const [scrapeLoading, setScrapeLoading] = useState(false)
+  const [scrapeError, setScrapeError] = useState<string | null>(null)
+  const [scrapeSuccess, setScrapeSuccess] = useState(false)
+
+  const handleScrapeAndAdd = async () => {
+    setScrapeError(null)
+    setScrapeSuccess(false)
+    if (!propertyLinkInput.trim()) {
+      setScrapeError('请输入 Property Guru 链接')
+      return
+    }
+    const sourceUrl = normalizeSourceUrl(propertyLinkInput)
+    if (!sourceUrl.includes('propertyguru.com')) {
+      setScrapeError('仅支持 Property Guru 链接')
+      return
+    }
+    setScrapeLoading(true)
+    try {
+      const existing = await properties.findBySourceUrl(sourceUrl)
+      if (existing) {
+        setPropId(existing.id)
+        setScrapeSuccess(true)
+        setTimeout(() => {
+          setPropertyInputMode('select')
+          setPropertyLinkInput('')
+          setScrapeSuccess(false)
+        }, 600)
+        return
+      }
+      const scraped = await scrapeProperty(sourceUrl)
+      const created = await properties.create.mutateAsync({
+        title: scraped.title,
+        link: scraped.link,
+        basic_info: scraped.basic_info || undefined,
+        source_url: sourceUrl,
+        price: scraped.price || undefined,
+        size_sqft: scraped.size_sqft || undefined,
+        bedrooms: scraped.bedrooms || undefined,
+        bathrooms: scraped.bathrooms || undefined,
+        main_image_url: scraped.main_image_url || undefined,
+        image_urls: scraped.image_urls || undefined,
+        floor_plan_url: scraped.floor_plan_url || undefined,
+        listing_agent_name: scraped.listing_agent_name || undefined,
+        listing_agent_phone: scraped.listing_agent_phone || undefined,
+        listing_type: scraped.listing_type || undefined,
+      })
+      setPropId(created.id)
+      setScrapeSuccess(true)
+      setTimeout(() => {
+        setPropertyInputMode('select')
+        setPropertyLinkInput('')
+        setScrapeSuccess(false)
+      }, 600)
+    } catch (e) {
+      setScrapeError((e as Error).message)
+    } finally {
+      setScrapeLoading(false)
+    }
+  }
 
   const handleCreate = async () => {
     setConflictError(null)
-    if (!propId || !groupId || !startTime || !endTime) {
+    if (!propId || !groupId || !startTime) {
       alert('请填写完整')
       return
     }
-    const startIso = new Date(startTime).toISOString()
-    const endIso = new Date(endTime).toISOString()
-    if (new Date(endIso) <= new Date(startIso)) {
-      setConflictError('结束时间须晚于开始时间')
-      return
-    }
+    const startDate = new Date(startTime)
+    const endDate = new Date(startDate.getTime() + 15 * 60 * 1000)
+    const startIso = startDate.toISOString()
+    const endIso = endDate.toISOString()
     // 前端冲突预检
     const existing = (allAppointments.data ?? []).map((a) => ({
       id: a.id,
@@ -382,7 +391,7 @@ function AppointmentsSection({
     const { hasConflict, conflictingWith } = checkAppointmentConflict(startIso, endIso, existing)
     if (hasConflict && conflictingWith) {
       setConflictError(
-        `与已有预约冲突：${new Date(conflictingWith.start_time).toLocaleString('zh-CN')} - ${new Date(conflictingWith.end_time).toLocaleString('zh-CN', { hour: '2-digit', minute: '2-digit' })}，请调整时段`
+        `与已有预约冲突：${new Date(conflictingWith.start_time).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}，请调整时段`
       )
       return
     }
@@ -401,7 +410,6 @@ function AppointmentsSection({
       setPropId('')
       setGroupId('')
       setStartTime('')
-      setEndTime('')
       setConflictError(null)
     } catch (e: unknown) {
       const err = e as { message?: string }
@@ -454,16 +462,83 @@ function AppointmentsSection({
           )}
           <div>
             <label className="text-xs text-stone-600">房源</label>
-            <select
-              value={propId}
-              onChange={(e) => { setPropId(e.target.value); setConflictError(null) }}
-              className="w-full mt-1 px-3 py-2 border border-stone-200 rounded-sm text-sm"
-            >
-              <option value="">选择房源</option>
-              {properties.data?.map((p) => (
-                <option key={p.id} value={p.id}>{p.title}</option>
-              ))}
-            </select>
+            <div className="flex gap-2 mt-1 mb-1">
+              <button
+                type="button"
+                onClick={() => { setPropertyInputMode('select'); setScrapeError(null) }}
+                className={`text-xs px-2 py-1.5 border rounded-sm ${propertyInputMode === 'select' ? 'border-stone-600 bg-stone-100' : 'border-stone-200'}`}
+              >
+                选择已有房源
+              </button>
+              <button
+                type="button"
+                onClick={() => { setPropertyInputMode('byLink'); setScrapeError(null); setScrapeSuccess(false) }}
+                className={`text-xs px-2 py-1.5 border rounded-sm ${propertyInputMode === 'byLink' ? 'border-stone-600 bg-stone-100' : 'border-stone-200'}`}
+              >
+                通过链接添加
+              </button>
+            </div>
+            {propertyInputMode === 'select' ? (
+              <select
+                value={propId}
+                onChange={(e) => { setPropId(e.target.value); setConflictError(null) }}
+                className="w-full mt-1 px-3 py-2 border border-stone-200 rounded-sm text-sm"
+              >
+                <option value="">选择房源</option>
+                {properties.data?.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    [{p.listing_type === 'rent' ? '出租' : p.listing_type === 'sale' ? '出售' : '未知'}] {p.title}{p.price ? ` - ${p.price}` : ''}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <div className="space-y-2">
+                <input
+                  value={propertyLinkInput}
+                  onChange={(e) => { setPropertyLinkInput(e.target.value); setScrapeError(null) }}
+                  placeholder="粘贴 Property Guru 链接，例如 https://www.propertyguru.com.sg/listing/..."
+                  className="w-full px-3 py-2 border border-stone-200 rounded-sm text-sm"
+                />
+                {scrapeError && (
+                  <p className="text-xs text-red-600">{scrapeError}</p>
+                )}
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleScrapeAndAdd}
+                    disabled={scrapeLoading}
+                    className="text-sm px-4 py-1.5 border border-stone-300 rounded-sm hover:bg-stone-100 disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {scrapeLoading && (
+                      <svg className="animate-spin h-4 w-4 text-stone-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                    )}
+                    抓取并添加
+                  </button>
+                  {scrapeSuccess && !scrapeLoading && (
+                    <span className="text-green-600" title="添加成功">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+                        <path fillRule="evenodd" d="M19.916 4.626a.75.75 0 01.208 1.04l-9 13.5a.75.75 0 01-1.154.114l-6-6a.75.75 0 011.06-1.06l5.353 5.353 8.493-12.739a.75.75 0 011.04-.208z" clipRule="evenodd" />
+                      </svg>
+                    </span>
+                  )}
+                  {scrapeError && !scrapeLoading && (
+                    <button
+                      type="button"
+                      onClick={handleScrapeAndAdd}
+                      className="p-1 text-stone-500 hover:text-stone-700 hover:bg-stone-100 rounded"
+                      title="重试"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+                        <path fillRule="evenodd" d="M4.755 10.059a7.5 7.5 0 0112.548-3.364l1.903 1.903h-3.183a.75.75 0 100 1.5h4.992a.75.75 0 00.75-.75V4.356a.75.75 0 00-1.5 0v3.18l-1.9-1.9A9 9 0 003.306 9.67a.75.75 0 011.45.388zm15.408 3.352a.75.75 0 00-.919.53 7.5 7.5 0 01-12.548 3.364l-1.902-1.903h3.183a.75.75 0 000-1.5H2.984a.75.75 0 00-.75.75v4.992a.75.75 0 001.5 0v-3.18l1.9 1.9a9 9 0 0015.059 4.035.75.75 0 00-.53-.918z" clipRule="evenodd" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
           <div>
             <label className="text-xs text-stone-600">客户分组</label>
@@ -478,30 +553,65 @@ function AppointmentsSection({
               ))}
             </select>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-stone-600">开始时间</label>
+          <div>
+            <label className="text-xs text-stone-600">看房时间（每 15 分钟一个时段）</label>
+            <div className="flex flex-wrap gap-2 mt-1">
               <input
-                type="datetime-local"
-                value={startTime}
-                onChange={(e) => { setStartTime(e.target.value); setConflictError(null) }}
-                className="w-full mt-1 px-3 py-2 border border-stone-200 rounded-sm text-sm"
+                type="date"
+                value={startTime ? startTime.slice(0, 10) : ''}
+                onChange={(e) => {
+                  const d = e.target.value
+                  const t = startTime ? startTime.slice(11, 16) : '09:00'
+                  setStartTime(d ? `${d}T${t}` : '')
+                  setConflictError(null)
+                }}
+                className="flex-1 min-w-[120px] px-3 py-2 border border-stone-200 rounded-sm text-sm"
               />
-            </div>
-            <div>
-              <label className="text-xs text-stone-600">结束时间</label>
-              <input
-                type="datetime-local"
-                value={endTime}
-                onChange={(e) => { setEndTime(e.target.value); setConflictError(null) }}
-                className="w-full mt-1 px-3 py-2 border border-stone-200 rounded-sm text-sm"
-              />
+              <select
+                value={startTime ? startTime.slice(11, 13) : ''}
+                onChange={(e) => {
+                  const h = e.target.value
+                  const m = startTime ? startTime.slice(14, 16) : '00'
+                  const d = startTime ? startTime.slice(0, 10) : new Date().toISOString().slice(0, 10)
+                  setStartTime(h ? `${d}T${h}:${m}` : '')
+                  setConflictError(null)
+                }}
+                className="w-20 px-2 py-2 border border-stone-200 rounded-sm text-sm bg-white"
+              >
+                <option value="">时</option>
+                {Array.from({ length: 18 }, (_, i) => {
+                  const h = i + 6
+                  return (
+                    <option key={h} value={String(h).padStart(2, '0')}>
+                      {h}时
+                    </option>
+                  )
+                })}
+              </select>
+              <select
+                value={startTime ? startTime.slice(14, 16) : ''}
+                onChange={(e) => {
+                  const m = e.target.value
+                  const h = startTime ? startTime.slice(11, 13) : '09'
+                  const d = startTime ? startTime.slice(0, 10) : new Date().toISOString().slice(0, 10)
+                  setStartTime(m !== '' ? `${d}T${h}:${m}` : '')
+                  setConflictError(null)
+                }}
+                className="w-24 px-2 py-2 border border-stone-200 rounded-sm text-sm bg-white"
+              >
+                <option value="">分</option>
+                {[0, 15, 30, 45].map((m) => (
+                  <option key={m} value={String(m).padStart(2, '0')}>
+                    {m}分
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
           <button
             onClick={handleCreate}
-            disabled={appointments.create.isPending}
-            className="text-sm px-4 py-2 border border-stone-300 rounded-sm hover:bg-stone-100"
+            disabled={appointments.create.isPending || (propertyInputMode === 'byLink' && scrapeLoading)}
+            className="text-sm px-4 py-2 border border-stone-300 rounded-sm hover:bg-stone-100 disabled:opacity-50"
           >
             创建
           </button>
@@ -513,29 +623,66 @@ function AppointmentsSection({
           <div key={date}>
             <p className="text-xs text-stone-500 mb-2">{new Date(date).toLocaleDateString('zh-CN')}</p>
             <div className="space-y-2">
-              {list.map((a) => (
-                <div
-                  key={a.id}
-                  className="border border-stone-200 rounded-sm bg-white p-4 flex justify-between"
-                >
-                  <div>
-                    <p className="font-medium text-stone-900 text-sm">
-                      {(a.properties as Property)?.title ?? '—'}
-                    </p>
-                    <p className="text-stone-500 text-xs mt-1">
-                      {(a.customer_groups as CustomerGroup)?.name} ·{' '}
-                      {new Date(a.start_time).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })} -{' '}
-                      {new Date(a.end_time).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => appointments.remove.mutate(a.id)}
-                    className="text-xs text-stone-400 hover:text-red-600"
+              {list.map((a) => {
+                const prop = a.properties as Property | undefined
+                const agentName = prop?.listing_agent_name
+                const agentPhone = prop?.listing_agent_phone
+                const hasAgent = agentName || agentPhone
+                const whatsappUrl = agentPhone
+                  ? `https://wa.me/${normalizePhoneForWhatsApp(agentPhone)}`
+                  : null
+                return (
+                  <div
+                    key={a.id}
+                    className="border border-stone-200 rounded-sm bg-white p-4 flex justify-between gap-4"
                   >
-                    删除
-                  </button>
-                </div>
-              ))}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-medium text-stone-900 text-sm">
+                          {prop?.title ?? '—'}
+                        </p>
+                        {prop?.listing_type && (
+                          <span className={`px-1.5 py-0.5 rounded text-xs ${prop.listing_type === 'rent' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>
+                            {prop.listing_type === 'rent' ? '出租' : '出售'}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-stone-500 text-xs mt-1">
+                        {(a.customer_groups as CustomerGroup)?.name} ·{' '}
+                        {new Date(a.start_time).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                      {hasAgent && (
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <span className="text-xs text-stone-600">
+                            卖家中介：
+                            {agentName ? ` ${agentName}` : ''}
+                            {agentPhone ? ` · ${agentPhone}` : ''}
+                          </span>
+                          {whatsappUrl && (
+                            <a
+                              href={whatsappUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-sm bg-[#25D366] text-white hover:bg-[#20BD5A]"
+                            >
+                              <svg viewBox="0 0 24 24" className="w-4 h-4" fill="currentColor">
+                                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+                              </svg>
+                              WhatsApp
+                            </a>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => appointments.remove.mutate(a.id)}
+                      className="text-xs text-stone-400 hover:text-red-600 shrink-0"
+                    >
+                      删除
+                    </button>
+                  </div>
+                )
+              })}
             </div>
           </div>
         ))}
@@ -544,38 +691,201 @@ function AppointmentsSection({
   )
 }
 
-function ClientViewPreview({
-  groups,
-  baseUrl,
+/** 合并后的时间块：同一天、同一客户组、相邻时段的预约合并为一块 */
+type ScheduleBlock = {
+  customerGroupId: string
+  customerGroupName: string
+  startTime: string
+  endTime: string
+  appointments: Appointment[]
+  propertyCount: number
+}
+
+const MERGE_GAP_MS = 30 * 60 * 1000 // 30 分钟内视为相邻，可合并
+
+function mergeAppointmentsIntoBlocks(appointments: Appointment[]): ScheduleBlock[] {
+  if (appointments.length === 0) return []
+  const byDateAndGroup = new Map<string, Appointment[]>()
+  for (const a of appointments) {
+    const dateKey = new Date(a.start_time).toDateString()
+    const groupId = a.customer_group_id
+    const key = `${dateKey}|${groupId}`
+    if (!byDateAndGroup.has(key)) byDateAndGroup.set(key, [])
+    byDateAndGroup.get(key)!.push(a)
+  }
+  const blocks: ScheduleBlock[] = []
+  for (const list of byDateAndGroup.values()) {
+    list.sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
+    const group = list[0]
+    const name = (group.customer_groups as CustomerGroup)?.name ?? '—'
+    let startMs = new Date(list[0].start_time).getTime()
+    let endMs = new Date(list[0].end_time).getTime()
+    const merged: Appointment[] = [list[0]]
+    for (let i = 1; i < list.length; i++) {
+      const next = list[i]
+      const nextStart = new Date(next.start_time).getTime()
+      const nextEnd = new Date(next.end_time).getTime()
+      if (nextStart <= endMs + MERGE_GAP_MS) {
+        endMs = Math.max(endMs, nextEnd)
+        merged.push(next)
+      } else {
+        blocks.push({
+          customerGroupId: group.customer_group_id,
+          customerGroupName: name,
+          startTime: new Date(startMs).toISOString(),
+          endTime: new Date(endMs).toISOString(),
+          appointments: [...merged],
+          propertyCount: merged.length,
+        })
+        startMs = nextStart
+        endMs = nextEnd
+        merged.length = 0
+        merged.push(next)
+      }
+    }
+    blocks.push({
+      customerGroupId: group.customer_group_id,
+      customerGroupName: name,
+      startTime: new Date(startMs).toISOString(),
+      endTime: new Date(endMs).toISOString(),
+      appointments: [...merged],
+      propertyCount: merged.length,
+    })
+  }
+  blocks.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
+  return blocks
+}
+
+function AgentScheduleSection({
+  appointments,
 }: {
-  groups: ReturnType<typeof useCustomerGroups>
-  baseUrl: string
+  appointments: ReturnType<typeof useAppointments>
 }) {
-  const [previewToken, setPreviewToken] = useState<string | null>(null)
+  const [rangeMode, setRangeMode] = useState<'twoWeeks' | 'all'>('twoWeeks')
+  const appts = appointments.data ?? []
+  const now = new Date()
+  const future = appts.filter((a) => new Date(a.start_time) >= now)
+  const twoWeeksEnd = new Date(now)
+  twoWeeksEnd.setDate(twoWeeksEnd.getDate() + 14)
+  const filtered =
+    rangeMode === 'twoWeeks'
+      ? future.filter((a) => new Date(a.start_time) <= twoWeeksEnd)
+      : future
+  const blocks = mergeAppointmentsIntoBlocks(filtered)
+  const byDate = blocks.reduce<Record<string, ScheduleBlock[]>>((acc, b) => {
+    const d = new Date(b.startTime).toDateString()
+    if (!acc[d]) acc[d] = []
+    acc[d].push(b)
+    return acc
+  }, {})
+  const sortedDates = Object.keys(byDate).sort(
+    (a, b) => new Date(a).getTime() - new Date(b).getTime()
+  )
+
+  const dayNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
 
   return (
     <section>
-      <h2 className="text-sm font-medium text-stone-700 mb-4">客户视图预览</h2>
-      <p className="text-stone-500 text-sm mb-4">选择分组查看客户看到的页面</p>
-      <select
-        value={previewToken || ''}
-        onChange={(e) => setPreviewToken(e.target.value || null)}
-        className="mb-4 text-sm border border-stone-200 rounded-sm px-3 py-2"
-      >
-        <option value="">选择分组</option>
-        {groups.data?.map((g) => (
-          <option key={g.id} value={g.share_token}>{g.name}</option>
-        ))}
-      </select>
-      {previewToken && (
-        <a
-          href={`/view/${previewToken}`}
-          target="_blank"
-          rel="noreferrer"
-          className="block text-sm text-stone-600 hover:text-stone-900"
-        >
-          在新标签页打开客户视图 →
-        </a>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-sm font-medium text-stone-700">我的时间表</h2>
+        <div className="flex gap-1 border border-stone-200 rounded-sm p-0.5">
+          <button
+            onClick={() => setRangeMode('twoWeeks')}
+            className={`px-3 py-1.5 text-sm rounded-sm ${
+              rangeMode === 'twoWeeks'
+                ? 'bg-stone-800 text-white'
+                : 'text-stone-600 hover:bg-stone-100'
+            }`}
+          >
+            未来两周
+          </button>
+          <button
+            onClick={() => setRangeMode('all')}
+            className={`px-3 py-1.5 text-sm rounded-sm ${
+              rangeMode === 'all'
+                ? 'bg-stone-800 text-white'
+                : 'text-stone-600 hover:bg-stone-100'
+            }`}
+          >
+            全部
+          </button>
+        </div>
+      </div>
+
+      {sortedDates.length === 0 ? (
+        <div className="py-12 text-center text-stone-500 text-sm border border-dashed border-stone-200 rounded-sm">
+          {rangeMode === 'twoWeeks'
+            ? '未来两周暂无预约'
+            : '暂无未来预约'}
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {sortedDates.map((dateStr) => {
+            const date = new Date(dateStr)
+            const dayName = dayNames[date.getDay()]
+            const blocksForDate = byDate[dateStr]
+            return (
+              <div
+                key={dateStr}
+                className="border border-stone-200 rounded-lg bg-white overflow-hidden shadow-sm"
+              >
+                <div className="px-4 py-2.5 bg-stone-50 border-b border-stone-100 flex items-center justify-between">
+                  <span className="font-medium text-stone-800 text-sm">
+                    {date.toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', year: 'numeric' })}
+                  </span>
+                  <span className="text-stone-500 text-xs">{dayName}</span>
+                </div>
+                <div className="p-3 space-y-2">
+                  {blocksForDate.map((block) => {
+                    const start = new Date(block.startTime)
+                    const end = new Date(block.endTime)
+                    const timeStr = `${start.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })} – ${end.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })}`
+                    return (
+                      <div
+                        key={`${block.customerGroupId}-${block.startTime}`}
+                        className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-amber-50 border border-amber-200/60"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-stone-900 text-sm truncate">
+                            {block.customerGroupName}
+                          </p>
+                          <p className="text-stone-600 text-xs mt-0.5">
+                            {timeStr}
+                            {block.propertyCount > 1 && (
+                              <span className="ml-1.5 text-amber-700">
+                                · 看 {block.propertyCount} 套房
+                              </span>
+                            )}
+                          </p>
+                        </div>
+                        <div className="shrink-0 flex gap-1">
+                          {block.appointments.slice(0, 3).map((a) => {
+                            const prop = a.properties as Property | undefined
+                            return (
+                              <span
+                                key={a.id}
+                                className="text-xs px-2 py-0.5 rounded bg-white border border-stone-200 text-stone-600 truncate max-w-[120px]"
+                                title={prop?.title}
+                              >
+                                {prop?.title?.slice(0, 12) ?? '—'}
+                                {(prop?.title?.length ?? 0) > 12 ? '…' : ''}
+                              </span>
+                            )
+                          })}
+                          {block.propertyCount > 3 && (
+                            <span className="text-xs text-stone-400 self-center">
+                              +{block.propertyCount - 3}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })}
+        </div>
       )}
     </section>
   )

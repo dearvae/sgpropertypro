@@ -7,6 +7,9 @@ export default function Login() {
   const [password, setPassword] = useState('')
   const [isSignUp, setIsSignUp] = useState(false)
   const [role, setRole] = useState<'agent' | 'client'>('agent')
+  const [fullName, setFullName] = useState('')
+  const [agentNumber, setAgentNumber] = useState('')
+  const [phone, setPhone] = useState('')
   const [error, setError] = useState('')
   const { signIn, signUp } = useAuth()
   const navigate = useNavigate()
@@ -15,7 +18,11 @@ export default function Login() {
     e.preventDefault()
     setError('')
     const { error } = isSignUp
-      ? await signUp(email, password, role)
+      ? await signUp(email, password, role, {
+          fullName,
+          agentNumber,
+          phone,
+        })
       : await signIn(email, password)
     if (error) {
       setError(error.message)
@@ -44,17 +51,54 @@ export default function Login() {
             />
           </div>
           {isSignUp && (
-            <div>
-              <label className="block text-sm text-stone-700 mb-1">身份</label>
-              <select
-                value={role}
-                onChange={(e) => setRole(e.target.value as 'agent' | 'client')}
-                className="w-full px-3 py-2 border border-stone-200 rounded-sm bg-white text-stone-900 text-sm"
-              >
-                <option value="agent">中介</option>
-                <option value="client">客户</option>
-              </select>
-            </div>
+            <>
+              <div>
+                <label className="block text-sm text-stone-700 mb-1">身份</label>
+                <select
+                  value={role}
+                  onChange={(e) => setRole(e.target.value as 'agent' | 'client')}
+                  className="w-full px-3 py-2 border border-stone-200 rounded-sm bg-white text-stone-900 text-sm"
+                >
+                  <option value="agent">中介</option>
+                  <option value="client">客户</option>
+                </select>
+              </div>
+              <div>
+                <label htmlFor="fullName" className="block text-sm text-stone-700 mb-1">姓名</label>
+                <input
+                  id="fullName"
+                  type="text"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  className="w-full px-3 py-2 border border-stone-200 rounded-sm bg-white text-stone-900 text-sm focus:outline-none focus:border-stone-400"
+                  placeholder="您的姓名"
+                />
+              </div>
+              {role === 'agent' && (
+                <div>
+                  <label htmlFor="agentNumber" className="block text-sm text-stone-700 mb-1">中介号</label>
+                  <input
+                    id="agentNumber"
+                    type="text"
+                    value={agentNumber}
+                    onChange={(e) => setAgentNumber(e.target.value)}
+                    className="w-full px-3 py-2 border border-stone-200 rounded-sm bg-white text-stone-900 text-sm focus:outline-none focus:border-stone-400"
+                    placeholder="中介注册号"
+                  />
+                </div>
+              )}
+              <div>
+                <label htmlFor="phone" className="block text-sm text-stone-700 mb-1">手机号</label>
+                <input
+                  id="phone"
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  className="w-full px-3 py-2 border border-stone-200 rounded-sm bg-white text-stone-900 text-sm focus:outline-none focus:border-stone-400"
+                  placeholder="手机号码"
+                />
+              </div>
+            </>
           )}
           <div>
             <label htmlFor="password" className="block text-sm text-stone-700 mb-1">密码</label>

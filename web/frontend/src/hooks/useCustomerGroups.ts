@@ -22,10 +22,10 @@ export function useCustomerGroups() {
   })
 
   const create = useMutation({
-    mutationFn: async (name: string) => {
+    mutationFn: async ({ name, description, intent }: { name: string; description?: string; intent: 'buy' | 'rent' }) => {
       const { data, error } = await supabase
         .from('customer_groups')
-        .insert({ agent_id: user!.id, name })
+        .insert({ agent_id: user!.id, name, description: description || null, intent })
         .select()
         .single()
       if (error) throw error
@@ -35,10 +35,14 @@ export function useCustomerGroups() {
   })
 
   const update = useMutation({
-    mutationFn: async ({ id, name }: { id: string; name: string }) => {
+    mutationFn: async ({ id, name, intent }: { id: string; name: string; intent?: 'buy' | 'rent' }) => {
       const { data, error } = await supabase
         .from('customer_groups')
-        .update({ name, updated_at: new Date().toISOString() })
+        .update({
+          name,
+          ...(intent !== undefined && { intent }),
+          updated_at: new Date().toISOString(),
+        })
         .eq('id', id)
         .select()
         .single()

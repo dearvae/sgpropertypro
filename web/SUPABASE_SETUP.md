@@ -17,14 +17,33 @@
 2. `supabase/migrations/002_rls_policies.sql`
 3. `supabase/migrations/003_client_view_rpc.sql`
 4. `supabase/migrations/004_appointment_conflict_check.sql`
+5. `supabase/migrations/005_realtime.sql`
+6. `supabase/migrations/006_customer_group_description.sql`
+7. `supabase/migrations/007_property_scraping_fields.sql`（房源抓取字段）
 
-或使用 Supabase CLI（若已安装）：
+或使用 Supabase CLI 执行迁移：
 
 ```bash
 cd web
+# 方式一：链接后 push（需先 supabase login）
 npx supabase link --project-ref YOUR_PROJECT_REF
 npx supabase db push
+
+# 方式二：直接用数据库连接（免登录）
+# 在项目根 .env 中设置 SUPABASE_PROJECT_REF（项目 ID）、SUPABASE_DB_PASSWORD，或：
+SUPABASE_PROJECT_REF=你的项目ID SUPABASE_DB_PASSWORD=你的数据库密码 ./run-migration.sh
+# 项目 ID 在 Dashboard 的 URL 中可见；数据库密码在 Settings → Database
 ```
+
+**若出现 "column p.bedrooms does not exist"**：在项目根 .env 中添加 `SUPABASE_DB_PASSWORD=你的密码`，然后执行：
+```bash
+cd web && python3 run-fix-columns.py
+```
+
+**若出现 "Could not find the table in the schema cache"**：说明数据库表尚未创建。
+
+- **最快方式**：在 SQL Editor 中打开并执行 `supabase/BOOTSTRAP_ALL.sql`（一次性创建全部表）
+- 或按顺序执行 001～006 的 migration 文件
 
 ## 3. 启用 Realtime
 

@@ -7,7 +7,12 @@ type AuthContextType = {
   session: Session | null
   loading: boolean
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>
-  signUp: (email: string, password: string, role?: 'agent' | 'client') => Promise<{ error: Error | null }>
+  signUp: (
+    email: string,
+    password: string,
+    role?: 'agent' | 'client',
+    meta?: { fullName?: string; agentNumber?: string; phone?: string }
+  ) => Promise<{ error: Error | null }>
   signOut: () => Promise<void>
 }
 
@@ -38,14 +43,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: error as Error | null }
   }, [])
 
-  const signUp = useCallback(async (email: string, password: string, role: 'agent' | 'client' = 'agent') => {
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { data: { role } },
-    })
-    return { error: error as Error | null }
-  }, [])
+  const signUp = useCallback(
+    async (
+      email: string,
+      password: string,
+      role: 'agent' | 'client' = 'agent',
+      meta?: { fullName?: string; agentNumber?: string; phone?: string }
+    ) => {
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            role,
+            full_name: meta?.fullName?.trim() || null,
+            agent_number: meta?.agentNumber?.trim() || null,
+            phone: meta?.phone?.trim() || null,
+          },
+        },
+      })
+      return { error: error as Error | null }
+    },
+    []
+  )
 
   const signOut = useCallback(async () => {
     await supabase.auth.signOut()

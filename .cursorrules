@@ -94,6 +94,8 @@ If needed, you can further use the `web_scraper.py` file to scrape the web page 
 ## User Specified Lessons
 
 - You have a python venv in ./venv. Always use (activate) it when doing python development. First, to check whether 'uv' is available, use `which uv`. If that's the case, first activate the venv, and then use `uv pip install` to install packages. Otherwise, fall back to `pip`.
+- 数据库相关配置放在项目根 .env（已 gitignore）：SUPABASE_PROJECT_REF（项目 ID）、SUPABASE_DB_PASSWORD。迁移/修复脚本会从 .env 自动读取。参考 .env.example。
+- **数据库迁移（必做）**：每次新增或修改数据库表/列/SQL 迁移脚本时，**必须在本轮对话中立即执行**。执行方式：`cd propertyassistance && python3 web/run-migration-xxx.py`（需在 .env 中配置 SUPABASE_PROJECT_REF、SUPABASE_DB_PASSWORD）。否则会出现 "Could not find the column in schema cache" 等错误。
 - Include info useful for debugging in the program output.
 - Read the file before you try to edit it.
 - Due to Cursor's limit, when you use `git` and `gh` and need to submit a multiline commit message, first write the message in a file, and then use `git commit -F <filename>` or similar command to commit. And then remove the file. Include "[Cursor] " in the commit message and PR title.
@@ -104,6 +106,12 @@ If needed, you can further use the `web_scraper.py` file to scrape the web page 
 - Add debug information to stderr while keeping the main output clean in stdout for better pipeline integration
 - When using seaborn styles in matplotlib, use 'seaborn-v0_8' instead of 'seaborn' as the style name due to recent seaborn version changes
 - Use 'gpt-4o' as the model name for OpenAI's GPT-4 with vision capabilities
-- When searching for recent news, use the current year (2025) instead of previous years, or simply use the "recent" keyword to get the latest information
 
 # Scratchpad
+## 已完成：中介时间表 - 替换客户视图，新增智能合并的时间表
+- [X] 删除「客户视图」tab
+- [X] 新增「时间表」tab：展示未来预约，同客户同天相邻时段（30分钟内）合并为一块
+- [X] 支持「未来两周」/「全部」切换，按天卡片展示，每块显示客户名、时间段、看几套房
+- [X] Backend: 抓取 Property Guru 房源的 listing_agent_name、listing_agent_phone
+- [X] 数据库: migrations/010_listing_agent_fields.sql 添加字段
+- [X] Frontend: 预约卡片显示「卖家中介」及 WhatsApp 按钮
