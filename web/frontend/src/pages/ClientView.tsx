@@ -39,6 +39,28 @@ export default function ClientView() {
   const qc = useQueryClient()
   useRealtimeClientView(token)
 
+  const [activeTab, setActiveTab] = useState<'upcoming' | 'history'>('upcoming')
+  const [collapsedDates, setCollapsedDates] = useState<Set<string>>(new Set())
+  const [lightboxImage, setLightboxImage] = useState<string | null>(null)
+  const [noteModal, setNoteModal] = useState<{ appointmentId: string; content: string } | null>(null)
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setLightboxImage(null)
+        setNoteModal(null)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  useEffect(() => {
+    const open = !!lightboxImage || !!noteModal
+    document.body.style.overflow = open ? 'hidden' : ''
+    return () => { document.body.style.overflow = '' }
+  }, [lightboxImage, noteModal])
+
   const { data, isLoading, isFetching, error } = useQuery({
     queryKey: ['client-view', token],
     queryFn: async (): Promise<ClientViewData> => {
@@ -46,7 +68,12 @@ export default function ClientView() {
         p_share_token: token,
       })
       if (rpcError) throw rpcError
-      return result as ClientViewData
+      // Supabase RPC 可能返回原始值或数组包装，统一为对象
+      const resolved = Array.isArray(result) && result.length > 0 ? result[0] : result
+      if (import.meta.env.DEV) {
+        console.log('[ClientView] RPC 返回:', { raw: result, resolved })
+      }
+      return resolved as ClientViewData
     },
     enabled: !!token,
   })
@@ -73,7 +100,8 @@ export default function ClientView() {
     )
   }
 
-  const { group, appointments } = data
+  const { group, appointments: rawAppointments } = data
+  const appointments = Array.isArray(rawAppointments) ? rawAppointments : []
   const now = new Date()
   const upcoming = appointments.filter((a) => new Date(a.start_time) >= now)
   const history = appointments.filter((a) => new Date(a.start_time) < now)
@@ -86,28 +114,6 @@ export default function ClientView() {
   }, {})
   const historyDates = Object.keys(historyByDate).sort((a, b) => new Date(b).getTime() - new Date(a).getTime())
 
-  const [activeTab, setActiveTab] = useState<'upcoming' | 'history'>('upcoming')
-  const [collapsedDates, setCollapsedDates] = useState<Set<string>>(new Set())
-  const [lightboxImage, setLightboxImage] = useState<string | null>(null)
-  const [noteModal, setNoteModal] = useState<{ appointmentId: string; content: string } | null>(null)
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setLightboxImage(null)
-        setNoteModal(null)
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [])
-
-  useEffect(() => {
-    const open = !!lightboxImage || !!noteModal
-    document.body.style.overflow = open ? 'hidden' : ''
-    return () => { document.body.style.overflow = '' }
-  }, [lightboxImage, noteModal])
-
   const toggleDate = (d: string) => {
     setCollapsedDates((prev) => {
       const next = new Set(prev)
@@ -118,6 +124,7 @@ export default function ClientView() {
   }
 
   const displayImages = (p: PropertyData): string[] => {
+    if (!p) return []
     const urls = Array.isArray(p.image_urls) ? p.image_urls : []
     if (urls.length >= 2) return urls.slice(0, 2)
     if (urls.length === 1 && p.main_image_url && urls[0] !== p.main_image_url) return [urls[0], p.main_image_url]
@@ -146,6 +153,7 @@ export default function ClientView() {
     a: AppointmentItem,
     inHistory = false
   ) => {
+    if (!a?.property) return null
     const imgs = displayImages(a.property)
     const hasNote = !!a.client_note?.trim()
     return (

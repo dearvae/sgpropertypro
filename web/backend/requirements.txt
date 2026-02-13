@@ -1,0 +1,4 @@
+# 后端抓取 API 专用依赖（精简版，减小 Docker 镜像）
+fastapi>=0.109.0
+uvicorn>=0.27.0
+playwright>=1.41.0

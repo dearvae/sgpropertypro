@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './hooks/useAuth'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import Login from './pages/Login'
 import AgentDashboard from './pages/AgentDashboard'
 import ClientView from './pages/ClientView'
@@ -21,7 +22,7 @@ function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/" element={<ProtectedRoute clientRedirect={<ClientLanding />}><AgentDashboard /></ProtectedRoute>} />
-          <Route path="/view/:token" element={<ClientView />} />
+          <Route path="/view/:token" element={<ErrorBoundary><ClientView /></ErrorBoundary>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
