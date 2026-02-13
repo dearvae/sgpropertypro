@@ -38,6 +38,7 @@ export function useProperties() {
       listing_agent_phone?: string
       listing_type?: 'sale' | 'rent'
       lease_tenure?: string
+      site_plan_url?: string
     }) => {
       const { data, error } = await supabase
         .from('properties')
@@ -58,6 +59,7 @@ export function useProperties() {
           listing_agent_phone: p.listing_agent_phone || null,
           listing_type: p.listing_type || null,
           lease_tenure: p.lease_tenure || null,
+          site_plan_url: p.site_plan_url || null,
         })
         .select()
         .single()

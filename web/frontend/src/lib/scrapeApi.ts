@@ -18,6 +18,7 @@ export type ScrapeResult = {
   listing_agent_phone?: string
   listing_type?: 'sale' | 'rent'  // 出售 vs 出租（爬虫识别）
   lease_tenure?: string  // 地契：99年地契、999年地契、永久地契（买卖时展示）
+  site_plan_url?: string  // 公寓小区平面图，从 99.co 抓取
 }
 
 export async function scrapeProperty(url: string): Promise<ScrapeResult> {
@@ -32,3 +33,4 @@ export async function scrapeProperty(url: string): Promise<ScrapeResult> {
   }
   return res.json()
 }
+

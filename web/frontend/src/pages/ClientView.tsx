@@ -16,6 +16,7 @@ type PropertyData = {
   main_image_url: string | null
   image_urls: string[]
   floor_plan_url: string | null
+  site_plan_url: string | null
   listing_type: 'sale' | 'rent' | null
   listing_agent_name: string | null
   listing_agent_phone: string | null
@@ -185,6 +186,21 @@ export default function ClientView() {
           <div className="flex-1 min-w-0 p-4 flex flex-col justify-center">
             <div className="flex items-center gap-2 flex-wrap">
               <p className={`font-semibold text-base leading-tight ${inHistory ? 'text-slate-700' : 'text-slate-900'}`}>{a.property.title}</p>
+              {a.property.site_plan_url && (
+                <button
+                  type="button"
+                  onClick={() => setLightboxImage(a.property.site_plan_url!)}
+                  className="flex-shrink-0 p-1.5 rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-colors"
+                  title="查看小区平面图"
+                  aria-label="查看小区平面图"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round">
+                    <rect x="3" y="8" width="6" height="8" rx="0.5" />
+                    <rect x="11" y="4" width="7" height="12" rx="0.5" />
+                    <rect x="4" y="18" width="5" height="3" rx="0.5" />
+                  </svg>
+                </button>
+              )}
               {a.property.listing_type && (
                 <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${a.property.listing_type === 'rent' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>
                   {a.property.listing_type === 'rent' ? '出租' : '出售'}

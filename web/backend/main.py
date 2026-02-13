@@ -25,6 +25,14 @@ class ScrapeRequest(BaseModel):
     url: str
 
 
+class SitePlanRequest(BaseModel):
+    apartment_name: str
+
+
+class SitePlanResponse(BaseModel):
+    site_plan_url: str
+
+
 class ScrapeResponse(BaseModel):
     title: str
     link: str
@@ -40,6 +48,7 @@ class ScrapeResponse(BaseModel):
     listing_agent_phone: Optional[str] = None  # 卖家中介电话
     listing_type: Optional[str] = None  # 'sale' | 'rent' 出售 vs 出租
     lease_tenure: Optional[str] = None  # 地契：99年地契、999年地契、永久地契
+    site_plan_url: Optional[str] = None  # 公寓小区平面图，从 99.co 抓取
 
 
 def _normalize_propertyguru_url(url: str) -> str:
@@ -62,6 +71,31 @@ def _detect_lease_tenure(body: str) -> Optional[str]:
     if re.search(r"\b99\s*[- ]?year|\b99\s*年|99年地契|leasehold", body_lower):
         return "99年地契"
     return None
+
+
+def _extract_apartment_name(title: str) -> Optional[str]:
+    """从房源 title 提取公寓/项目名，用于 99.co 查询"""
+    if not title or len(title.strip()) < 2:
+        return None
+    t = title.strip()
+    # "Project - 2 Bedroom" -> Project
+    m = re.match(r"^(.+?)\s*[-–—]\s+", t)
+    if m:
+        return m.group(1).strip()
+    # "2 Bed at Project Name" -> Project Name
+    m = re.search(r"\s+at\s+(.+)$", t, re.I)
+    if m:
+        return m.group(1).strip()
+    return t
+
+
+def _apartment_name_to_slug(name: str) -> str:
+    """将公寓名称转为 99.co URL 的 slug：小写、空格变横线"""
+    slug = name.strip().lower().replace(" ", "-")
+    for suffix in ["-condo", "-residences", "-residence"]:
+        if slug.endswith(suffix):
+            slug = slug[: -len(suffix)]
+    return slug
 
 
 def _detect_listing_type(url: str, body: str) -> Optional[str]:
@@ -390,6 +424,39 @@ async def scrape_property(req: ScrapeRequest):
             if listing_type == "sale":
                 lease_tenure = _detect_lease_tenure(body)
 
+            # 从 99.co 抓取公寓 site plan（best-effort，失败不影响主流程）
+            site_plan_url: Optional[str] = None
+            apt_name = _extract_apartment_name(title)
+            if apt_name:
+                try:
+                    slug = _apartment_name_to_slug(apt_name)
+                    plan_url = f"https://www.99.co/singapore/condos-apartments/{slug}#site_plans"
+                    plan_page = await context.new_page()
+                    await plan_page.goto(plan_url, wait_until="load", timeout=15000)
+                    await plan_page.wait_for_timeout(2500)
+                    await plan_page.evaluate(
+                        """() => {
+                        const el = document.querySelector('#site_plans');
+                        if (el) el.scrollIntoView({ behavior: 'smooth' });
+                    }"""
+                    )
+                    await plan_page.wait_for_timeout(1500)
+                    for sel in [
+                        "#site_plans img.CarouselPhoto_image__06711",
+                        "#site_plans .CarouselPhoto_imageContainer__WOp2O img",
+                        "#site_plans img[src*='pic2.99.co']",
+                        "#site_plans img",
+                    ]:
+                        if await plan_page.locator(sel).count() > 0:
+                            img = plan_page.locator(sel).first
+                            src = await img.get_attribute("src")
+                            if src and "pic2.99.co" in src:
+                                site_plan_url = src
+                                break
+                    await plan_page.close()
+                except Exception:
+                    pass
+
             await browser.close()
 
             return ScrapeResponse(
@@ -407,8 +474,76 @@ async def scrape_property(req: ScrapeRequest):
                 listing_agent_phone=listing_agent_phone,
                 listing_type=listing_type,
                 lease_tenure=lease_tenure,
+                site_plan_url=site_plan_url,
             )
 
         except Exception as e:
             await browser.close()
             raise HTTPException(status_code=500, detail=f"抓取失败: {str(e)}")
+
+
+@app.post("/api/scrape-site-plan", response_model=SitePlanResponse)
+async def scrape_site_plan(req: SitePlanRequest):
+    """从 99.co 抓取公寓的 site plan 图片"""
+    apartment_name = req.apartment_name.strip()
+    if not apartment_name:
+        raise HTTPException(status_code=400, detail="公寓名称不能为空")
+
+    slug = _apartment_name_to_slug(apartment_name)
+    url = f"https://www.99.co/singapore/condos-apartments/{slug}#site_plans"
+
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True)
+        context = await browser.new_context(
+            user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        )
+        page = await context.new_page()
+
+        try:
+            await page.goto(url, wait_until="load", timeout=30000)
+            await page.wait_for_timeout(3000)
+
+            # 先滚动到 #site_plans 确保加载
+            await page.evaluate(
+                """() => {
+                const el = document.querySelector('#site_plans');
+                if (el) el.scrollIntoView({ behavior: 'smooth' });
+            }"""
+            )
+            await page.wait_for_timeout(2000)
+
+            # 选择器：site_plans 区域内的 CarouselPhoto 图片
+            selectors = [
+                "#site_plans img.CarouselPhoto_image__06711",
+                "#site_plans .CarouselPhoto_imageContainer__WOp2O img",
+                "#site_plans img[src*='pic2.99.co']",
+                "#site_plans img",
+            ]
+            site_plan_url: Optional[str] = None
+            for sel in selectors:
+                try:
+                    if await page.locator(sel).count() > 0:
+                        img = page.locator(sel).first
+                        src = await img.get_attribute("src")
+                        if src and "pic2.99.co" in src:
+                            site_plan_url = src
+                            break
+                except Exception:
+                    pass
+
+            await browser.close()
+
+            if not site_plan_url:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"未找到该公寓的 site plan，请确认 99.co 上存在：{apartment_name}",
+                )
+
+            return SitePlanResponse(site_plan_url=site_plan_url)
+
+        except HTTPException:
+            await browser.close()
+            raise
+        except Exception as e:
+            await browser.close()
+            raise HTTPException(status_code=500, detail=f"抓取 site plan 失败: {str(e)}")

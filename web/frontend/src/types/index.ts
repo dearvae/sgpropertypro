@@ -27,6 +27,7 @@ export type Property = {
   listing_agent_phone: string | null
   listing_type: 'sale' | 'rent' | null  // 出售 | 出租（爬虫识别）
   lease_tenure: string | null  // 地契：99年地契、999年地契、永久地契（买卖时展示）
+  site_plan_url: string | null  // 公寓小区平面图，从 99.co 抓取
   created_at: string
   updated_at: string
 }
