@@ -22,6 +22,7 @@
 7. `supabase/migrations/007_property_scraping_fields.sql`（房源抓取字段）
 8. `supabase/migrations/015_pending_appointments.sql`（待预约功能）
 9. `supabase/migrations/016_allow_appointment_conflicts.sql`（**必做**：允许时间冲突的预约共存，否则无法保存冲突时段）
+10. `supabase/migrations/020_customer_group_is_active.sql`（客户 inactive 打标，已成交客户可从筛选排除）
 
 或使用 Supabase CLI 执行迁移：
 
@@ -41,6 +42,8 @@ SUPABASE_PROJECT_REF=你的项目ID SUPABASE_DB_PASSWORD=你的数据库密码 .
 ```bash
 cd web && python3 run-fix-columns.py
 ```
+
+**若出现 "Could not find the 'customer_info' column"**：说明预约相关迁移（018、019）未执行。在 SQL Editor 中执行 `supabase/FIX_APPOINTMENT_COLUMNS.sql` 即可修复。
 
 **若出现 "Could not find the table in the schema cache"**：说明数据库表尚未创建。
 

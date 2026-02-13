@@ -90,8 +90,12 @@ def _extract_apartment_name(title: str) -> Optional[str]:
 
 
 def _apartment_name_to_slug(name: str) -> str:
-    """将公寓名称转为 99.co URL 的 slug：小写、空格变横线"""
-    slug = name.strip().lower().replace(" ", "-")
+    """将公寓名称转为 99.co URL 的 slug：去掉特殊字符、空格变横线"""
+    # 去掉特殊字符（如 @），只保留字母、数字、空格、连字符
+    slug = re.sub(r"[^a-zA-Z0-9\s\-]", "", name.strip())
+    # 将单个或多个空格统一替换为单个 -
+    slug = re.sub(r"\s+", "-", slug)
+    slug = slug.lower().strip("-")
     for suffix in ["-condo", "-residences", "-residence"]:
         if slug.endswith(suffix):
             slug = slug[: -len(suffix)]

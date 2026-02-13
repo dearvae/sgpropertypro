@@ -5,6 +5,7 @@ export type CustomerGroup = {
   description: string | null
   intent: 'buy' | 'rent' | null  // 买房 | 租房，必选
   share_token: string
+  is_active?: boolean  // 是否活跃；false 表示已成交等，从各 filter 排除。默认 true
   created_at: string
   updated_at: string
 }
@@ -32,18 +33,24 @@ export type Property = {
   updated_at: string
 }
 
+/** 预约角色：买家 | 卖家 | 租客 | 房东 */
+export type PartyRole = 'buyer' | 'seller' | 'tenant' | 'landlord'
+
 export type Appointment = {
   id: string
   property_id: string
-  customer_group_id: string
+  customer_group_id: string | null
   start_time: string
   end_time: string
   status: 'scheduled' | 'completed' | 'cancelled'
+  party_role: PartyRole
+  customer_info?: string | null
+  customer_phone?: string | null
   notes?: string | null
   created_at: string
   updated_at: string
   properties?: Property
-  customer_groups?: CustomerGroup
+  customer_groups?: CustomerGroup | null
 }
 
 /** 待预约状态 */

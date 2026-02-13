@@ -38,15 +38,29 @@ export function useAppointments(customerGroupId?: string) {
   const create = useMutation({
     mutationFn: async (a: {
       property_id: string
-      customer_group_id: string
+      party_role: 'buyer' | 'seller' | 'tenant' | 'landlord'
+      customer_group_id?: string | null
+      customer_info?: string | null
+      customer_phone?: string | null
       start_time: string
       end_time: string
       notes?: string | null
     }) => {
-      const { property_id, customer_group_id, start_time, end_time, notes } = a
+      const { property_id, party_role, customer_group_id, customer_info, customer_phone, start_time, end_time, notes } = a
+      const payload: Record<string, unknown> = {
+        property_id,
+        party_role,
+        start_time,
+        end_time,
+        notes: notes || null,
+        customer_info: customer_info?.trim() || null,
+        customer_phone: customer_phone?.trim() || null,
+      }
+      if (customer_group_id) payload.customer_group_id = customer_group_id
+      else payload.customer_group_id = null
       const { data, error } = await supabase
         .from('appointments')
-        .insert({ property_id, customer_group_id, start_time, end_time, notes: notes || null })
+        .insert(payload)
         .select('*, properties(*), customer_groups(*)')
         .single()
       if (error) throw error

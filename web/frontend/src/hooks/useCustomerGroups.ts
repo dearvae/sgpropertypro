@@ -35,14 +35,14 @@ export function useCustomerGroups() {
   })
 
   const update = useMutation({
-    mutationFn: async ({ id, name, intent }: { id: string; name: string; intent?: 'buy' | 'rent' }) => {
+    mutationFn: async ({ id, name, intent, is_active }: { id: string; name?: string; intent?: 'buy' | 'rent'; is_active?: boolean }) => {
+      const payload: Record<string, unknown> = { updated_at: new Date().toISOString() }
+      if (name !== undefined) payload.name = name
+      if (intent !== undefined) payload.intent = intent
+      if (is_active !== undefined) payload.is_active = is_active
       const { data, error } = await supabase
         .from('customer_groups')
-        .update({
-          name,
-          ...(intent !== undefined && { intent }),
-          updated_at: new Date().toISOString(),
-        })
+        .update(payload)
         .eq('id', id)
         .select()
         .single()
