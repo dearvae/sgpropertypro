@@ -51,6 +51,13 @@ export function useRealtimeClientView(token: string | undefined) {
           qc.invalidateQueries({ queryKey: ['client-view', token] })
         }
       )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'properties' },
+        () => {
+          qc.invalidateQueries({ queryKey: ['client-view', token] })
+        }
+      )
       .subscribe()
 
     return () => {

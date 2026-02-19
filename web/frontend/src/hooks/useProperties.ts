@@ -28,6 +28,8 @@ export function useProperties() {
       basic_info?: string
       source_url?: string
       price?: string
+      price_value?: string
+      price_description?: string
       size_sqft?: string
       bedrooms?: string
       bathrooms?: string
@@ -49,6 +51,8 @@ export function useProperties() {
           basic_info: p.basic_info || null,
           source_url: p.source_url || null,
           price: p.price || null,
+          price_value: p.price_value ?? null,
+          price_description: p.price_description ?? null,
           size_sqft: p.size_sqft || null,
           bedrooms: p.bedrooms || null,
           bathrooms: p.bathrooms || null,

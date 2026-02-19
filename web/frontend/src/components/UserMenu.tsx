@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useAuth } from '@/hooks/useAuth'
 import { useProfile } from '@/hooks/useProfile'
 import { ProfileEditModal } from './ProfileEditModal'
@@ -9,6 +10,7 @@ export function UserMenu() {
   const [showDropdown, setShowDropdown] = useState(false)
   const [showProfileModal, setShowProfileModal] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const { t } = useTranslation()
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -30,7 +32,7 @@ export function UserMenu() {
         className="flex items-center gap-2 rounded-full border border-stone-200 p-0.5 hover:bg-stone-50 transition-colors"
       >
         {avatarUrl ? (
-          <img src={avatarUrl} alt="头像" className="w-8 h-8 rounded-full object-cover" />
+          <img src={avatarUrl} alt={t('userMenu.avatar')} className="w-8 h-8 rounded-full object-cover" />
         ) : (
           <div className="w-8 h-8 rounded-full bg-stone-200 flex items-center justify-center text-stone-600 text-sm font-medium">
             {displayName[0].toUpperCase()}
@@ -41,7 +43,7 @@ export function UserMenu() {
       {showDropdown && (
         <div className="absolute right-0 top-full mt-1 py-1 min-w-[140px] bg-white border border-stone-200 rounded-sm shadow-lg z-50">
           <div className="px-3 py-2 border-b border-stone-100">
-            <p className="text-sm text-stone-900 truncate">{profile?.full_name || '未设置姓名'}</p>
+            <p className="text-sm text-stone-900 truncate">{profile?.full_name || t('userMenu.noName')}</p>
             <p className="text-xs text-stone-500 truncate">{user?.email}</p>
           </div>
           <button
@@ -51,7 +53,7 @@ export function UserMenu() {
             }}
             className="w-full text-left px-3 py-2 text-sm text-stone-700 hover:bg-stone-50"
           >
-            个人资料
+            {t('userMenu.profile')}
           </button>
           <button
             onClick={() => {
@@ -60,7 +62,7 @@ export function UserMenu() {
             }}
             className="w-full text-left px-3 py-2 text-sm text-stone-600 hover:bg-stone-50"
           >
-            退出
+            {t('userMenu.signOut')}
           </button>
         </div>
       )}

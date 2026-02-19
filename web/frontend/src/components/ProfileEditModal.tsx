@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useProfile } from '@/hooks/useProfile'
 
 export function ProfileEditModal({ onClose }: { onClose: () => void }) {
@@ -8,6 +9,7 @@ export function ProfileEditModal({ onClose }: { onClose: () => void }) {
   const [phone, setPhone] = useState('')
   const [avatarUrl, setAvatarUrl] = useState('')
   const [error, setError] = useState('')
+  const { t } = useTranslation()
 
   useEffect(() => {
     if (profile) {
@@ -25,7 +27,7 @@ export function ProfileEditModal({ onClose }: { onClose: () => void }) {
     setError('')
     const nameChanged = profile && fullName.trim() !== (profile.full_name ?? '')
     if (nameChanged && !nameChangeable) {
-      setError('您今年已修改过姓名，明年可再修改一次')
+      setError(t('profile.nameChangeError'))
       return
     }
     try {
@@ -50,14 +52,14 @@ export function ProfileEditModal({ onClose }: { onClose: () => void }) {
         className="bg-white rounded-sm shadow-lg p-6 w-full max-w-md mx-4 border border-stone-200"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="text-sm font-medium text-stone-900 mb-4">个人资料</h3>
+        <h3 className="text-sm font-medium text-stone-900 mb-4">{t('profile.title')}</h3>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs text-stone-600 mb-1">头像图片链接</label>
+            <label className="block text-xs text-stone-600 mb-1">{t('profile.avatarUrl')}</label>
             <div className="flex gap-3 items-center">
               <div className="w-14 h-14 rounded-full shrink-0 overflow-hidden bg-stone-200 border border-stone-200">
                 {avatarUrl ? (
-                  <img src={avatarUrl} alt="头像" className="w-full h-full object-cover" />
+                  <img src={avatarUrl} alt={t('profile.avatar')} className="w-full h-full object-cover" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-stone-500 text-xl">
                     {fullName ? fullName[0] : '?'}
@@ -75,35 +77,35 @@ export function ProfileEditModal({ onClose }: { onClose: () => void }) {
           </div>
           <div>
             <label className="block text-xs text-stone-600 mb-1">
-              姓名
-              {!nameChangeable && <span className="text-amber-600 ml-1">（今年已修改过，明年可再改）</span>}
+              {t('profile.fullName')}
+              {!nameChangeable && <span className="text-amber-600 ml-1">{t('profile.nameChangedHint')}</span>}
             </label>
             <input
               type="text"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
               disabled={!nameChangeable}
-              placeholder="您的姓名"
+              placeholder={t('login.namePlaceholder')}
               className="w-full px-3 py-2 border border-stone-200 rounded-sm text-sm disabled:bg-stone-100 disabled:text-stone-500"
             />
           </div>
           <div>
-            <label className="block text-xs text-stone-600 mb-1">中介号</label>
+            <label className="block text-xs text-stone-600 mb-1">{t('profile.agentNumber')}</label>
             <input
               type="text"
               value={agentNumber}
               onChange={(e) => setAgentNumber(e.target.value)}
-              placeholder="中介注册号"
+              placeholder={t('login.agentNumberPlaceholder')}
               className="w-full px-3 py-2 border border-stone-200 rounded-sm text-sm"
             />
           </div>
           <div>
-            <label className="block text-xs text-stone-600 mb-1">手机号</label>
+            <label className="block text-xs text-stone-600 mb-1">{t('profile.phone')}</label>
             <input
               type="tel"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
-              placeholder="手机号码"
+              placeholder={t('login.phonePlaceholder')}
               className="w-full px-3 py-2 border border-stone-200 rounded-sm text-sm"
             />
           </div>
@@ -114,10 +116,10 @@ export function ProfileEditModal({ onClose }: { onClose: () => void }) {
               disabled={update.isPending}
               className="px-4 py-2 text-sm border border-stone-300 rounded-sm hover:bg-stone-100 disabled:opacity-50"
             >
-              {update.isPending ? '保存中...' : '保存'}
+              {update.isPending ? t('profile.saving') : t('common.save')}
             </button>
             <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-stone-500 hover:text-stone-700">
-              取消
+              {t('common.cancel')}
             </button>
           </div>
         </form>

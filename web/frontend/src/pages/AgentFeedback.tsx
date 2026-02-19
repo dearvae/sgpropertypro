@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { message } from 'antd'
+import { useTranslation } from 'react-i18next'
 import { useAgentFeedback, type FeedbackSort } from '@/hooks/useAgentFeedback'
 import type { AgentFeedback } from '@/types'
 
@@ -7,10 +9,11 @@ export function AgentFeedbackSection() {
   const [content, setContent] = useState('')
   const [isAnonymous, setIsAnonymous] = useState(false)
   const feedback = useAgentFeedback(sort)
+  const { t, i18n } = useTranslation()
 
   const handleSubmit = async () => {
     if (!content.trim()) {
-      alert('请输入建议或反馈内容')
+      message.warning(t('feedback.enterFeedback'))
       return
     }
     try {
@@ -18,7 +21,7 @@ export function AgentFeedbackSection() {
       setContent('')
       setIsAnonymous(false)
     } catch (e) {
-      alert((e as Error).message)
+      message.error((e as Error).message)
     }
   }
 
@@ -35,7 +38,7 @@ export function AgentFeedbackSection() {
   return (
     <section>
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-sm font-medium text-stone-700">建议与反馈</h2>
+        <h2 className="text-sm font-medium text-stone-700">{t('feedback.title')}</h2>
         <div className="flex gap-1 border border-stone-200 rounded-sm p-0.5">
           <button
             onClick={() => setSort('recent')}
@@ -43,7 +46,7 @@ export function AgentFeedbackSection() {
               sort === 'recent' ? 'bg-stone-800 text-white' : 'text-stone-600 hover:bg-stone-100'
             }`}
           >
-            按最近时间
+            {t('feedback.sortRecent')}
           </button>
           <button
             onClick={() => setSort('top')}
@@ -51,17 +54,16 @@ export function AgentFeedbackSection() {
               sort === 'top' ? 'bg-stone-800 text-white' : 'text-stone-600 hover:bg-stone-100'
             }`}
           >
-            按支持最多
+            {t('feedback.sortTop')}
           </button>
         </div>
       </div>
 
-      {/* 提交表单 */}
       <div className="mb-6 p-4 border border-stone-200 rounded-sm bg-white space-y-3">
         <textarea
           value={content}
           onChange={(e) => setContent(e.target.value)}
-          placeholder="分享您的建议或反馈..."
+          placeholder={t('feedback.placeholder')}
           rows={4}
           className="w-full px-3 py-2 border border-stone-200 rounded-sm text-sm resize-none focus:outline-none focus:ring-1 focus:ring-stone-400"
         />
@@ -73,25 +75,24 @@ export function AgentFeedbackSection() {
               onChange={(e) => setIsAnonymous(e.target.checked)}
               className="rounded border-stone-300"
             />
-            匿名提交
+            {t('feedback.anonymousSubmit')}
           </label>
           <button
             onClick={handleSubmit}
             disabled={feedback.create.isPending || !content.trim()}
             className="text-sm px-4 py-2 border border-stone-300 rounded-sm hover:bg-stone-100 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {feedback.create.isPending ? '提交中...' : '提交'}
+            {feedback.create.isPending ? t('feedback.submitting') : t('feedback.submit')}
           </button>
         </div>
       </div>
 
-      {/* 反馈列表 */}
       <div className="space-y-3">
         {feedback.isLoading ? (
-          <div className="py-12 text-center text-stone-500 text-sm">加载中...</div>
+          <div className="py-12 text-center text-stone-500 text-sm">{t('common.loading')}</div>
         ) : items.length === 0 ? (
           <div className="py-12 text-center text-stone-500 text-sm border border-dashed border-stone-200 rounded-sm">
-            暂无建议或反馈
+            {t('feedback.noFeedback')}
           </div>
         ) : (
           items.map((item) => (
@@ -102,8 +103,8 @@ export function AgentFeedbackSection() {
               <div className="flex-1 min-w-0">
                 <p className="text-sm text-stone-900 whitespace-pre-wrap">{item.content}</p>
                 <p className="text-xs text-stone-500 mt-2">
-                  {item.author_display ? item.author_display : '匿名'} ·{' '}
-                  {new Date(item.created_at).toLocaleString('zh-CN', {
+                  {item.author_display ? item.author_display : t('common.anonymous')} ·{' '}
+                  {new Date(item.created_at).toLocaleString(i18n.language === 'zh' ? 'zh-CN' : 'en-US', {
                     month: 'short',
                     day: 'numeric',
                     hour: '2-digit',
@@ -119,7 +120,7 @@ export function AgentFeedbackSection() {
                     ? 'border-amber-400 bg-amber-50 text-amber-700'
                     : 'border-stone-200 hover:bg-stone-50 text-stone-600'
                 } disabled:opacity-50`}
-                title={item.has_voted ? '取消支持' : '支持 +1'}
+                title={item.has_voted ? t('feedback.unsupport') : t('feedback.support')}
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"

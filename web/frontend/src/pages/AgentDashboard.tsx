@@ -1,31 +1,42 @@
 import { useState, useMemo, useEffect } from 'react'
+import { message } from 'antd'
+import { useTranslation } from 'react-i18next'
 import { UserMenu } from '@/components/UserMenu'
+import { LanguageSwitcher } from '@/components/LanguageSwitcher'
 import { useCustomerGroups } from '@/hooks/useCustomerGroups'
 import { useProperties } from '@/hooks/useProperties'
 import { useAppointments } from '@/hooks/useAppointments'
 import { usePendingAppointments } from '@/hooks/usePendingAppointments'
 import { useRealtimeAppointments } from '@/hooks/useRealtimeAppointments'
 import { checkAppointmentConflict } from '@/lib/conflictCheck'
-import { scrapeProperty } from '@/lib/scrapeApi'
+import { scrapeProperty, triggerScrapeAsync } from '@/lib/scrapeApi'
 import { getWhatsAppChatUrl } from '@/lib/whatsapp'
 import { AgentFeedbackSection } from '@/pages/AgentFeedback'
 import type { CustomerGroup, PartyRole, Property, Appointment, PendingAppointment, PendingAppointmentStatus } from '@/types'
+import { formatPriceDisplay } from '@/types'
 
-const PARTY_ROLE_LABELS: Record<PartyRole, string> = {
-  buyer: '买家',
-  seller: '卖家',
-  tenant: '租客',
-  landlord: '房东',
+function usePartyRoleLabels() {
+  const { t } = useTranslation()
+  return {
+    buyer: t('partyRole.buyer'),
+    seller: t('partyRole.seller'),
+    tenant: t('partyRole.tenant'),
+    landlord: t('partyRole.landlord'),
+  } as Record<PartyRole, string>
 }
 
-const PENDING_STATUS_OPTIONS: { value: PendingAppointmentStatus; label: string }[] = [
-  { value: 'not_scheduled', label: '还未预约' },
-  { value: 'to_consult', label: '待咨询' },
-  { value: 'consulted', label: '已咨询' },
-  { value: 'awaiting_agent_reply', label: '待对方中介回复正在确认时间' },
-]
+function usePendingStatusOptions() {
+  const { t } = useTranslation()
+  return [
+    { value: 'not_scheduled' as PendingAppointmentStatus, label: t('pendingStatus.not_scheduled') },
+    { value: 'to_consult' as PendingAppointmentStatus, label: t('pendingStatus.to_consult') },
+    { value: 'consulted' as PendingAppointmentStatus, label: t('pendingStatus.consulted') },
+    { value: 'awaiting_agent_reply' as PendingAppointmentStatus, label: t('pendingStatus.awaiting_agent_reply') },
+  ]
+}
 
 export default function AgentDashboard() {
+  const { t } = useTranslation()
   const [activeTab, setActiveTab] = useState<'groups' | 'appointments' | 'pending' | 'schedule' | 'feedback'>('groups')
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null)
   const [showAddAppointment, setShowAddAppointment] = useState(false)
@@ -43,8 +54,9 @@ export default function AgentDashboard() {
     <div className="min-h-screen bg-stone-50">
       <header className="border-b border-stone-200 bg-white">
         <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
-          <h1 className="text-lg font-medium text-stone-900">看房预约管理</h1>
-          <div className="flex items-center gap-4">
+          <h1 className="text-lg font-medium text-stone-900">{t('app.title')}</h1>
+          <div className="flex items-center gap-2">
+            <LanguageSwitcher />
             <UserMenu />
           </div>
         </div>
@@ -59,11 +71,11 @@ export default function AgentDashboard() {
                   : 'border-transparent text-stone-500 hover:text-stone-700'
               }`}
             >
-              {tab === 'groups' && '客户分组'}
-              {tab === 'appointments' && '预约'}
-              {tab === 'pending' && '待预约'}
-              {tab === 'schedule' && '时间表'}
-              {tab === 'feedback' && '建议反馈'}
+              {tab === 'groups' && t('dashboard.groups')}
+              {tab === 'appointments' && t('dashboard.appointments')}
+              {tab === 'pending' && t('dashboard.pending')}
+              {tab === 'schedule' && t('dashboard.schedule')}
+              {tab === 'feedback' && t('dashboard.feedback')}
             </button>
           ))}
         </div>
@@ -76,6 +88,7 @@ export default function AgentDashboard() {
             baseUrl={baseUrl}
             properties={properties}
             pendingAppointments={pendingAppointments}
+            t={t}
           />
         )}
         {activeTab === 'appointments' && (
@@ -111,11 +124,13 @@ function CustomerGroupsSection({
   baseUrl,
   properties,
   pendingAppointments,
+  t,
 }: {
   groups: ReturnType<typeof useCustomerGroups>
   baseUrl: string
   properties: ReturnType<typeof useProperties>
   pendingAppointments: ReturnType<typeof usePendingAppointments>
+  t: ReturnType<typeof useTranslation>['t']
 }) {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [addPendingForGroupId, setAddPendingForGroupId] = useState<string | null>(null)
@@ -140,7 +155,7 @@ function CustomerGroupsSection({
 
   const handleCreate = async () => {
     if (!newName.trim()) {
-      alert('请输入分组名称')
+      message.warning(t('dashboard.enterGroupName'))
       return
     }
     try {
@@ -149,7 +164,7 @@ function CustomerGroupsSection({
       setNewName('')
       setNewDescription('')
     } catch (e) {
-      alert((e as Error).message)
+      message.error((e as Error).message)
     }
   }
 
@@ -165,7 +180,7 @@ function CustomerGroupsSection({
       await groups.update.mutateAsync({ id: editingId, name: editName.trim(), intent: editIntent })
       setEditingId(null)
     } catch (e) {
-      alert((e as Error).message)
+      message.error((e as Error).message)
     }
   }
 
@@ -174,7 +189,7 @@ function CustomerGroupsSection({
       await groups.update.mutateAsync({ id, is_active: false })
       setConfirmInactiveId(null)
     } catch (e) {
-      alert((e as Error).message)
+      message.error((e as Error).message)
     }
   }
 
@@ -182,18 +197,18 @@ function CustomerGroupsSection({
     try {
       await groups.update.mutateAsync({ id, is_active: true })
     } catch (e) {
-      alert((e as Error).message)
+      message.error((e as Error).message)
     }
   }
 
   const handleAddPending = async () => {
     if (!addPendingForGroupId || !addPendingLink.trim()) {
-      setAddPendingError('请输入 Property Guru 链接')
+      setAddPendingError(t('dashboard.enterPropertyLink'))
       return
     }
     const sourceUrl = normalizeSourceUrl(addPendingLink)
-    if (!sourceUrl.includes('propertyguru.com')) {
-      setAddPendingError('仅支持 Property Guru 链接')
+    if (!isSupportedScrapeUrl(sourceUrl)) {
+      setAddPendingError(t('dashboard.propertyLinkOnly'))
       return
     }
     setAddPendingError(null)
@@ -209,6 +224,8 @@ function CustomerGroupsSection({
           link: scraped.link,
           basic_info: scraped.basic_info || undefined,
           price: scraped.price || undefined,
+          price_value: scraped.price_value || undefined,
+          price_description: scraped.price_description || undefined,
           size_sqft: scraped.size_sqft || undefined,
           bedrooms: scraped.bedrooms || undefined,
           bathrooms: scraped.bathrooms || undefined,
@@ -229,6 +246,8 @@ function CustomerGroupsSection({
           basic_info: scraped.basic_info || undefined,
           source_url: sourceUrl,
           price: scraped.price || undefined,
+          price_value: scraped.price_value || undefined,
+          price_description: scraped.price_description || undefined,
           size_sqft: scraped.size_sqft || undefined,
           bedrooms: scraped.bedrooms || undefined,
           bathrooms: scraped.bathrooms || undefined,
@@ -261,12 +280,12 @@ function CustomerGroupsSection({
 
   return (
     <section>
-      <h2 className="text-sm font-medium text-stone-700 mb-4">客户分组</h2>
+      <h2 className="text-sm font-medium text-stone-700 mb-4">{t('dashboard.groupsTitle')}</h2>
       <button
         onClick={handleOpenCreateModal}
         className="mb-6 text-sm border border-stone-300 rounded-sm px-4 py-2 hover:bg-stone-100"
       >
-        新建
+        {t('dashboard.create')}
       </button>
 
       {showCreateModal && (
@@ -275,37 +294,37 @@ function CustomerGroupsSection({
             className="bg-white rounded-sm shadow-lg p-6 w-full max-w-md mx-4 border border-stone-200"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-sm font-medium text-stone-900 mb-4">新建客户分组</h3>
+            <h3 className="text-sm font-medium text-stone-900 mb-4">{t('dashboard.createGroupTitle')}</h3>
             <div className="space-y-3">
               <div>
-                <label className="text-xs text-stone-600">分组名称</label>
+                <label className="text-xs text-stone-600">{t('dashboard.groupName')}</label>
                 <input
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
-                  placeholder="例如：张先生"
+                  placeholder={t('dashboard.groupNamePlaceholder')}
                   className="w-full mt-1 px-3 py-2 border border-stone-200 rounded-sm text-sm"
                   autoFocus
                 />
               </div>
               <div>
-                <label className="text-xs text-stone-600">客户需求 <span className="text-amber-600">*必选</span></label>
+                <label className="text-xs text-stone-600">{t('dashboard.customerNeed')} <span className="text-amber-600">{t('dashboard.required')}</span></label>
                 <div className="flex gap-4 mt-2">
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input type="radio" name="intent" value="buy" checked={newIntent === 'buy'} onChange={() => setNewIntent('buy')} className="text-emerald-600" />
-                    <span className="text-sm">买房</span>
+                    <span className="text-sm">{t('dashboard.buy')}</span>
                   </label>
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input type="radio" name="intent" value="rent" checked={newIntent === 'rent'} onChange={() => setNewIntent('rent')} className="text-emerald-600" />
-                    <span className="text-sm">租房</span>
+                    <span className="text-sm">{t('dashboard.rent')}</span>
                   </label>
                 </div>
               </div>
               <div>
-                <label className="text-xs text-stone-600">描述 / 备注</label>
+                <label className="text-xs text-stone-600">{t('dashboard.description')}</label>
                 <textarea
                   value={newDescription}
                   onChange={(e) => setNewDescription(e.target.value)}
-                  placeholder="预算范围、备注等..."
+                  placeholder={t('dashboard.descriptionPlaceholder')}
                   rows={3}
                   className="w-full mt-1 px-3 py-2 border border-stone-200 rounded-sm text-sm resize-none"
                 />
@@ -317,13 +336,13 @@ function CustomerGroupsSection({
                 disabled={groups.create.isPending}
                 className="px-4 py-2 text-sm border border-stone-300 rounded-sm hover:bg-stone-100"
               >
-                创建
+                {t('common.create')}
               </button>
               <button
                 onClick={() => setShowCreateModal(false)}
                 className="px-4 py-2 text-sm text-stone-500 hover:text-stone-700"
               >
-                取消
+                {t('common.cancel')}
               </button>
             </div>
           </div>
@@ -337,25 +356,25 @@ function CustomerGroupsSection({
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="text-sm font-medium text-stone-900 mb-3">
-              新增待预约 · {groups.data?.find((g) => g.id === addPendingForGroupId)?.name ?? ''}
+              {t('dashboard.addPending')} · {groups.data?.find((g) => g.id === addPendingForGroupId)?.name ?? ''}
             </h3>
             <div className="space-y-3">
               <div>
-                <label className="text-xs text-stone-600">房源链接</label>
+                <label className="text-xs text-stone-600">{t('dashboard.propertyLink')}</label>
                 <input
                   value={addPendingLink}
                   onChange={(e) => { setAddPendingLink(e.target.value); setAddPendingError(null) }}
-                  placeholder="粘贴 Property Guru 链接"
+                  placeholder={t('dashboard.propertyLinkPlaceholder')}
                   className="w-full mt-1 px-3 py-2 border border-stone-200 rounded-sm text-sm"
                   autoFocus
                 />
               </div>
               <div>
-                <label className="text-xs text-stone-600">备注（可选）</label>
+                <label className="text-xs text-stone-600">{t('dashboard.notesOptional')}</label>
                 <input
                   value={addPendingNotes}
                   onChange={(e) => setAddPendingNotes(e.target.value)}
-                  placeholder="正在跟对方讨论、待确认时间等"
+                  placeholder={t('dashboard.notesPlaceholder')}
                   className="w-full mt-1 px-3 py-2 border border-stone-200 rounded-sm text-sm"
                 />
               </div>
@@ -373,13 +392,13 @@ function CustomerGroupsSection({
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                   </svg>
                 )}
-                添加
+                {t('common.add')}
               </button>
               <button
                 onClick={() => { setAddPendingForGroupId(null); setAddPendingError(null) }}
                 className="px-4 py-2 text-sm text-stone-500 hover:text-stone-700"
               >
-                取消
+                {t('common.cancel')}
               </button>
             </div>
           </div>
@@ -402,15 +421,15 @@ function CustomerGroupsSection({
                 <div className="flex items-center gap-2">
                   <label className="flex items-center gap-1 text-xs cursor-pointer">
                     <input type="radio" name={`edit-intent-${g.id}`} checked={editIntent === 'buy'} onChange={() => setEditIntent('buy')} />
-                    买房
+                    {t('dashboard.buy')}
                   </label>
                   <label className="flex items-center gap-1 text-xs cursor-pointer">
                     <input type="radio" name={`edit-intent-${g.id}`} checked={editIntent === 'rent'} onChange={() => setEditIntent('rent')} />
-                    租房
+                    {t('dashboard.rent')}
                   </label>
                 </div>
-                <button onClick={handleUpdate} className="text-sm text-stone-600">保存</button>
-                <button onClick={() => setEditingId(null)} className="text-sm text-stone-400">取消</button>
+                <button onClick={handleUpdate} className="text-sm text-stone-600">{t('common.save')}</button>
+                <button onClick={() => setEditingId(null)} className="text-sm text-stone-400">{t('common.cancel')}</button>
               </div>
             ) : (
               <>
@@ -418,7 +437,7 @@ function CustomerGroupsSection({
                   <div className="flex items-center gap-2 flex-wrap">
                     <p className="font-medium text-stone-900 text-sm">{g.name}</p>
                     <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${g.intent === 'rent' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>
-                      {g.intent === 'rent' ? '租房' : '买房'}
+                      {g.intent === 'rent' ? t('dashboard.rent') : t('dashboard.buy')}
                     </span>
                     {g.is_active === false && (
                       <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-stone-200 text-stone-600">
@@ -427,7 +446,6 @@ function CustomerGroupsSection({
                     )}
                   </div>
                   {g.description && <p className="text-stone-600 text-xs mt-1">{g.description}</p>}
-                  <p className="text-stone-500 text-xs mt-1 font-mono">{baseUrl}{g.share_token}</p>
                 </div>
                 <div className="flex gap-2 flex-wrap">
                   {g.is_active !== false && (
@@ -435,7 +453,7 @@ function CustomerGroupsSection({
                       onClick={() => setAddPendingForGroupId(g.id)}
                       className="text-sm text-amber-600 hover:text-amber-700"
                     >
-                      新增待预约
+                      {t('dashboard.addPending')}
                     </button>
                   )}
                   {g.is_active !== false ? (
@@ -443,36 +461,45 @@ function CustomerGroupsSection({
                       onClick={() => setConfirmInactiveId(g.id)}
                       className="text-sm text-stone-500 hover:text-stone-700"
                     >
-                      设为 inactive
+                      {t('dashboard.setInactive')}
                     </button>
                   ) : (
                     <button
                       onClick={() => handleSetActive(g.id)}
                       className="text-sm text-emerald-600 hover:text-emerald-700"
                     >
-                      设为 active
+                      {t('dashboard.setActive')}
                     </button>
                   )}
                   <button
                     onClick={() => handleStartEdit(g)}
                     className="text-sm text-stone-500 hover:text-stone-700"
                   >
-                    编辑
+                    {t('common.edit')}
                   </button>
                   <button
                     onClick={() => {
                       navigator.clipboard.writeText(`${baseUrl}${g.share_token}`)
-                      alert('链接已复制')
+                      message.success(t('dashboard.viewLinkCopied'))
                     }}
                     className="text-sm text-stone-500 hover:text-stone-700"
                   >
-                    复制链接
+                    {t('dashboard.copyViewLink')}
+                  </button>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(`${baseUrl}${g.share_token_edit ?? g.share_token}`)
+                      message.success(t('dashboard.editLinkCopied'))
+                    }}
+                    className="text-sm text-stone-500 hover:text-stone-700"
+                  >
+                    {t('dashboard.copyEditLink')}
                   </button>
                   <button
                     onClick={() => groups.remove.mutate(g.id)}
                     className="text-sm text-stone-400 hover:text-red-600"
                   >
-                    删除
+                    {t('common.delete')}
                   </button>
                 </div>
               </>
@@ -487,22 +514,22 @@ function CustomerGroupsSection({
             className="bg-white rounded-sm border border-stone-200 p-5 w-full max-w-sm shadow-lg"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-sm font-medium text-stone-900 mb-2">设为 inactive</h3>
+            <h3 className="text-sm font-medium text-stone-900 mb-2">{t('dashboard.inactiveConfirmTitle')}</h3>
             <p className="text-xs text-stone-600 mb-4">
-              如果设为 inactive，该客户将不会出现在其他页面的筛选列表中，与其相关的预约和待预约也不会再显示，除非再将其改回 active。
+              {t('dashboard.inactiveConfirmDesc')}
             </p>
             <div className="flex gap-2">
               <button
                 onClick={() => confirmInactiveId && handleSetInactive(confirmInactiveId)}
                 className="flex-1 text-sm px-4 py-2 border border-stone-300 rounded-sm hover:bg-stone-100"
               >
-                确认
+                {t('common.confirm')}
               </button>
               <button
                 onClick={() => setConfirmInactiveId(null)}
                 className="text-sm px-4 py-2 border border-stone-200 rounded-sm hover:bg-stone-100"
               >
-                取消
+                {t('common.cancel')}
               </button>
             </div>
           </div>
@@ -518,6 +545,11 @@ function normalizeSourceUrl(url: string): string {
   return u.replace(/\/$/, '')
 }
 
+const SUPPORTED_SCRAPE_DOMAINS = ['propertyguru.com', 'propertygroup.com']
+function isSupportedScrapeUrl(url: string): boolean {
+  return SUPPORTED_SCRAPE_DOMAINS.some((d) => url.includes(d))
+}
+
 function PendingAppointmentsSection({
   pendingAppointments,
   properties,
@@ -527,13 +559,37 @@ function PendingAppointmentsSection({
   properties: ReturnType<typeof useProperties>
   groups: ReturnType<typeof useCustomerGroups>
 }) {
+  const { t } = useTranslation()
+  const PENDING_STATUS_OPTIONS = usePendingStatusOptions()
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
   const [refreshingPropertyId, setRefreshingPropertyId] = useState<string | null>(null)
+  const [lightboxImage, setLightboxImage] = useState<string | null>(null)
+
+  const displayImages = (p: Property | undefined): string[] => {
+    if (!p) return []
+    const urls = Array.isArray(p.image_urls) ? p.image_urls : []
+    if (urls.length >= 2) return urls.slice(0, 2)
+    if (urls.length === 1 && p.main_image_url && urls[0] !== p.main_image_url) return [urls[0], p.main_image_url]
+    if (urls.length === 1) return urls
+    if (p.main_image_url) return [p.main_image_url]
+    return []
+  }
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setLightboxImage(null) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  useEffect(() => {
+    document.body.style.overflow = lightboxImage ? 'hidden' : ''
+    return () => { document.body.style.overflow = '' }
+  }, [lightboxImage])
 
   const handleRefreshProperty = async (prop: Property) => {
     const url = prop.source_url || prop.link
-    if (!url || !url.includes('propertyguru.com')) {
-      alert('该房源无 Property Guru 链接，无法刷新')
+    if (!url || !isSupportedScrapeUrl(url)) {
+      message.info(t('pendingSection.noRefreshSupport'))
       return
     }
     setRefreshingPropertyId(prop.id)
@@ -545,6 +601,8 @@ function PendingAppointmentsSection({
         link: scraped.link,
         basic_info: scraped.basic_info || undefined,
         price: scraped.price || undefined,
+        price_value: scraped.price_value || undefined,
+        price_description: scraped.price_description || undefined,
         size_sqft: scraped.size_sqft || undefined,
         bedrooms: scraped.bedrooms || undefined,
         bathrooms: scraped.bathrooms || undefined,
@@ -558,7 +616,7 @@ function PendingAppointmentsSection({
         lease_tenure: scraped.lease_tenure || undefined,
       })
     } catch (e) {
-      alert((e as Error).message || '刷新失败')
+      message.error((e as Error).message || t('pendingSection.refreshFailed'))
     } finally {
       setRefreshingPropertyId(null)
     }
@@ -593,11 +651,11 @@ function PendingAppointmentsSection({
 
   return (
     <section>
-      <h2 className="text-sm font-medium text-stone-700 mb-4">待预约</h2>
+      <h2 className="text-sm font-medium text-stone-700 mb-4">{t('pendingSection.title')}</h2>
       <div className="space-y-2">
         {groupIds.length === 0 ? (
           <div className="py-12 text-center text-stone-500 text-sm border border-dashed border-stone-200 rounded-sm">
-            暂无待预约，在客户分组卡片旁点击「新增待预约」添加
+            {t('pendingSection.noPending')}
           </div>
         ) : (
           groupIds.map((gid: string) => {
@@ -611,7 +669,7 @@ function PendingAppointmentsSection({
                   className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-stone-50"
                 >
                   <span className="font-medium text-stone-900 text-sm">{groupName}</span>
-                  <span className="text-stone-500 text-xs">{items.length} 条</span>
+                  <span className="text-stone-500 text-xs">{t('pendingSection.itemsCount', { count: items.length })}</span>
                   <svg
                     className={`w-5 h-5 text-stone-500 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
                     xmlns="http://www.w3.org/2000/svg"
@@ -629,95 +687,102 @@ function PendingAppointmentsSection({
                       const agentPhone = prop?.listing_agent_phone
                       const hasAgent = agentName || agentPhone
                       const whatsappUrl = agentPhone ? getWhatsAppChatUrl(agentPhone) : null
+                      const imgs = displayImages(prop)
                       return (
-                        <div key={p.id} className="p-4 flex justify-between gap-4 bg-white">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <p className="font-medium text-stone-900 text-sm">{prop?.title ?? '—'}</p>
-                              {prop?.listing_type && (
-                                <span className={`px-1.5 py-0.5 rounded text-xs ${prop.listing_type === 'rent' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>
-                                  {prop.listing_type === 'rent' ? '出租' : '出售'}
-                                </span>
-                              )}
-                            </div>
-                            <p className="text-stone-500 text-xs mt-1">
-                              时间待定
-                              {prop?.listing_type === 'sale' && prop?.lease_tenure && (
-                                <span className="ml-1.5 text-stone-400">· {prop.lease_tenure}</span>
-                              )}
-                            </p>
-                            {p.notes && (
-                              <p className="text-stone-600 text-xs mt-1 bg-stone-50 px-2 py-1 rounded border border-stone-100">
-                                备注：{p.notes}
-                              </p>
+                        <div key={p.id} className="p-4 flex bg-white border-t border-stone-100 first:border-t-0">
+                          <div className="flex flex-col w-28 sm:w-32 flex-shrink-0 gap-0.5 p-2 bg-stone-50 rounded-lg mr-4">
+                            {imgs[0] ? (
+                              <button type="button" onClick={() => setLightboxImage(imgs[0])} className="block w-full h-20 rounded-lg overflow-hidden cursor-zoom-in hover:opacity-90 transition-opacity text-left">
+                                <img src={imgs[0]} alt={prop?.title ?? ''} className="w-full h-20 object-cover" />
+                              </button>
+                            ) : (
+                              <div className="w-full h-20 rounded-lg bg-stone-200 flex items-center justify-center text-stone-400 text-xs">{t('common.noImage')}</div>
                             )}
-                            {hasAgent && (
-                              <div className="mt-2 flex flex-wrap items-center gap-2">
-                                <span className="text-xs text-stone-600">
-                                  卖家中介：
-                                  {agentName && <span className="font-medium text-stone-700">{agentName}</span>}
-                                  {agentName && agentPhone && <span className="text-stone-400 mx-1">·</span>}
-                                  {agentPhone && (
-                                    <a href={`tel:${agentPhone}`} className="text-emerald-600 hover:text-emerald-700 font-medium hover:underline">
-                                      {agentPhone}
-                                    </a>
-                                  )}
-                                </span>
-                                {whatsappUrl && (
-                                  <a
-                                    href={whatsappUrl}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-sm bg-[#25D366] text-white hover:bg-[#20BD5A]"
-                                  >
-                                    <svg viewBox="0 0 24 24" className="w-4 h-4" fill="currentColor">
-                                      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
-                                    </svg>
-                                    WhatsApp
-                                  </a>
+                            {imgs[1] ? (
+                              <button type="button" onClick={() => setLightboxImage(imgs[1])} className="block w-full h-20 rounded-lg overflow-hidden cursor-zoom-in hover:opacity-90 transition-opacity text-left">
+                                <img src={imgs[1]} alt={prop?.title ?? ''} className="w-full h-20 object-cover" />
+                              </button>
+                            ) : imgs[0] ? null : <div className="w-full h-20 rounded-lg bg-stone-200" />}
+                          </div>
+                          <div className="flex-1 min-w-0 flex flex-col justify-between">
+                            <div>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <p className="font-semibold text-base leading-tight text-stone-900">{prop?.title ?? '—'}</p>
+                                {prop?.listing_type && (
+                                  <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${prop.listing_type === 'rent' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>
+                                    {prop.listing_type === 'rent' ? t('clientView.rent') : t('clientView.sale')}
+                                  </span>
                                 )}
                               </div>
-                            )}
-                          </div>
-                          <div className="shrink-0 flex flex-col items-end gap-2">
-                            {prop && (prop.source_url || prop.link)?.includes('propertyguru.com') && (
-                              <button
-                                onClick={() => handleRefreshProperty(prop)}
-                                disabled={refreshingPropertyId === prop.id}
-                                className="text-xs text-stone-400 hover:text-stone-700 disabled:opacity-50 flex items-center gap-1"
-                                title="重新抓取最新信息"
-                              >
-                                {refreshingPropertyId === prop.id ? (
-                                  <svg className="animate-spin h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                                  </svg>
-                                ) : (
-                                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5">
-                                    <path fillRule="evenodd" d="M4.755 10.059a7.5 7.5 0 0112.548-3.364l1.903 1.903h-3.183a.75.75 0 100 1.5h4.992a.75.75 0 00.75-.75V4.356a.75.75 0 00-1.5 0v3.18l-1.9-1.9A9 9 0 003.306 9.67a.75.75 0 011.45.388zm15.408 3.352a.75.75 0 00-.919.53 7.5 7.5 0 01-12.548 3.364l-1.902-1.903h3.183a.75.75 0 000-1.5H2.984a.75.75 0 00-.75.75v4.992a.75.75 0 001.5 0v-3.18l1.9 1.9a9 9 0 0015.059 4.035.75.75 0 00-.53-.918z" clipRule="evenodd" />
-                                  </svg>
+                              <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-1.5 text-sm text-stone-600">
+                                {formatPriceDisplay(prop!) && <span className="font-medium text-emerald-700">{formatPriceDisplay(prop!)}</span>}
+                                {prop?.bedrooms && <span>{prop.bedrooms}</span>}
+                                {prop?.bathrooms && <span>{prop.bathrooms}</span>}
+                                {(prop?.size_sqft || prop?.basic_info) && <span>{(prop.size_sqft || prop.basic_info)}</span>}
+                                {prop?.listing_type === 'sale' && prop?.lease_tenure && <span className="text-stone-500">{prop.lease_tenure}</span>}
+                              </div>
+                              <p className="text-stone-500 text-sm mt-1">{t('pendingSection.timeTbd')}</p>
+                              {p.notes && (
+                                <p className="text-stone-600 text-sm mt-2 px-3 py-2 rounded-lg bg-stone-50 border border-stone-100">{t('clientView.noteLabel')}：{p.notes}</p>
+                              )}
+                              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-sm">
+                                {prop?.floor_plan_url && (
+                                  <button type="button" onClick={() => setLightboxImage(prop.floor_plan_url!)} className="text-emerald-600 hover:underline font-medium">
+                                    {t('clientView.floorPlan')}
+                                  </button>
                                 )}
-                                刷新
-                              </button>
-                            )}
-                            <select
-                              value={p.status}
-                              onChange={(e) => {
-                                const v = e.target.value as PendingAppointmentStatus
-                                pendingAppointments.update.mutate({ id: p.id, status: v })
-                              }}
-                              className="text-xs border border-stone-200 rounded-sm px-2 py-1.5 bg-white"
-                            >
-                              {PENDING_STATUS_OPTIONS.map((o) => (
-                                <option key={o.value} value={o.value}>{o.label}</option>
-                              ))}
-                            </select>
-                            <button
-                              onClick={() => pendingAppointments.remove.mutate(p.id)}
-                              className="text-xs text-stone-400 hover:text-red-600"
-                            >
-                              删除
-                            </button>
+                                {prop?.site_plan_url && (
+                                  <button type="button" onClick={() => setLightboxImage(prop.site_plan_url!)} className="text-emerald-600 hover:underline font-medium">
+                                    {t('clientView.viewSitePlan')}
+                                  </button>
+                                )}
+                                {prop?.link && (
+                                  <a href={prop.link} target="_blank" rel="noreferrer" className="text-emerald-600 hover:underline font-medium">{t('clientView.viewProperty')}</a>
+                                )}
+                              </div>
+                              {hasAgent && (
+                                <div className="mt-2 flex flex-wrap items-center gap-2">
+                                  <span className="text-xs text-stone-600">
+                                    {t('clientView.listingAgent')}：{agentName && <span className="font-medium text-stone-700">{agentName}</span>}
+                                    {agentName && agentPhone && <span className="text-stone-400 mx-1">·</span>}
+                                    {agentPhone && (
+                                      <a href={`tel:${agentPhone}`} className="text-emerald-600 hover:text-emerald-700 font-medium hover:underline">{agentPhone}</a>
+                                    )}
+                                  </span>
+                                  {whatsappUrl && (
+                                    <a href={whatsappUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-sm bg-[#25D366] text-white hover:bg-[#20BD5A]">
+                                      <svg viewBox="0 0 24 24" className="w-4 h-4" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+                                      WhatsApp
+                                    </a>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 mt-2 pt-2 border-t border-stone-100 shrink-0">
+                              {prop && (prop.source_url || prop.link) && isSupportedScrapeUrl((prop.source_url || prop.link)!) && (
+                                <button
+                                  onClick={() => handleRefreshProperty(prop)}
+                                  disabled={refreshingPropertyId === prop.id}
+                                  className="text-xs text-stone-400 hover:text-stone-700 disabled:opacity-50 flex items-center gap-1"
+                                  title={t('pendingSection.refreshTitle')}
+                                >
+                                  {refreshingPropertyId === prop.id ? (
+                                    <svg className="animate-spin h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg>
+                                  ) : (
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5"><path fillRule="evenodd" d="M4.755 10.059a7.5 7.5 0 0112.548-3.364l1.903 1.903h-3.183a.75.75 0 100 1.5h4.992a.75.75 0 00.75-.75V4.356a.75.75 0 00-1.5 0v3.18l-1.9-1.9A9 9 0 003.306 9.67a.75.75 0 011.45.388zm15.408 3.352a.75.75 0 00-.919.53 7.5 7.5 0 01-12.548 3.364l-1.902-1.903h3.183a.75.75 0 000-1.5H2.984a.75.75 0 00-.75.75v4.992a.75.75 0 001.5 0v-3.18l1.9 1.9a9 9 0 0015.059 4.035.75.75 0 00-.53-.918z" clipRule="evenodd" /></svg>
+                                  )}
+                                  {t('common.refresh')}
+                                </button>
+                              )}
+                              <select
+                                value={p.status}
+                                onChange={(e) => { const v = e.target.value as PendingAppointmentStatus; pendingAppointments.update.mutate({ id: p.id, status: v }) }}
+                                className="text-xs border border-stone-200 rounded-sm px-2 py-1.5 bg-white"
+                              >
+                                {PENDING_STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                              </select>
+                              <button onClick={() => pendingAppointments.remove.mutate(p.id)} className="text-xs text-stone-400 hover:text-red-600">{t('common.delete')}</button>
+                            </div>
                           </div>
                         </div>
                       )
@@ -729,6 +794,13 @@ function PendingAppointmentsSection({
           })
         )}
       </div>
+
+      {lightboxImage && (
+        <div role="dialog" aria-modal="true" aria-label={t('lightbox.title')} className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={() => setLightboxImage(null)}>
+          <button type="button" onClick={() => setLightboxImage(null)} className="absolute top-4 right-4 text-white/80 hover:text-white text-2xl leading-none" aria-label={t('common.close')}>✕</button>
+          <img src={lightboxImage} alt={t('lightbox.alt')} className="max-w-full max-h-[90vh] w-auto object-contain rounded-lg" onClick={(e) => e.stopPropagation()} />
+        </div>
+      )}
     </section>
   )
 }
@@ -752,6 +824,8 @@ function AppointmentsSection({
   showAddAppointment: boolean
   setShowAddAppointment: (v: boolean) => void
 }) {
+  const { t, i18n } = useTranslation()
+  const PARTY_ROLE_LABELS = usePartyRoleLabels()
   const [propId, setPropId] = useState('')
   const [groupId, setGroupId] = useState('')
   const [partyRole, setPartyRole] = useState<PartyRole>('buyer')
@@ -774,11 +848,35 @@ function AppointmentsSection({
   const [editCustomerInfo, setEditCustomerInfo] = useState('')
   const [editCustomerPhone, setEditCustomerPhone] = useState('')
   const [refreshingPropertyId, setRefreshingPropertyId] = useState<string | null>(null)
+  const [lightboxImage, setLightboxImage] = useState<string | null>(null)
+
+  const displayImages = (p: Property | undefined): string[] => {
+    if (!p) return []
+    const urls = Array.isArray(p.image_urls) ? p.image_urls : []
+    if (urls.length >= 2) return urls.slice(0, 2)
+    if (urls.length === 1 && p.main_image_url && urls[0] !== p.main_image_url) return [urls[0], p.main_image_url]
+    if (urls.length === 1) return urls
+    if (p.main_image_url) return [p.main_image_url]
+    return []
+  }
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setLightboxImage(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  useEffect(() => {
+    document.body.style.overflow = lightboxImage ? 'hidden' : ''
+    return () => { document.body.style.overflow = '' }
+  }, [lightboxImage])
 
   const handleRefreshProperty = async (prop: Property) => {
     const url = prop.source_url || prop.link
-    if (!url || !url.includes('propertyguru.com')) {
-      alert('该房源无 Property Guru 链接，无法刷新')
+    if (!url || !isSupportedScrapeUrl(url)) {
+      message.info(t('pendingSection.noRefreshSupport'))
       return
     }
     setRefreshingPropertyId(prop.id)
@@ -790,6 +888,8 @@ function AppointmentsSection({
         link: scraped.link,
         basic_info: scraped.basic_info || undefined,
         price: scraped.price || undefined,
+        price_value: scraped.price_value || undefined,
+        price_description: scraped.price_description || undefined,
         size_sqft: scraped.size_sqft || undefined,
         bedrooms: scraped.bedrooms || undefined,
         bathrooms: scraped.bathrooms || undefined,
@@ -803,7 +903,7 @@ function AppointmentsSection({
         lease_tenure: scraped.lease_tenure || undefined,
       })
     } catch (e) {
-      alert((e as Error).message || '刷新失败')
+      message.error((e as Error).message || t('pendingSection.refreshFailed'))
     } finally {
       setRefreshingPropertyId(null)
     }
@@ -813,65 +913,42 @@ function AppointmentsSection({
     setScrapeError(null)
     setScrapeSuccess(false)
     if (!propertyLinkInput.trim()) {
-      setScrapeError('请输入 Property Guru 链接')
+      setScrapeError(t('appointmentsSection.enterPropertyLink'))
       return
     }
     const sourceUrl = normalizeSourceUrl(propertyLinkInput)
-    if (!sourceUrl.includes('propertyguru.com')) {
-      setScrapeError('仅支持 Property Guru 链接')
+    if (!isSupportedScrapeUrl(sourceUrl)) {
+      setScrapeError(t('appointmentsSection.propertyLinkOnly'))
       return
     }
     setScrapeLoading(true)
     try {
-      const scraped = await scrapeProperty(sourceUrl)
       const existing = await properties.findBySourceUrl(sourceUrl)
       if (existing) {
-        await properties.update.mutateAsync({
-          id: existing.id,
-          title: scraped.title,
-          link: scraped.link,
-          basic_info: scraped.basic_info || undefined,
-          price: scraped.price || undefined,
-          size_sqft: scraped.size_sqft || undefined,
-          bedrooms: scraped.bedrooms || undefined,
-          bathrooms: scraped.bathrooms || undefined,
-          main_image_url: scraped.main_image_url || undefined,
-          image_urls: scraped.image_urls || undefined,
-          floor_plan_url: scraped.floor_plan_url || undefined,
-          site_plan_url: scraped.site_plan_url || existing.site_plan_url || undefined,
-          listing_agent_name: scraped.listing_agent_name || undefined,
-          listing_agent_phone: scraped.listing_agent_phone || undefined,
-          listing_type: scraped.listing_type || undefined,
-          lease_tenure: scraped.lease_tenure || undefined,
-        })
+        // 已有记录：直接使用，并异步触发刷新
         setPropId(existing.id)
+        triggerScrapeAsync(existing.id, sourceUrl).catch(() => {
+          // 触发失败不阻塞，用户可手动点刷新
+        })
       } else {
+        // 新建：先存库（链接 + 占位标题），再异步触发抓取
         const created = await properties.create.mutateAsync({
-          title: scraped.title,
-          link: scraped.link,
-          basic_info: scraped.basic_info || undefined,
+          title: t('appointmentsSection.scraping'),
+          link: sourceUrl,
           source_url: sourceUrl,
-          price: scraped.price || undefined,
-          size_sqft: scraped.size_sqft || undefined,
-          bedrooms: scraped.bedrooms || undefined,
-          bathrooms: scraped.bathrooms || undefined,
-          main_image_url: scraped.main_image_url || undefined,
-          image_urls: scraped.image_urls || undefined,
-          floor_plan_url: scraped.floor_plan_url || undefined,
-          site_plan_url: scraped.site_plan_url || undefined,
-          listing_agent_name: scraped.listing_agent_name || undefined,
-          listing_agent_phone: scraped.listing_agent_phone || undefined,
-          listing_type: scraped.listing_type || undefined,
-          lease_tenure: scraped.lease_tenure || undefined,
         })
         setPropId(created.id)
+        triggerScrapeAsync(created.id, sourceUrl).catch(() => {
+          // 触发失败不阻塞，用户可手动点刷新
+        })
       }
       setScrapeSuccess(true)
+      // 提示用户数据已保存，抓取在后台进行
       setTimeout(() => {
         setPropertyInputMode('select')
         setPropertyLinkInput('')
         setScrapeSuccess(false)
-      }, 600)
+      }, 1500)
     } catch (e) {
       setScrapeError((e as Error).message)
     } finally {
@@ -881,7 +958,7 @@ function AppointmentsSection({
 
   const needsCustomerGroup = partyRole === 'buyer' || partyRole === 'tenant'
   const isSellerOrLandlord = partyRole === 'seller' || partyRole === 'landlord'
-  const buyerOrTenantLabel = partyRole === 'seller' ? '买家' : '租客'
+  const buyerOrTenantLabel = partyRole === 'seller' ? t('partyRole.buyer') : t('partyRole.tenant')
 
   // 实时计算新增预约是否有时间冲突（用于红色标签展示）
   const createConflictInfo = useMemo(() => {
@@ -899,19 +976,19 @@ function AppointmentsSection({
     const { hasConflict, conflictingWith } = checkAppointmentConflict(startIso, endIso, existing)
     if (!hasConflict) return null
     if (conflictingWith) {
-      return `与已有预约冲突：${new Date(conflictingWith.start_time).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`
+      return t('appointmentsSection.conflictWith', { date: new Date(conflictingWith.start_time).toLocaleString(i18n.language === 'zh' ? 'zh-CN' : 'en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) })
     }
-    return '请调整时间后再提交'
+    return t('appointmentsSection.adjustTime')
   }, [startTime, propId, groupId, partyRole, allAppointments.data])
 
   const handleCreate = async () => {
     setConflictError(null)
     if (!propId || !startTime) {
-      alert('请填写完整')
+      message.warning(t('appointmentsSection.fillComplete'))
       return
     }
     if (needsCustomerGroup && !groupId) {
-      alert('请选择客户分组')
+      message.warning(t('appointmentsSection.selectGroupRequired'))
       return
     }
     const startDate = new Date(startTime)
@@ -941,9 +1018,9 @@ function AppointmentsSection({
     } catch (e: unknown) {
       const err = e as { message?: string }
       if (err?.message?.includes('APPOINTMENT_CONFLICT') || err?.message?.includes('冲突')) {
-        setConflictError('时间与已有预约冲突，请调整时段')
+        setConflictError(t('appointmentsSection.conflictError'))
       } else {
-        alert(err?.message || '创建失败')
+        message.error(err?.message || t('appointmentsSection.createFailed'))
       }
     }
   }
@@ -986,9 +1063,9 @@ function AppointmentsSection({
     )
     if (!hasConflict) return null
     if (conflictingWith) {
-      return `与已有预约冲突：${new Date(conflictingWith.start_time).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`
+      return t('appointmentsSection.conflictWith', { date: new Date(conflictingWith.start_time).toLocaleString(i18n.language === 'zh' ? 'zh-CN' : 'en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) })
     }
-    return '请调整时间后再提交'
+    return t('appointmentsSection.adjustTime')
   }, [editingAppointment, editStartTime, allAppointments.data])
 
   const editNeedsCustomerGroup = editPartyRole === 'buyer' || editPartyRole === 'tenant'
@@ -998,15 +1075,15 @@ function AppointmentsSection({
     if (!editingAppointment) return
     setConflictError(null)
     if (!editStartTime) {
-      alert('请选择时间')
+      message.warning(t('appointmentsSection.selectTime'))
       return
     }
     if (!editPropId) {
-      alert('请选择房源')
+      message.warning(t('appointmentsSection.selectPropertyRequired'))
       return
     }
     if (editNeedsCustomerGroup && !editGroupId) {
-      alert('请选择客户分组')
+      message.warning(t('appointmentsSection.selectGroupRequired'))
       return
     }
     const startDate = new Date(editStartTime)
@@ -1030,9 +1107,9 @@ function AppointmentsSection({
     } catch (e: unknown) {
       const err = e as { message?: string }
       if (err?.message?.includes('APPOINTMENT_CONFLICT') || err?.message?.includes('冲突')) {
-        setConflictError('时间与已有预约冲突，请调整时段')
+        setConflictError(t('appointmentsSection.conflictError'))
       } else {
-        alert(err?.message || '更新失败')
+        message.error(err?.message || t('appointmentsSection.updateFailed'))
       }
     }
   }
@@ -1049,24 +1126,41 @@ function AppointmentsSection({
     selectedGroupId
       ? rawAppts
       : rawAppts.filter((a) => !a.customer_group_id || activeGroupIds.has(a.customer_group_id))
-  const groupedByDate = appts.reduce<Record<string, Appointment[]>>((acc, a) => {
+
+  const now = new Date()
+  const upcomingAppts = appts.filter((a) => new Date(a.start_time) >= now)
+  const pastAppts = appts.filter((a) => new Date(a.start_time) < now)
+  // 未来预约：越靠近现在越靠上 → 升序（最早的在前）
+  const upcomingSorted = [...upcomingAppts].sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
+  // 历史记录：越靠近现在越靠上 → 降序（最近的在前）
+  const pastSorted = [...pastAppts].sort((a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime())
+
+  const [apptSubTab, setApptSubTab] = useState<'future' | 'history'>('future')
+  const displayAppts = apptSubTab === 'future' ? upcomingSorted : pastSorted
+  const groupedByDate = displayAppts.reduce<Record<string, Appointment[]>>((acc, a) => {
     const d = new Date(a.start_time).toDateString()
     if (!acc[d]) acc[d] = []
     acc[d].push(a)
     return acc
   }, {})
+  // 日期排序：未来升序（早→晚），历史降序（晚→早）
+  const sortedDates = Object.keys(groupedByDate).sort((a, b) =>
+    apptSubTab === 'future'
+      ? new Date(a).getTime() - new Date(b).getTime()
+      : new Date(b).getTime() - new Date(a).getTime()
+  )
 
   return (
     <section>
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-sm font-medium text-stone-700">预约</h2>
+        <h2 className="text-sm font-medium text-stone-700">{t('appointmentsSection.title')}</h2>
         <div className="flex gap-2 items-center">
           <select
             value={selectedGroupId || ''}
             onChange={(e) => setSelectedGroupId(e.target.value || null)}
             className="text-sm border border-stone-200 rounded-sm px-3 py-1.5"
           >
-            <option value="">全部分组</option>
+            <option value="">{t('appointmentsSection.allGroups')}</option>
             {activeGroups.map((g) => (
               <option key={g.id} value={g.id}>{g.name}</option>
             ))}
@@ -1075,9 +1169,34 @@ function AppointmentsSection({
             onClick={() => setShowAddAppointment(!showAddAppointment)}
             className="text-sm border border-stone-300 rounded-sm px-4 py-1.5 hover:bg-stone-100"
           >
-            {showAddAppointment ? '取消' : '添加预约'}
+            {showAddAppointment ? t('common.cancel') : t('appointmentsSection.addAppointment')}
           </button>
         </div>
+      </div>
+
+      <div className="flex gap-1 mb-4 border-b border-stone-200">
+        <button
+          type="button"
+          onClick={() => setApptSubTab('future')}
+          className={`px-3 py-2 text-sm rounded-t border-b -mb-px ${
+            apptSubTab === 'future'
+              ? 'border-stone-400 text-stone-900 font-medium bg-white'
+              : 'border-transparent text-stone-500 hover:text-stone-700'
+          }`}
+        >
+          {t('appointmentsSection.future')} {upcomingAppts.length > 0 && `(${upcomingAppts.length})`}
+        </button>
+        <button
+          type="button"
+          onClick={() => setApptSubTab('history')}
+          className={`px-3 py-2 text-sm rounded-t border-b -mb-px ${
+            apptSubTab === 'history'
+              ? 'border-stone-400 text-stone-900 font-medium bg-white'
+              : 'border-transparent text-stone-500 hover:text-stone-700'
+          }`}
+        >
+          {t('appointmentsSection.history')} {pastAppts.length > 0 && `(${pastAppts.length})`}
+        </button>
       </div>
 
       {showAddAppointment && (
@@ -1088,7 +1207,7 @@ function AppointmentsSection({
             </p>
           )}
           <div className="flex items-center justify-between gap-4">
-            <label className="text-xs text-stone-600">预约角色</label>
+            <label className="text-xs text-stone-600">{t('appointmentsSection.partyRole')}</label>
             <div className="flex gap-1 flex-wrap justify-end">
               {(['buyer', 'seller', 'tenant', 'landlord'] as const).map((role) => (
                 <button
@@ -1118,14 +1237,14 @@ function AppointmentsSection({
                 onClick={() => { setPropertyInputMode('select'); setScrapeError(null) }}
                 className={`text-xs px-2 py-1.5 border rounded-sm ${propertyInputMode === 'select' ? 'border-stone-600 bg-stone-100' : 'border-stone-200'}`}
               >
-                选择已有房源
+                {t('appointmentsSection.selectExisting')}
               </button>
               <button
                 type="button"
                 onClick={() => { setPropertyInputMode('byLink'); setScrapeError(null); setScrapeSuccess(false) }}
                 className={`text-xs px-2 py-1.5 border rounded-sm ${propertyInputMode === 'byLink' ? 'border-stone-600 bg-stone-100' : 'border-stone-200'}`}
               >
-                通过链接添加
+                {t('appointmentsSection.addByLink')}
               </button>
             </div>
             {propertyInputMode === 'select' ? (
@@ -1134,10 +1253,10 @@ function AppointmentsSection({
                 onChange={(e) => { setPropId(e.target.value); setConflictError(null) }}
                 className="w-full mt-1 px-3 py-2 border border-stone-200 rounded-sm text-sm"
               >
-                <option value="">选择房源</option>
+                <option value="">{t('appointmentsSection.selectProperty')}</option>
                 {properties.data?.map((p) => (
                   <option key={p.id} value={p.id}>
-                    [{p.listing_type === 'rent' ? '出租' : p.listing_type === 'sale' ? '出售' : '未知'}] {p.title}{p.price ? ` - ${p.price}` : ''}
+                    [{p.listing_type === 'rent' ? t('clientView.rent') : p.listing_type === 'sale' ? t('clientView.sale') : t('appointmentsSection.unknown')}] {p.title}{formatPriceDisplay(p) ? ` - ${formatPriceDisplay(p)}` : ''}
                   </option>
                 ))}
               </select>
@@ -1146,7 +1265,7 @@ function AppointmentsSection({
                 <input
                   value={propertyLinkInput}
                   onChange={(e) => { setPropertyLinkInput(e.target.value); setScrapeError(null) }}
-                  placeholder="粘贴 Property Guru 链接，例如 https://www.propertyguru.com.sg/listing/..."
+                  placeholder={t('appointmentsSection.propertyLinkPlaceholder')}
                   className="w-full px-3 py-2 border border-stone-200 rounded-sm text-sm"
                 />
                 {scrapeError && (
@@ -1165,10 +1284,10 @@ function AppointmentsSection({
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                       </svg>
                     )}
-                    抓取并添加
+                    {t('appointmentsSection.scrapeAndAdd')}
                   </button>
                   {scrapeSuccess && !scrapeLoading && (
-                    <span className="text-green-600" title="添加成功">
+                    <span className="text-green-600" title={t('appointmentsSection.scrapeSuccessTitle')}>
                       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
                         <path fillRule="evenodd" d="M19.916 4.626a.75.75 0 01.208 1.04l-9 13.5a.75.75 0 01-1.154.114l-6-6a.75.75 0 011.06-1.06l5.353 5.353 8.493-12.739a.75.75 0 011.04-.208z" clipRule="evenodd" />
                       </svg>
@@ -1179,7 +1298,7 @@ function AppointmentsSection({
                       type="button"
                       onClick={handleScrapeAndAdd}
                       className="p-1 text-stone-500 hover:text-stone-700 hover:bg-stone-100 rounded"
-                      title="重试"
+                      title={t('common.retry')}
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
                         <path fillRule="evenodd" d="M4.755 10.059a7.5 7.5 0 0112.548-3.364l1.903 1.903h-3.183a.75.75 0 100 1.5h4.992a.75.75 0 00.75-.75V4.356a.75.75 0 00-1.5 0v3.18l-1.9-1.9A9 9 0 003.306 9.67a.75.75 0 011.45.388zm15.408 3.352a.75.75 0 00-.919.53 7.5 7.5 0 01-12.548 3.364l-1.902-1.903h3.183a.75.75 0 000-1.5H2.984a.75.75 0 00-.75.75v4.992a.75.75 0 001.5 0v-3.18l1.9 1.9a9 9 0 0015.059 4.035.75.75 0 00-.53-.918z" clipRule="evenodd" />
@@ -1192,13 +1311,13 @@ function AppointmentsSection({
           </div>
           {needsCustomerGroup && (
             <div>
-              <label className="text-xs text-stone-600">客户分组</label>
+              <label className="text-xs text-stone-600">{t('appointmentsSection.selectGroup')}</label>
               <select
                 value={groupId}
                 onChange={(e) => { setGroupId(e.target.value); setConflictError(null) }}
                 className="w-full mt-1 px-3 py-2 border border-stone-200 rounded-sm text-sm"
               >
-                <option value="">选择分组</option>
+                <option value="">{t('appointmentsSection.selectGroup')}</option>
                 {activeGroups.map((g) => (
                   <option key={g.id} value={g.id}>{g.name}</option>
                 ))}
@@ -1213,26 +1332,26 @@ function AppointmentsSection({
                   type="tel"
                   value={customerPhone}
                   onChange={(e) => setCustomerPhone(e.target.value)}
-                  placeholder="如：81234567 或 +65 8123 4567"
+                  placeholder={t('appointmentsSection.phonePlaceholder')}
                   className="w-full mt-1 px-3 py-2 border border-stone-200 rounded-sm text-sm"
                 />
               </div>
               <div>
-                <label className="text-xs text-stone-600">客户信息（可选）</label>
+                <label className="text-xs text-stone-600">{t('appointmentsSection.customerInfo')}</label>
                 <input
                   value={customerInfo}
                   onChange={(e) => setCustomerInfo(e.target.value)}
-                  placeholder="如：潜在买家/租客姓名等"
+                  placeholder={t('appointmentsSection.customerInfoPlaceholder')}
                   className="w-full mt-1 px-3 py-2 border border-stone-200 rounded-sm text-sm"
                 />
               </div>
             </>
           )}
           <div>
-            <label className="text-xs text-stone-600">看房时间（每 15 分钟一个时段）</label>
+            <label className="text-xs text-stone-600">{t('appointmentsSection.viewTime')}</label>
             {createConflictInfo && (
               <span className="ml-2 inline-flex items-center px-2.5 py-1 rounded text-xs font-medium bg-red-100 text-red-700 border border-red-200" title={createConflictInfo}>
-                时间冲突
+                {t('appointmentsSection.timeConflict')}
               </span>
             )}
             <div className="flex flex-wrap gap-2 mt-1">
@@ -1258,12 +1377,12 @@ function AppointmentsSection({
                 }}
                 className="w-20 px-2 py-2 border border-stone-200 rounded-sm text-sm bg-white"
               >
-                <option value="">时</option>
+                <option value="">{t('scheduleSection.hourSuffix') || ''}</option>
                 {Array.from({ length: 18 }, (_, i) => {
                   const h = i + 6
                   return (
                     <option key={h} value={String(h).padStart(2, '0')}>
-                      {h}时
+                      {h}{t('scheduleSection.hourSuffix')}
                     </option>
                   )
                 })}
@@ -1279,21 +1398,21 @@ function AppointmentsSection({
                 }}
                 className="w-24 px-2 py-2 border border-stone-200 rounded-sm text-sm bg-white"
               >
-                <option value="">分</option>
+                <option value="">{t('scheduleSection.minuteSuffix') || ''}</option>
                 {[0, 15, 30, 45].map((m) => (
                   <option key={m} value={String(m).padStart(2, '0')}>
-                    {m}分
+                    {m}{t('scheduleSection.minuteSuffix')}
                   </option>
                 ))}
               </select>
             </div>
           </div>
           <div>
-            <label className="text-xs text-stone-600">备注（可选，客户可见）</label>
+            <label className="text-xs text-stone-600">{t('appointmentsSection.notesOptional')}</label>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="如：带钥匙、提前10分钟到、客户特殊需求等"
+              placeholder={t('appointmentsSection.notesPlaceholder')}
               rows={2}
               className="w-full mt-1 px-3 py-2 border border-stone-200 rounded-sm text-sm resize-none"
             />
@@ -1303,7 +1422,7 @@ function AppointmentsSection({
             disabled={appointments.create.isPending || (propertyInputMode === 'byLink' && scrapeLoading)}
             className="text-sm px-4 py-2 border border-stone-300 rounded-sm hover:bg-stone-100 disabled:opacity-50"
           >
-            创建
+            {t('common.create')}
           </button>
         </div>
       )}
@@ -1314,7 +1433,7 @@ function AppointmentsSection({
             className="bg-white rounded-sm border border-stone-200 p-5 w-full max-w-md shadow-lg my-auto"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-sm font-medium text-stone-900 mb-3">编辑预约</h3>
+            <h3 className="text-sm font-medium text-stone-900 mb-3">{t('appointmentsSection.editTitle')}</h3>
             {conflictError && (
               <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-sm border border-red-200 mb-3">
                 {conflictError}
@@ -1322,7 +1441,7 @@ function AppointmentsSection({
             )}
             {editConflictInfo && !conflictError && (
               <span className="inline-flex items-center px-2.5 py-1 rounded text-xs font-medium bg-red-100 text-red-700 border border-red-200 mb-3" title={editConflictInfo}>
-                时间冲突
+                {t('appointmentsSection.timeConflict')}
               </span>
             )}
             <div className="space-y-3">
@@ -1356,10 +1475,10 @@ function AppointmentsSection({
                   onChange={(e) => { setEditPropId(e.target.value); setConflictError(null) }}
                   className="w-full mt-1 px-3 py-2 border border-stone-200 rounded-sm text-sm"
                 >
-                  <option value="">选择房源</option>
+                  <option value="">{t('appointmentsSection.selectProperty')}</option>
                   {properties.data?.map((p) => (
                     <option key={p.id} value={p.id}>
-                      [{p.listing_type === 'rent' ? '出租' : p.listing_type === 'sale' ? '出售' : '未知'}] {p.title}{p.price ? ` - ${p.price}` : ''}
+                      [{p.listing_type === 'rent' ? t('clientView.rent') : p.listing_type === 'sale' ? t('clientView.sale') : t('appointmentsSection.unknown')}] {p.title}{formatPriceDisplay(p) ? ` - ${formatPriceDisplay(p)}` : ''}
                     </option>
                   ))}
                 </select>
@@ -1372,7 +1491,7 @@ function AppointmentsSection({
                     onChange={(e) => { setEditGroupId(e.target.value); setConflictError(null) }}
                     className="w-full mt-1 px-3 py-2 border border-stone-200 rounded-sm text-sm"
                   >
-                    <option value="">选择分组</option>
+                    <option value="">{t('appointmentsSection.selectGroup')}</option>
                     {activeGroups.map((g) => (
                       <option key={g.id} value={g.id}>{g.name}</option>
                     ))}
@@ -1382,7 +1501,7 @@ function AppointmentsSection({
               {editIsSellerOrLandlord && (
                 <>
                   <div>
-                    <label className="text-xs text-stone-600">潜在{editPartyRole === 'seller' ? '买家' : '租客'}手机号（可选）</label>
+                    <label className="text-xs text-stone-600">{t('appointmentsSection.potentialBuyerPhone', { role: editPartyRole === 'seller' ? t('partyRole.buyer') : t('partyRole.tenant') })}</label>
                     <input
                       type="tel"
                       value={editCustomerPhone}
@@ -1427,12 +1546,12 @@ function AppointmentsSection({
                     }}
                     className="w-20 px-2 py-2 border border-stone-200 rounded-sm text-sm bg-white"
                   >
-                    <option value="">时</option>
+                    <option value="">{t('scheduleSection.hourSuffix') || ''}</option>
                     {Array.from({ length: 18 }, (_, i) => {
                       const hour = i + 6
                       return (
                         <option key={hour} value={String(hour).padStart(2, '0')}>
-                          {hour}时
+                          {hour}{t('scheduleSection.hourSuffix')}
                         </option>
                       )
                     })}
@@ -1448,21 +1567,21 @@ function AppointmentsSection({
                     }}
                     className="w-24 px-2 py-2 border border-stone-200 rounded-sm text-sm bg-white"
                   >
-                    <option value="">分</option>
+                    <option value="">{t('scheduleSection.minuteSuffix') || ''}</option>
                     {[0, 15, 30, 45].map((min) => (
                       <option key={min} value={String(min).padStart(2, '0')}>
-                        {min}分
+                        {min}{t('scheduleSection.minuteSuffix')}
                       </option>
                     ))}
                   </select>
                 </div>
               </div>
               <div>
-                <label className="text-xs text-stone-600">备注（可选，客户可见）</label>
+                <label className="text-xs text-stone-600">{t('appointmentsSection.notesOptional')}</label>
                 <textarea
                   value={editNotes}
                   onChange={(e) => setEditNotes(e.target.value)}
-                  placeholder="如：带钥匙、提前10分钟到、客户特殊需求等"
+                  placeholder={t('appointmentsSection.notesPlaceholder')}
                   rows={2}
                   className="w-full mt-1 px-3 py-2 border border-stone-200 rounded-sm text-sm resize-none"
                 />
@@ -1473,13 +1592,13 @@ function AppointmentsSection({
                   disabled={appointments.update.isPending}
                   className="flex-1 text-sm px-4 py-2 border border-stone-300 rounded-sm hover:bg-stone-100 disabled:opacity-50"
                 >
-                  保存
+                  {t('common.save')}
                 </button>
                 <button
                   onClick={() => setEditingAppointment(null)}
                   className="text-sm px-4 py-2 border border-stone-200 rounded-sm hover:bg-stone-100"
                 >
-                  取消
+                  {t('common.cancel')}
                 </button>
               </div>
             </div>
@@ -1488,7 +1607,13 @@ function AppointmentsSection({
       )}
 
       <div className="space-y-6">
-        {Object.entries(groupedByDate).map(([date, list]) => (
+        {displayAppts.length === 0 ? (
+          <p className="text-sm text-stone-500 py-8 text-center">
+            {apptSubTab === 'future' ? t('appointmentsSection.noFuture') : t('appointmentsSection.noHistory')}
+          </p>
+        ) : sortedDates.map((date) => {
+          const list = groupedByDate[date]
+          return (
           <div key={date}>
             <p className="text-xs text-stone-500 mb-2">{new Date(date).toLocaleDateString('zh-CN')}</p>
             <div className="space-y-2">
@@ -1510,140 +1635,208 @@ function AppointmentsSection({
                   existingForConflict,
                   a.id
                 )
+                const imgs = displayImages(prop)
                 return (
                   <div
                     key={a.id}
-                    className="border border-stone-200 rounded-sm bg-white p-4 flex justify-between gap-4"
+                    className="border border-stone-200 rounded-xl overflow-hidden bg-white shadow-sm hover:shadow-md transition-shadow flex"
                   >
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <p className="font-medium text-stone-900 text-sm">
-                          {prop?.title ?? '—'}
-                        </p>
-                        {prop?.listing_type && (
-                          <span className={`px-1.5 py-0.5 rounded text-xs ${prop.listing_type === 'rent' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>
-                            {prop.listing_type === 'rent' ? '出租' : '出售'}
-                          </span>
-                        )}
-                        {(a.party_role === 'seller' || a.party_role === 'landlord') && (
-                          <span className="px-1.5 py-0.5 rounded text-xs bg-stone-100 text-stone-700">
-                            代表{PARTY_ROLE_LABELS[a.party_role]}
-                          </span>
-                        )}
-                        {hasConflictTag && (
-                          <span className="px-2.5 py-1 rounded text-xs font-medium bg-red-100 text-red-700 border border-red-200">
-                            时间冲突
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-stone-500 text-xs mt-1">
-                        {(a.customer_groups as CustomerGroup | null)?.name ?? a.customer_info ?? `代表${PARTY_ROLE_LABELS[a.party_role ?? 'buyer']}`} ·{' '}
-                        {new Date(a.start_time).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                        {prop?.listing_type === 'sale' && prop?.lease_tenure && (
-                          <span className="ml-1.5 text-stone-400">· {prop.lease_tenure}</span>
-                        )}
-                      </p>
-                      {a.notes && (
-                        <p className="text-stone-600 text-xs mt-1 bg-stone-50 px-2 py-1 rounded border border-stone-100">
-                          备注：{a.notes}
-                        </p>
+                    <div className="flex flex-col w-28 sm:w-32 flex-shrink-0 gap-0.5 p-2 bg-stone-50">
+                      {imgs[0] ? (
+                        <button type="button" onClick={() => setLightboxImage(imgs[0])} className="block w-full h-20 rounded-lg overflow-hidden cursor-zoom-in hover:opacity-90 transition-opacity text-left">
+                          <img src={imgs[0]} alt={prop?.title ?? ''} className="w-full h-20 object-cover" />
+                        </button>
+                      ) : (
+                        <div className="w-full h-20 rounded-lg bg-stone-200 flex items-center justify-center text-stone-400 text-xs">{t('common.noImage')}</div>
                       )}
-                      {(customerPhone || hasAgent) && (
-                        <div className="mt-2 flex flex-wrap items-center gap-2">
-                          {customerPhone && (
-                            <>
-                              <span className="text-xs text-stone-600">
-                                潜在{(a.party_role === 'seller' ? '买家' : '租客')}：
-                                <a href={`tel:${customerPhone}`} className="font-medium text-stone-700 hover:underline ml-1">
-                                  {customerPhone}
-                                </a>
-                              </span>
-                              {customerWhatsAppUrl && (
-                                <a
-                                  href={customerWhatsAppUrl}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-sm bg-[#25D366] text-white hover:bg-[#20BD5A]"
-                                >
-                                  <svg viewBox="0 0 24 24" className="w-4 h-4" fill="currentColor">
-                                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
-                                  </svg>
-                                  WhatsApp
-                                </a>
-                              )}
-                            </>
-                          )}
-                          {hasAgent && (
-                            <>
-                              <span className="text-xs text-stone-600">
-                                卖家中介：
-                                {agentName && <span className="font-medium text-stone-700">{agentName}</span>}
-                                {agentName && agentPhone && <span className="text-stone-400 mx-1">·</span>}
-                                {agentPhone && (
-                                  <a href={`tel:${agentPhone}`} className="text-emerald-600 hover:text-emerald-700 font-medium hover:underline">
-                                    {agentPhone}
-                                  </a>
-                                )}
-                              </span>
-                              {whatsappUrl && (
-                                <a
-                                  href={whatsappUrl}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-sm bg-[#25D366] text-white hover:bg-[#20BD5A]"
-                                >
-                                  <svg viewBox="0 0 24 24" className="w-4 h-4" fill="currentColor">
-                                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
-                                  </svg>
-                                  WhatsApp
-                                </a>
-                              )}
-                            </>
-                          )}
-                        </div>
+                      {imgs[1] ? (
+                        <button type="button" onClick={() => setLightboxImage(imgs[1])} className="block w-full h-20 rounded-lg overflow-hidden cursor-zoom-in hover:opacity-90 transition-opacity text-left">
+                          <img src={imgs[1]} alt={prop?.title ?? ''} className="w-full h-20 object-cover" />
+                        </button>
+                      ) : imgs[0] ? null : (
+                        <div className="w-full h-20 rounded-lg bg-stone-200" />
                       )}
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      {prop && (prop.source_url || prop.link)?.includes('propertyguru.com') && (
-                        <button
-                          onClick={() => handleRefreshProperty(prop)}
-                          disabled={refreshingPropertyId === prop.id}
-                          className="text-xs text-stone-400 hover:text-stone-700 disabled:opacity-50 flex items-center gap-1"
-                          title="重新抓取最新信息"
-                        >
-                          {refreshingPropertyId === prop.id ? (
-                            <svg className="animate-spin h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                            </svg>
-                          ) : (
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5">
-                              <path fillRule="evenodd" d="M4.755 10.059a7.5 7.5 0 0112.548-3.364l1.903 1.903h-3.183a.75.75 0 100 1.5h4.992a.75.75 0 00.75-.75V4.356a.75.75 0 00-1.5 0v3.18l-1.9-1.9A9 9 0 003.306 9.67a.75.75 0 011.45.388zm15.408 3.352a.75.75 0 00-.919.53 7.5 7.5 0 01-12.548 3.364l-1.902-1.903h3.183a.75.75 0 000-1.5H2.984a.75.75 0 00-.75.75v4.992a.75.75 0 001.5 0v-3.18l1.9 1.9a9 9 0 0015.059 4.035.75.75 0 00-.53-.918z" clipRule="evenodd" />
-                            </svg>
+                    <div className="flex-1 min-w-0 p-4 flex flex-col justify-between">
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-semibold text-base leading-tight text-stone-900">{prop?.title ?? '—'}</p>
+                          {prop?.listing_type && (
+                            <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${prop.listing_type === 'rent' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>
+                              {prop.listing_type === 'rent' ? t('clientView.rent') : t('clientView.sale')}
+                            </span>
                           )}
-                          刷新
+                          {(a.party_role === 'seller' || a.party_role === 'landlord') && (
+                            <span className="px-1.5 py-0.5 rounded text-xs bg-stone-100 text-stone-700">
+                              {t('appointmentsSection.represent', { role: PARTY_ROLE_LABELS[a.party_role] })}
+                            </span>
+                          )}
+                          {hasConflictTag && (
+                            <span className="px-2.5 py-1 rounded text-xs font-medium bg-red-100 text-red-700 border border-red-200">
+                              {t('appointmentsSection.timeConflict')}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-1.5 text-sm text-stone-600">
+                          {formatPriceDisplay(prop!) && <span className="font-medium text-emerald-700">{formatPriceDisplay(prop!)}</span>}
+                          {prop?.bedrooms && <span>{prop.bedrooms}</span>}
+                          {prop?.bathrooms && <span>{prop.bathrooms}</span>}
+                          {(prop?.size_sqft || prop?.basic_info) && (
+                            <span>{(prop.size_sqft || prop.basic_info)}</span>
+                          )}
+                          {prop?.listing_type === 'sale' && prop?.lease_tenure && (
+                            <span className="text-stone-500">{prop.lease_tenure}</span>
+                          )}
+                        </div>
+                        <p className="text-stone-500 text-sm mt-2">
+                          {(a.customer_groups as CustomerGroup | null)?.name ?? a.customer_info ?? t('appointmentsSection.represent', { role: PARTY_ROLE_LABELS[a.party_role ?? 'buyer'] })} ·{' '}
+                          {new Date(a.start_time).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                        {a.notes && (
+                          <p className="text-stone-600 text-sm mt-2 px-3 py-2 rounded-lg bg-stone-50 border border-stone-100">
+                            {t('appointmentsSection.agentNote')}：{a.notes}
+                          </p>
+                        )}
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-sm">
+                          {prop?.floor_plan_url && (
+                            <button type="button" onClick={() => setLightboxImage(prop.floor_plan_url!)} className="text-emerald-600 hover:underline font-medium">
+                              户型图
+                            </button>
+                          )}
+                          {prop?.site_plan_url && (
+                            <button type="button" onClick={() => setLightboxImage(prop.site_plan_url!)} className="text-emerald-600 hover:underline font-medium">
+{t('clientView.sitePlan')}
+                                  </button>
+                          )}
+                          {prop?.link && (
+                            <a href={prop.link} target="_blank" rel="noreferrer" className="text-emerald-600 hover:underline font-medium">
+                              {t('clientView.viewProperty')}
+                            </a>
+                          )}
+                        </div>
+                        {(customerPhone || hasAgent) && (
+                          <div className="mt-2 flex flex-wrap items-center gap-2">
+                            {customerPhone && (
+                              <>
+                                <span className="text-xs text-stone-600">
+                                  {t('appointmentsSection.potentialBuyer', { role: a.party_role === 'seller' ? t('partyRole.buyer') : t('partyRole.tenant') })}
+                                  <a href={`tel:${customerPhone}`} className="font-medium text-stone-700 hover:underline ml-1">
+                                    {customerPhone}
+                                  </a>
+                                </span>
+                                {customerWhatsAppUrl && (
+                                  <a
+                                    href={customerWhatsAppUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-sm bg-[#25D366] text-white hover:bg-[#20BD5A]"
+                                  >
+                                    <svg viewBox="0 0 24 24" className="w-4 h-4" fill="currentColor">
+                                      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+                                    </svg>
+                                    WhatsApp
+                                  </a>
+                                )}
+                              </>
+                            )}
+                            {hasAgent && (
+                              <>
+                                <span className="text-xs text-stone-600">
+                                  {t('appointmentsSection.listingAgent')}
+                                  {agentName && <span className="font-medium text-stone-700">{agentName}</span>}
+                                  {agentName && agentPhone && <span className="text-stone-400 mx-1">·</span>}
+                                  {agentPhone && (
+                                    <a href={`tel:${agentPhone}`} className="text-emerald-600 hover:text-emerald-700 font-medium hover:underline">
+                                      {agentPhone}
+                                    </a>
+                                  )}
+                                </span>
+                                {whatsappUrl && (
+                                  <a
+                                    href={whatsappUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-sm bg-[#25D366] text-white hover:bg-[#20BD5A]"
+                                  >
+                                    <svg viewBox="0 0 24 24" className="w-4 h-4" fill="currentColor">
+                                      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+                                    </svg>
+                                    WhatsApp
+                                  </a>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 mt-2 pt-2 border-t border-stone-100 shrink-0">
+                        {prop && (prop.source_url || prop.link) && isSupportedScrapeUrl((prop.source_url || prop.link)!) && (
+                          <button
+                            onClick={() => handleRefreshProperty(prop)}
+                            disabled={refreshingPropertyId === prop.id}
+                            className="text-xs text-stone-400 hover:text-stone-700 disabled:opacity-50 flex items-center gap-1"
+                            title={t('pendingSection.refreshTitle')}
+                          >
+                            {refreshingPropertyId === prop.id ? (
+                              <svg className="animate-spin h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                              </svg>
+                            ) : (
+                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5">
+                                <path fillRule="evenodd" d="M4.755 10.059a7.5 7.5 0 0112.548-3.364l1.903 1.903h-3.183a.75.75 0 100 1.5h4.992a.75.75 0 00.75-.75V4.356a.75.75 0 00-1.5 0v3.18l-1.9-1.9A9 9 0 003.306 9.67a.75.75 0 011.45.388zm15.408 3.352a.75.75 0 00-.919.53 7.5 7.5 0 01-12.548 3.364l-1.902-1.903h3.183a.75.75 0 000-1.5H2.984a.75.75 0 00-.75.75v4.992a.75.75 0 001.5 0v-3.18l1.9 1.9a9 9 0 0015.059 4.035.75.75 0 00-.53-.918z" clipRule="evenodd" />
+                              </svg>
+                            )}
+                            {t('common.refresh')}
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleOpenEdit(a)}
+                          className="text-xs text-stone-400 hover:text-stone-700"
+                        >
+                          {t('common.edit')}
                         </button>
-                      )}
-                      <button
-                        onClick={() => handleOpenEdit(a)}
-                        className="text-xs text-stone-400 hover:text-stone-700"
-                      >
-                        编辑
-                      </button>
-                      <button
-                        onClick={() => appointments.remove.mutate(a.id)}
-                        className="text-xs text-stone-400 hover:text-red-600"
-                      >
-                        删除
-                      </button>
+                        <button
+                          onClick={() => appointments.remove.mutate(a.id)}
+                          className="text-xs text-stone-400 hover:text-red-600"
+                        >
+                          {t('common.delete')}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )
               })}
             </div>
           </div>
-        ))}
+          )
+        })}
       </div>
+
+      {lightboxImage && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={t('lightbox.title')}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+          onClick={() => setLightboxImage(null)}
+        >
+          <button
+            type="button"
+            onClick={() => setLightboxImage(null)}
+            className="absolute top-4 right-4 text-white/80 hover:text-white text-2xl leading-none"
+            aria-label={t('common.close')}
+          >
+            ✕
+          </button>
+          <img
+            src={lightboxImage}
+            alt={t('lightbox.alt')}
+            className="max-w-full max-h-[90vh] w-auto object-contain rounded-lg"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
     </section>
   )
 }
@@ -1666,7 +1859,10 @@ type TimelineItem =
 
 const MERGE_GAP_MS = 30 * 60 * 1000 // 30 分钟内视为相邻，可合并
 
-function mergeAppointmentsIntoBlocks(appointments: Appointment[]): ScheduleBlock[] {
+function mergeAppointmentsIntoBlocks(
+  appointments: Appointment[],
+  getRepresentLabel: (role: PartyRole) => string
+): ScheduleBlock[] {
   if (appointments.length === 0) return []
   const byDateAndGroup = new Map<string, Appointment[]>()
   for (const a of appointments) {
@@ -1680,7 +1876,8 @@ function mergeAppointmentsIntoBlocks(appointments: Appointment[]): ScheduleBlock
   for (const list of byDateAndGroup.values()) {
     list.sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
     const group = list[0]
-    const name = (group.customer_groups as CustomerGroup | null)?.name ?? group.customer_info ?? `代表${PARTY_ROLE_LABELS[group.party_role ?? 'buyer']}`
+    const role = (group.party_role ?? 'buyer') as PartyRole
+    const name = (group.customer_groups as CustomerGroup | null)?.name ?? group.customer_info ?? getRepresentLabel(role)
     let startMs = new Date(list[0].start_time).getTime()
     let endMs = new Date(list[0].end_time).getTime()
     const merged: Appointment[] = [list[0]]
@@ -1721,7 +1918,7 @@ function mergeAppointmentsIntoBlocks(appointments: Appointment[]): ScheduleBlock
   return blocks
 }
 
-/** 合并同一天内、同一客户的连续时间块（中间在路上的时间算作陪客户） */
+/** 合并同一天内、同一客户的连续时间块 */
 function mergeConsecutiveSameCustomerBlocks(blocks: ScheduleBlock[]): ScheduleBlock[] {
   if (blocks.length === 0) return []
   const merged: ScheduleBlock[] = []
@@ -1773,6 +1970,8 @@ function AgentScheduleSection({
   appointments: ReturnType<typeof useAppointments>
   groups: ReturnType<typeof useCustomerGroups>
 }) {
+  const { t, i18n } = useTranslation()
+  const PARTY_ROLE_LABELS = usePartyRoleLabels()
   const [rangeMode, setRangeMode] = useState<'twoWeeks' | 'all'>('twoWeeks')
   const activeGroupIds = new Set(groups.data?.filter((g) => g.is_active !== false).map((g) => g.id) ?? [])
   const rawAppts = appointments.data ?? []
@@ -1785,7 +1984,7 @@ function AgentScheduleSection({
     rangeMode === 'twoWeeks'
       ? future.filter((a) => new Date(a.start_time) <= twoWeeksEnd)
       : future
-  const blocks = mergeAppointmentsIntoBlocks(filtered)
+  const blocks = mergeAppointmentsIntoBlocks(filtered, (role) => t('appointmentsSection.represent', { role: PARTY_ROLE_LABELS[role] }))
   const byDate = blocks.reduce<Record<string, ScheduleBlock[]>>((acc, b) => {
     const d = new Date(b.startTime).toDateString()
     if (!acc[d]) acc[d] = []
@@ -1796,12 +1995,14 @@ function AgentScheduleSection({
     (a, b) => new Date(a).getTime() - new Date(b).getTime()
   )
 
-  const dayNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
+  const dayNames = i18n.language === 'zh'
+    ? ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
+    : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
   return (
     <section>
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-sm font-medium text-stone-700">我的时间表</h2>
+        <h2 className="text-sm font-medium text-stone-700">{t('scheduleSection.title')}</h2>
         <div className="flex gap-1 border border-stone-200 rounded-sm p-0.5">
           <button
             onClick={() => setRangeMode('twoWeeks')}
@@ -1811,7 +2012,7 @@ function AgentScheduleSection({
                 : 'text-stone-600 hover:bg-stone-100'
             }`}
           >
-            未来两周
+            {t('scheduleSection.twoWeeks')}
           </button>
           <button
             onClick={() => setRangeMode('all')}
@@ -1821,7 +2022,7 @@ function AgentScheduleSection({
                 : 'text-stone-600 hover:bg-stone-100'
             }`}
           >
-            全部
+            {t('scheduleSection.all')}
           </button>
         </div>
       </div>
@@ -1829,8 +2030,8 @@ function AgentScheduleSection({
       {sortedDates.length === 0 ? (
         <div className="py-12 text-center text-stone-500 text-sm border border-dashed border-stone-200 rounded-sm">
           {rangeMode === 'twoWeeks'
-            ? '未来两周暂无预约'
-            : '暂无未来预约'}
+            ? t('scheduleSection.noTwoWeeks')
+            : t('scheduleSection.noFuture')}
         </div>
       ) : (
         <div className="space-y-6">
@@ -1857,7 +2058,7 @@ function AgentScheduleSection({
               >
                 <div className="px-4 py-3 bg-stone-50 border-b border-stone-100 flex items-center justify-between">
                   <span className="font-medium text-stone-800 text-sm">
-                    {date.toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', year: 'numeric' })}
+                    {date.toLocaleDateString(i18n.language === 'zh' ? 'zh-CN' : 'en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
                   </span>
                   <span className="text-stone-500 text-xs">{dayName}</span>
                 </div>
@@ -1881,7 +2082,7 @@ function AgentScheduleSection({
                           className="flex-shrink-0 flex items-center justify-center rounded-lg bg-emerald-50/80 border border-dashed border-emerald-200/70"
                           style={{ flex: `${flexRatio} 1 0`, minHeight: 48 }}
                         >
-                          <p className="text-emerald-700 text-sm">{timeStr}（约 {item.durationMinutes} 分钟）</p>
+                          <p className="text-emerald-700 text-sm">{timeStr}（{t('scheduleSection.mins', { count: item.durationMinutes })}）</p>
                         </div>
                       )
                     }
@@ -1898,7 +2099,7 @@ function AgentScheduleSection({
                       >
                         <div className="flex-1 min-w-0">
                           <p className="text-xs text-stone-500 mb-0.5">
-                            服务{PARTY_ROLE_LABELS[block.partyRole]}
+                            {t('scheduleSection.serveRole', { role: PARTY_ROLE_LABELS[block.partyRole] })}
                           </p>
                           <p className="font-medium text-stone-900 text-sm truncate">
                             {block.customerGroupName}
@@ -1907,7 +2108,7 @@ function AgentScheduleSection({
                             {timeStr}
                             {block.propertyCount > 1 && (
                               <span className="ml-1.5 text-amber-700">
-                                · 看 {block.propertyCount} 套房
+                                · {t('scheduleSection.viewProperties', { count: block.propertyCount })}
                               </span>
                             )}
                           </p>

@@ -7,6 +7,8 @@ export type ScrapeResult = {
   title: string
   link: string
   price?: string
+  price_value?: string
+  price_description?: string
   size_sqft?: string
   bedrooms?: string
   bathrooms?: string
@@ -32,5 +34,34 @@ export async function scrapeProperty(url: string): Promise<ScrapeResult> {
     throw new Error(err.detail || '抓取失败')
   }
   return res.json()
+}
+
+/** 支持的抓取域名 */
+export const SUPPORTED_SCRAPE_DOMAINS = ['propertyguru.com', 'propertygroup.com']
+
+export function isSupportedScrapeUrl(url: string): boolean {
+  return SUPPORTED_SCRAPE_DOMAINS.some((d) => url.includes(d))
+}
+
+export function normalizeSourceUrl(url: string): string {
+  let u = url.trim()
+  if (!u.startsWith('http')) u = 'https://' + u
+  return u.replace(/\/$/, '')
+}
+
+/**
+ * 异步触发抓取：立即返回 202，后台抓取完成后会更新数据库。
+ * 用于提交新链接时，用户无需等待抓取完成。
+ */
+export async function triggerScrapeAsync(propertyId: string, url: string): Promise<void> {
+  const res = await fetch(`${SCRAPE_API_URL}/api/trigger-scrape`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ property_id: propertyId, url: url.trim() }),
+  })
+  if (!res.ok && res.status !== 202) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(err.detail || '触发抓取失败')
+  }
 }
 

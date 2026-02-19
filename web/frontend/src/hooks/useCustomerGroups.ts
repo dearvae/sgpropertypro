@@ -14,6 +14,7 @@ export function useCustomerGroups() {
         .from('customer_groups')
         .select('*')
         .eq('agent_id', user?.id)
+        .order('is_active', { ascending: false }) // active 在前，inactive 排最下
         .order('created_at', { ascending: false })
       if (error) throw error
       return data as CustomerGroup[]

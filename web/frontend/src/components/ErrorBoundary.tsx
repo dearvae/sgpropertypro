@@ -1,4 +1,5 @@
 import { Component, type ReactNode } from 'react'
+import i18n from 'i18next'
 
 type Props = {
   children: ReactNode
@@ -26,7 +27,7 @@ export class ErrorBoundary extends Component<Props, State> {
       if (this.props.fallback) return this.props.fallback
       return (
         <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-slate-50 px-4">
-          <p className="text-slate-700 font-medium">渲染出错</p>
+          <p className="text-slate-700 font-medium">{i18n.t('error.renderError')}</p>
           <pre className="text-xs text-slate-500 overflow-auto max-w-full p-4 bg-slate-100 rounded-lg">
             {this.state.error.message}
           </pre>

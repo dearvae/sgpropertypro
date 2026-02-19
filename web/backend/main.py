@@ -1,14 +1,24 @@
 """
 Property Guru 房源抓取 API
-POST /api/scrape-property 传入 URL，返回抓取到的房源信息
+POST /api/scrape-property 传入 URL，返回抓取到的房源信息（同步，用于刷新按钮）
+POST /api/trigger-scrape 传入 property_id + url，立即返回 202，后台异步抓取并写入数据库
 """
+import os
 import re
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException
+from dotenv import load_dotenv
+from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from playwright.async_api import async_playwright
+
+# 加载 .env（项目根或 backend 同目录）
+for d in [os.path.dirname(os.path.dirname(os.path.dirname(__file__))), os.path.dirname(__file__)]:
+    env_path = os.path.join(d, ".env")
+    if os.path.isfile(env_path):
+        load_dotenv(env_path)
+        break
 
 app = FastAPI(title="Property Scrape API")
 
@@ -25,6 +35,12 @@ class ScrapeRequest(BaseModel):
     url: str
 
 
+class TriggerScrapeRequest(BaseModel):
+    """异步触发抓取：立即返回，后台抓取完成后写入数据库"""
+    property_id: str
+    url: str
+
+
 class SitePlanRequest(BaseModel):
     apartment_name: str
 
@@ -37,6 +53,8 @@ class ScrapeResponse(BaseModel):
     title: str
     link: str
     price: Optional[str] = None
+    price_value: Optional[str] = None  # 价格数值部分，如 S$1,500,000
+    price_description: Optional[str] = None  # 价格描述，如 negotiable、Starting from
     size_sqft: Optional[str] = None
     bedrooms: Optional[str] = None
     bathrooms: Optional[str] = None
@@ -51,8 +69,43 @@ class ScrapeResponse(BaseModel):
     site_plan_url: Optional[str] = None  # 公寓小区平面图，从 99.co 抓取
 
 
+def _parse_price_into_value_and_description(price_text: str) -> tuple[Optional[str], Optional[str]]:
+    """将完整价格文本拆分为数值和描述，如 'S$1.5M negotiable' -> ('S$1.5M', 'negotiable')"""
+    if not price_text or not price_text.strip():
+        return None, None
+    text = price_text.strip()
+    text_lower = text.lower()
+    # 描述词在后面的：negotiable, POA, price on request 等
+    for pattern, desc_name in [(r"\bnegotiable\b", "negotiable"), (r"\bpoa\b", "POA")]:
+        m = re.search(pattern, text_lower, re.I)
+        if m:
+            value = re.sub(pattern, " ", text, flags=re.I)
+            value = " ".join(value.split()).strip()
+            return value or None, desc_name
+    for pattern, desc_name in [
+        (r"\bprice on request\b", "Price on request"),
+        (r"\bcall for price\b", "Call for price"),
+        (r"\bcontact for price\b", "Contact for price"),
+    ]:
+        m = re.search(pattern, text_lower, re.I)
+        if m:
+            value = re.sub(pattern, " ", text, flags=re.I)
+            value = " ".join(value.split()).strip()
+            return value or None, desc_name
+    # 描述词在前面的：Starting from, From
+    for pattern, desc_name in [
+        (r"^\s*starting\s+from\s+", "Starting from"),
+        (r"^\s*from\s+", "From"),
+    ]:
+        m = re.search(pattern, text_lower, re.I)
+        if m:
+            value = re.sub(pattern, "", text, flags=re.I).strip()
+            return value or None, desc_name
+    return text, None
+
+
 def _normalize_propertyguru_url(url: str) -> str:
-    """统一 Property Guru 链接格式，便于去重"""
+    """统一 Property Guru / Property Group 等链接格式，便于去重"""
     url = url.strip()
     if not url.startswith("http"):
         url = "https://" + url
@@ -102,6 +155,23 @@ def _apartment_name_to_slug(name: str) -> str:
     return slug
 
 
+def _is_generic_site_title(title: str) -> bool:
+    """判断 title 是否为网站域名/通用名而非房源详情（如 www.propertyguru.com、www.propertygroup.com）"""
+    if not title or len(title.strip()) < 3:
+        return True
+    t = title.strip().lower()
+    # 纯域名格式：www.xxx.com、propertyguru.com.sg、propertygroup.com
+    if re.match(r"^(www\.)?[a-z0-9\-]+\.(com|sg|my|net|org)(\.[a-z]{2,})?$", t):
+        return True
+    # 以 www. 开头且含 .com/.sg 等，基本可判定为域名
+    if re.match(r"^www\.[a-z0-9\-\.]+\.(com|sg|my|net|org)", t):
+        return True
+    # 仅包含 "propertyguru" 或 "propertygroup" 且无房源关键词
+    if re.match(r"^property(guru|group)(\.com)?\.?sg?$", t) or t in ("propertyguru", "propertygroup"):
+        return True
+    return False
+
+
 def _detect_listing_type(url: str, body: str) -> Optional[str]:
     """从 URL 或页面内容识别房源类型：出售 vs 出租"""
     url_lower = url.lower()
@@ -118,12 +188,8 @@ def _detect_listing_type(url: str, body: str) -> Optional[str]:
     return None
 
 
-@app.post("/api/scrape-property", response_model=ScrapeResponse)
-async def scrape_property(req: ScrapeRequest):
-    url = _normalize_propertyguru_url(req.url)
-    if "propertyguru.com.sg" not in url and "propertyguru.com" not in url:
-        raise HTTPException(status_code=400, detail="仅支持 Property Guru 链接")
-
+async def _run_property_scraper(url: str) -> ScrapeResponse:
+    """执行房源抓取，返回抓取结果。供同步接口和后台任务共用。"""
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
         context = await browser.new_context(
@@ -135,6 +201,15 @@ async def scrape_property(req: ScrapeRequest):
             # 使用 load 而非 networkidle：Property Guru 等网站有大量后台请求，networkidle 难以达成
             await page.goto(url, wait_until="load", timeout=30000)
             await page.wait_for_timeout(2000)
+            # 等待房源标题或主内容区域出现（SPA 可能异步渲染）
+            try:
+                await page.wait_for_selector(
+                    "h1, [data-automation-id*='listing'], [class*='listing-detail']",
+                    timeout=5000,
+                )
+                await page.wait_for_timeout(800)
+            except Exception:
+                pass
 
             title = ""
             price: Optional[str] = None
@@ -146,20 +221,42 @@ async def scrape_property(req: ScrapeRequest):
             floor_plan_url: Optional[str] = None
             basic_info_parts: list[str] = []
 
-            # Title: og:title 或 h1
-            og_title = await page.evaluate(
-                """() => {
-                const m = document.querySelector('meta[property="og:title"]');
-                return m ? m.getAttribute('content') : '';
-            }"""
-            )
-            if og_title:
-                title = og_title
+            # Title: 优先从页面内房源标题元素抓取，避免 og:title 仅为 www.propertyguru.com 等网站域名
+            title_selectors = [
+                '[data-automation-id="listing-detail-title"]',
+                '[data-automation-id*="listing-detail"] h1',
+                '[data-automation-id*="listing-title"]',
+                '[class*="listing-title"]',
+                '[class*="listing-detail-title"]',
+                'h1[class*="listing"]',
+                'h1',
+            ]
+            for sel in title_selectors:
+                try:
+                    el = page.locator(sel).first
+                    txt = await el.text_content(timeout=500)
+                    if txt and len(txt.strip()) > 5 and not _is_generic_site_title(txt):
+                        title = txt.strip()
+                        break
+                except Exception:
+                    pass
 
+            # og:title 仅当不是域名/网站名时使用
             if not title:
-                h1 = await page.locator("h1").first.text_content()
-                if h1:
-                    title = h1.strip()
+                og_title = await page.evaluate(
+                    """() => {
+                    const m = document.querySelector('meta[property="og:title"]');
+                    return m ? m.getAttribute('content') : '';
+                }"""
+                )
+                if og_title and not _is_generic_site_title(og_title):
+                    title = og_title
+
+            # document.title 兜底（某些 SPA 会动态设置）
+            if not title:
+                doc_title = await page.title()
+                if doc_title and not _is_generic_site_title(doc_title):
+                    title = doc_title
 
             if not title:
                 title = "Property"
@@ -220,6 +317,7 @@ async def scrape_property(req: ScrapeRequest):
             bath_match = re.search(r"(\d+)\s*bath(?:room)?s?", body, re.I)
             if bath_match:
                 bathrooms = bath_match.group(1) + " 卫"
+            price_value, price_description = _parse_price_into_value_and_description(price) if price else (None, None)
             if price:
                 basic_info_parts.append(price)
             if size_sqft:
@@ -467,6 +565,8 @@ async def scrape_property(req: ScrapeRequest):
                 title=title,
                 link=url,
                 price=price,
+                price_value=price_value,
+                price_description=price_description,
                 size_sqft=size_sqft,
                 bedrooms=bedrooms,
                 bathrooms=bathrooms,
@@ -484,6 +584,88 @@ async def scrape_property(req: ScrapeRequest):
         except Exception as e:
             await browser.close()
             raise HTTPException(status_code=500, detail=f"抓取失败: {str(e)}")
+
+
+def _validate_scrape_url(url: str) -> None:
+    allowed = ("propertyguru.com.sg", "propertyguru.com", "propertygroup.com.sg", "propertygroup.com")
+    if not any(a in url for a in allowed):
+        raise HTTPException(status_code=400, detail="仅支持 Property Guru / Property Group 链接")
+
+
+@app.post("/api/scrape-property", response_model=ScrapeResponse)
+async def scrape_property(req: ScrapeRequest):
+    """同步抓取，用于刷新按钮（用户等待结果）"""
+    url = _normalize_propertyguru_url(req.url)
+    _validate_scrape_url(url)
+    return await _run_property_scraper(url)
+
+
+def _get_supabase_client():
+    """获取 Supabase 客户端（service role，用于后台更新）"""
+    try:
+        from supabase import create_client
+    except ImportError:
+        return None
+    url = os.environ.get("SUPABASE_URL") or os.environ.get("VITE_SUPABASE_URL")
+    key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+    if not url or not key:
+        return None
+    return create_client(url, key)
+
+
+async def _background_scrape_and_update(property_id: str, url: str) -> None:
+    """后台执行抓取，成功后更新 Supabase properties 表"""
+    try:
+        result = await _run_property_scraper(url)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).exception("异步抓取失败: %s", e)
+        return
+    client = _get_supabase_client()
+    if not client:
+        import logging
+        logging.getLogger(__name__).warning("未配置 SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY，无法写入数据库")
+        return
+    from datetime import datetime, timezone
+
+    payload = {
+        "title": result.title,
+        "link": result.link,
+        "basic_info": result.basic_info,
+        "price": result.price,
+        "price_value": result.price_value,
+        "price_description": result.price_description,
+        "size_sqft": result.size_sqft,
+        "bedrooms": result.bedrooms,
+        "bathrooms": result.bathrooms,
+        "main_image_url": result.main_image_url,
+        "image_urls": result.image_urls,
+        "floor_plan_url": result.floor_plan_url,
+        "listing_agent_name": result.listing_agent_name,
+        "listing_agent_phone": result.listing_agent_phone,
+        "listing_type": result.listing_type,
+        "lease_tenure": result.lease_tenure,
+        "site_plan_url": result.site_plan_url,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    # 过滤掉 None 值，保留空字符串等
+    payload = {k: v for k, v in payload.items() if v is not None}
+    try:
+        client.table("properties").update(payload).eq("id", property_id).execute()
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).exception("更新数据库失败: %s", e)
+
+
+@app.post("/api/trigger-scrape")
+async def trigger_scrape(req: TriggerScrapeRequest, background_tasks: BackgroundTasks):
+    """异步触发抓取：立即返回 202，后台抓取完成后写入数据库"""
+    from fastapi.responses import Response
+
+    url = _normalize_propertyguru_url(req.url)
+    _validate_scrape_url(url)
+    background_tasks.add_task(_background_scrape_and_update, req.property_id, url)
+    return Response(status_code=202, content=b"", media_type="text/plain")
 
 
 @app.post("/api/scrape-site-plan", response_model=SitePlanResponse)

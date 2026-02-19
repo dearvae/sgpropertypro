@@ -5,6 +5,7 @@ export type CustomerGroup = {
   description: string | null
   intent: 'buy' | 'rent' | null  // 买房 | 租房，必选
   share_token: string
+  share_token_edit?: string  // 可编辑链接专用 token，与 share_token 独立
   is_active?: boolean  // 是否活跃；false 表示已成交等，从各 filter 排除。默认 true
   created_at: string
   updated_at: string
@@ -18,6 +19,8 @@ export type Property = {
   basic_info: string | null
   source_url: string | null
   price: string | null
+  price_value: string | null  // 价格数值，如 S$1,500,000
+  price_description: string | null  // 价格描述，如 negotiable、Starting from
   size_sqft: string | null
   bedrooms: string | null
   bathrooms: string | null
@@ -31,6 +34,19 @@ export type Property = {
   site_plan_url: string | null  // 公寓小区平面图，从 99.co 抓取
   created_at: string
   updated_at: string
+}
+
+/** 格式化价格展示：price_value + 空格 + price_description，兼容旧的 price */
+export function formatPriceDisplay(p: {
+  price_value?: string | null
+  price_description?: string | null
+  price?: string | null
+}): string {
+  const val = p.price_value ?? p.price
+  const desc = p.price_description
+  if (!val) return ''
+  if (!desc) return val
+  return `${val} ${desc}`
 }
 
 /** 预约角色：买家 | 卖家 | 租客 | 房东 */

@@ -53,6 +53,8 @@ alter table public.properties add column if not exists listing_agent_name text;
 alter table public.properties add column if not exists listing_agent_phone text;
 alter table public.properties add column if not exists listing_type text check (listing_type in ('sale', 'rent'));
 alter table public.properties add column if not exists lease_tenure text;
+alter table public.properties add column if not exists price_value text;
+alter table public.properties add column if not exists price_description text;
 create unique index if not exists idx_properties_agent_source_url on public.properties(agent_id, source_url) where source_url is not null;
 
 create table if not exists public.appointments (
@@ -155,7 +157,7 @@ begin
     'appointments', (
       select coalesce(json_agg(
         json_build_object('id', a.id, 'start_time', a.start_time, 'end_time', a.end_time, 'status', a.status, 'client_note', coalesce(can.content, ''),
-          'property', json_build_object('id', p.id, 'title', p.title, 'link', p.link, 'basic_info', p.basic_info, 'price', p.price, 'size_sqft', p.size_sqft, 'bedrooms', p.bedrooms, 'bathrooms', p.bathrooms, 'main_image_url', p.main_image_url,
+          'property', json_build_object('id', p.id, 'title', p.title, 'link', p.link, 'basic_info', p.basic_info, 'price', p.price, 'price_value', p.price_value, 'price_description', p.price_description, 'size_sqft', p.size_sqft, 'bedrooms', p.bedrooms, 'bathrooms', p.bathrooms, 'main_image_url', p.main_image_url,
             'image_urls', (select coalesce(json_agg(elem order by ord), '[]'::json) from (select elem, ord from jsonb_array_elements_text(coalesce(p.image_urls, '[]'::jsonb)) with ordinality as t(elem, ord) limit 8) sub),
             'floor_plan_url', p.floor_plan_url))
         order by a.start_time), '[]'::json)
