@@ -32,6 +32,11 @@
 17. `supabase/migrations/037_agent_listings.sql`（**自售/出租房源**：group_type、property_id）
 18. `supabase/migrations/032_property_top_year.sql`（房源 TOP 年份/入伙年份）
 19. `supabase/migrations/033_client_view_top_year.sql`（get_client_view 返回 top_year）
+20. `supabase/migrations/038_pending_appointments_client_feedback.sql`（待预约客户反馈列）
+21. `supabase/migrations/039_save_client_pending_feedback.sql`（客户提交待预约反馈 RPC）
+22. `supabase/migrations/040_get_client_view_pending.sql`（**客户页待预约**：get_client_view 返回 pending_appointments）
+23. `supabase/migrations/041_realtime_pending_appointments.sql`（待预约 Realtime）
+24. `supabase/migrations/042_client_pending_notes.sql`（**待预约客户备注**：客户可查看中介备注、添加/编辑自己的备注）
 
 **「仅开发者可见」反馈**：仅管理员和超级管理员可见，并可删除任意建议。授予管理员权限见下方。
 

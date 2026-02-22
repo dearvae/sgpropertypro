@@ -45,9 +45,19 @@ type AppointmentItem = {
   property: PropertyData
 }
 
+type PendingItem = {
+  id: string
+  client_feedback: 'interested' | 'neutral' | 'not_interested' | null
+  status: string
+  notes: string
+  client_note?: string
+  property: PropertyData
+}
+
 type ClientViewData = {
   group: { id: string; name: string } | null
   appointments: AppointmentItem[]
+  pending_appointments?: PendingItem[]
   can_edit?: boolean
   error?: string
 }
@@ -79,10 +89,11 @@ export default function ClientView() {
   const qc = useQueryClient()
   useRealtimeClientView(token)
 
-  const [activeTab, setActiveTab] = useState<'upcoming' | 'history'>('upcoming')
+  const [activeTab, setActiveTab] = useState<'pending' | 'upcoming' | 'history'>('pending')
+  const [archiveCollapsed, setArchiveCollapsed] = useState(true)
   const [collapsedDates, setCollapsedDates] = useState<Set<string>>(new Set())
   const [lightboxImage, setLightboxImage] = useState<string | null>(null)
-  const [noteModal, setNoteModal] = useState<{ appointmentId: string; content: string } | null>(null)
+  const [noteModal, setNoteModal] = useState<{ appointmentId?: string; pendingId?: string; content: string } | null>(null)
   const [showMapModal, setShowMapModal] = useState(false)
   const [refreshingPropertyId, setRefreshingPropertyId] = useState<string | null>(null)
 
@@ -104,7 +115,7 @@ export default function ClientView() {
     return () => { document.body.style.overflow = '' }
   }, [lightboxImage, noteModal, showMapModal])
 
-  const { data, isLoading, isFetching, error } = useQuery({
+  const { data, isLoading, isFetching, error, refetch } = useQuery({
     queryKey: ['client-view', token],
     queryFn: async (): Promise<ClientViewData> => {
       const { data: result, error: rpcError } = await supabase.rpc('get_client_view', {
@@ -119,6 +130,9 @@ export default function ClientView() {
       return resolved as ClientViewData
     },
     enabled: !!token,
+    // Realtime 对匿名用户受 RLS 限制无法推送，用轮询保证待预约同步
+    refetchInterval: 20_000, // 每 20 秒轮询
+    refetchOnWindowFocus: true, // 切回标签页时刷新
   })
 
   if (isLoading) {
@@ -143,8 +157,11 @@ export default function ClientView() {
     )
   }
 
-  const { group, appointments: rawAppointments, can_edit: canEdit = false } = data
+  const { group, appointments: rawAppointments, pending_appointments: rawPending = [], can_edit: canEdit = false } = data
   const appointments = Array.isArray(rawAppointments) ? rawAppointments : []
+  const pendingItems = Array.isArray(rawPending) ? rawPending : []
+  const pendingMain = pendingItems.filter((p) => p.client_feedback !== 'not_interested')
+  const pendingArchive = pendingItems.filter((p) => p.client_feedback === 'not_interested')
   const now = new Date()
   const upcoming = appointments.filter((a) => new Date(a.start_time) >= now)
   const history = appointments.filter((a) => new Date(a.start_time) < now)
@@ -186,12 +203,21 @@ export default function ClientView() {
   const handleSaveNote = async () => {
     if (!token || !noteModal) return
     try {
-      const { error: rpcError } = await supabase.rpc('save_client_appointment_note', {
-        p_share_token: token,
-        p_appointment_id: noteModal.appointmentId,
-        p_content: noteModal.content,
-      })
-      if (rpcError) throw rpcError
+      if (noteModal.appointmentId) {
+        const { error: rpcError } = await supabase.rpc('save_client_appointment_note', {
+          p_share_token: token,
+          p_appointment_id: noteModal.appointmentId,
+          p_content: noteModal.content,
+        })
+        if (rpcError) throw rpcError
+      } else if (noteModal.pendingId) {
+        const { error: rpcError } = await supabase.rpc('save_client_pending_note', {
+          p_share_token: token,
+          p_pending_appointment_id: noteModal.pendingId,
+          p_content: noteModal.content,
+        })
+        if (rpcError) throw rpcError
+      }
       qc.invalidateQueries({ queryKey: ['client-view', token] })
       setNoteModal(null)
     } catch (e) {
@@ -201,6 +227,21 @@ export default function ClientView() {
 
   const copyPhone = (phone: string) => {
     navigator.clipboard.writeText(phone).then(() => message.success(t('clientView.copied')))
+  }
+
+  const handleSaveFeedback = async (pendingId: string, feedback: 'interested' | 'neutral' | 'not_interested') => {
+    if (!token) return
+    try {
+      const { error: rpcError } = await supabase.rpc('save_client_pending_feedback', {
+        p_share_token: token,
+        p_pending_appointment_id: pendingId,
+        p_feedback: feedback,
+      })
+      if (rpcError) throw rpcError
+      qc.invalidateQueries({ queryKey: ['client-view', token] })
+    } catch (e) {
+      message.error((e as Error).message)
+    }
   }
 
   const handleRefreshProperty = async (p: PropertyData) => {
@@ -372,7 +413,7 @@ export default function ClientView() {
             {canEdit ? (
               <button
                 type="button"
-                onClick={() => setNoteModal({ appointmentId: a.id, content: a.client_note || '' })}
+                onClick={() => setNoteModal({ appointmentId: a.id, content: a.client_note ?? '' })}
                 className={`mt-2 text-left text-sm w-full px-3 py-2 rounded-lg border transition-colors ${
                   hasNote
                     ? 'border-[#53868e]/30 bg-[#53868e]/10 text-[#2b5843]/90 hover:bg-[#53868e]/15'
@@ -384,6 +425,123 @@ export default function ClientView() {
             ) : hasNote ? (
               <p className="mt-2 text-sm text-[#2b5843]/80 px-3 py-2 rounded-lg border border-[#53868e]/20" style={{ background: 'rgba(83,134,142,0.08)' }}>{t('clientView.noteLabel')}：{a.client_note}</p>
             ) : null}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const pendingStatusLabels: Record<string, string> = {
+    not_scheduled: t('pendingStatus.not_scheduled'),
+    to_consult: t('pendingStatus.to_consult'),
+    consulted: t('pendingStatus.consulted'),
+    awaiting_agent_reply: t('pendingStatus.awaiting_agent_reply'),
+  }
+
+  const renderPendingCard = (item: PendingItem, inArchive = false) => {
+    if (!item?.property) return null
+    const p = item.property
+    const imgs = displayImages(p)
+    const fb = item.client_feedback
+    return (
+      <div
+        key={item.id}
+        className={`overflow-hidden rounded-xl shadow-sm border border-[#53868e]/20 hover:shadow-md transition-shadow ${inArchive ? 'bg-slate-50' : ''}`}
+        style={inArchive ? undefined : { background: 'linear-gradient(145deg, #f6f3f1 0%, #ebece8 100%)' }}
+      >
+        <div className="flex flex-col sm:flex-row">
+          <div className={`flex flex-col w-full sm:w-[166px] flex-shrink-0 gap-0.5 p-2 order-1 sm:order-none ${imgs.length <= 1 ? 'justify-center' : ''}`} style={{ background: 'rgba(83,134,142,0.08)' }}>
+            {imgs[0] ? (
+              <button type="button" onClick={() => setLightboxImage(imgs[0])} className="block w-full rounded-lg overflow-hidden cursor-zoom-in hover:opacity-90 transition-opacity text-left h-40 sm:h-auto sm:w-[150px] sm:aspect-[4/3]">
+                <img src={imgs[0]} alt={p.title} className="w-full h-full object-cover" />
+              </button>
+            ) : (
+              <div className="w-full h-20 rounded-lg flex items-center justify-center text-[#2b5843]/50 text-xs" style={{ background: 'rgba(83,134,142,0.15)' }}>{t('common.noImage')}</div>
+            )}
+            {imgs[1] && (
+              <button type="button" onClick={() => setLightboxImage(imgs[1])} className="block w-full h-[100px] sm:h-auto sm:w-[150px] sm:aspect-[4/3] rounded-lg overflow-hidden cursor-zoom-in hover:opacity-90 transition-opacity text-left mt-0.5">
+                <img src={imgs[1]} alt={p.title} className="w-full h-full object-cover" />
+              </button>
+            )}
+          </div>
+          <div className="flex-1 min-w-0 p-4 flex flex-col justify-center order-2 sm:order-none">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex items-center gap-2 flex-wrap min-w-0">
+                <p className="font-semibold text-base leading-tight break-words text-[#2b5843]">{p.title}</p>
+                {p.listing_type && (
+                  <span className={`px-1.5 py-0.5 rounded text-xs font-medium shrink-0 ${p.listing_type === 'rent' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>
+                    {p.listing_type === 'rent' ? t('clientView.rent') : t('clientView.sale')}
+                  </span>
+                )}
+              </div>
+              {formatPriceDisplay(p) && <span className="font-medium text-emerald-700 shrink-0">{formatPriceDisplay(p)}</span>}
+            </div>
+            <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-1.5 text-sm text-[#2b5843]/80">
+              {p.bedrooms && <span>{p.bedrooms}</span>}
+              {p.bathrooms && <span>{p.bathrooms}</span>}
+              {(p.size_sqft || p.basic_info) && <span>{(p.size_sqft || p.basic_info)}</span>}
+              {p.listing_type === 'sale' && p.lease_tenure && <span className="text-[#2b5843]/70">{p.lease_tenure}</span>}
+              {p.top_year && <span className="text-[#2b5843]/70">{p.top_year}</span>}
+            </div>
+            {item.status && (
+              <p className="text-[#2b5843]/70 text-xs mt-1">{pendingStatusLabels[item.status] ?? item.status}</p>
+            )}
+            {item.notes && (
+              <p className="text-[#2b5843]/80 text-sm mt-2 px-3 py-2 rounded-lg border border-[#53868e]/20" style={{ background: 'rgba(83,134,142,0.08)' }}>
+                {t('clientView.agentNote')}：{item.notes}
+              </p>
+            )}
+            {canEdit ? (
+              <button
+                type="button"
+                onClick={() => setNoteModal({ pendingId: item.id, content: item.client_note || '' })}
+                className={`mt-2 text-left text-sm w-full px-3 py-2 rounded-lg border transition-colors ${
+                  item.client_note?.trim()
+                    ? 'border-[#53868e]/30 bg-[#53868e]/10 text-[#2b5843]/90 hover:bg-[#53868e]/15'
+                    : 'border-dashed border-[#53868e]/30 text-[#2b5843]/70 hover:border-[#53868e] hover:text-[#2b5843]/80'
+                }`}
+              >
+                {item.client_note?.trim() ? item.client_note : t('clientView.addNote')}
+              </button>
+            ) : (item.client_note?.trim() ? (
+              <p className="mt-2 text-sm text-[#2b5843]/80 px-3 py-2 rounded-lg border border-[#53868e]/20" style={{ background: 'rgba(83,134,142,0.08)' }}>{t('clientView.noteLabel')}：{item.client_note}</p>
+            ) : null)}
+            {canEdit && (
+              <div className="flex flex-wrap gap-2 mt-3">
+                {(['interested', 'neutral', 'not_interested'] as const).map((f) => (
+                  <button
+                    key={f}
+                    type="button"
+                    onClick={() => handleSaveFeedback(item.id, f)}
+                    className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${
+                      fb === f
+                        ? f === 'interested'
+                          ? 'bg-emerald-100 border-emerald-300 text-emerald-800'
+                          : f === 'neutral'
+                            ? 'bg-amber-100 border-amber-300 text-amber-800'
+                            : 'bg-slate-200 border-slate-300 text-slate-700'
+                        : 'border-[#53868e]/25 text-[#2b5843]/80 hover:bg-[#53868e]/10'
+                    }`}
+                  >
+                    {t(`clientFeedback.${f}`)}
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-sm">
+              {p.site_plan_url && (
+                <button type="button" onClick={() => setLightboxImage(p.site_plan_url!)} className="text-emerald-600 hover:underline font-medium">{t('clientView.sitePlan')}</button>
+              )}
+              {p.link && (
+                <a href={p.link} target="_blank" rel="noreferrer" className="text-emerald-600 hover:underline font-medium">{t('clientView.viewProperty')}</a>
+              )}
+              <a href={getGoogleMapsSearchUrl(p.title)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-emerald-600 text-sm hover:underline font-medium">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
+                  <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" /><circle cx="12" cy="10" r="3" />
+                </svg>
+                {t('clientView.mapNav')}
+              </a>
+            </div>
           </div>
         </div>
       </div>
@@ -434,7 +592,22 @@ export default function ClientView() {
               </label>
               </div>
             )}
-            <div className="shrink-0">
+            <div className="shrink-0 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => refetch()}
+                disabled={isFetching}
+                className="p-1.5 rounded-lg text-[#2b5843]/70 hover:text-[#2b5843] hover:bg-[#53868e]/10 disabled:opacity-50 transition-colors"
+                title={t('clientView.refreshList')}
+                aria-label={t('clientView.refreshList')}
+              >
+                <svg className={`w-4 h-4 ${isFetching ? 'animate-spin' : ''}`} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                  <path d="M3 3v5h5" />
+                  <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
+                  <path d="M16 21h5v-5" />
+                </svg>
+              </button>
               <LanguageSwitcher />
             </div>
           </div>
@@ -463,6 +636,15 @@ export default function ClientView() {
           <div className="flex gap-1 border-b border-slate-200 mb-4 overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
             <button
               type="button"
+              onClick={() => setActiveTab('pending')}
+              className={`px-4 py-2 text-sm font-medium -mb-px border-b-2 transition-colors ${
+                activeTab === 'pending' ? 'border-emerald-600 text-emerald-700' : 'border-transparent text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              {t('clientView.pendingTab')}{pendingItems.length > 0 && <span className="ml-1.5 text-slate-400 font-normal">({pendingItems.length})</span>}
+            </button>
+            <button
+              type="button"
               onClick={() => setActiveTab('upcoming')}
               className={`px-4 py-2 text-sm font-medium -mb-px border-b-2 transition-colors ${
                 activeTab === 'upcoming' ? 'border-emerald-600 text-emerald-700' : 'border-transparent text-slate-500 hover:text-slate-700'
@@ -480,6 +662,40 @@ export default function ClientView() {
               {t('clientView.history')}{history.length > 0 && <span className="ml-1.5 text-slate-400 font-normal">({history.length})</span>}
             </button>
           </div>
+
+          {activeTab === 'pending' && (
+            <>
+              {pendingMain.length === 0 && pendingArchive.length === 0 ? (
+                <p className="text-slate-500 text-sm">{t('clientView.noPending')}</p>
+              ) : (
+                <div className="space-y-6">
+                  {pendingMain.length > 0 && (
+                    <div className="space-y-4">
+                      {pendingMain.map((item) => renderPendingCard(item))}
+                    </div>
+                  )}
+                  {pendingArchive.length > 0 && (
+                    <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
+                      <button
+                        type="button"
+                        onClick={() => setArchiveCollapsed((c) => !c)}
+                        className="w-full px-4 py-3 flex items-center justify-between text-left bg-slate-50 hover:bg-slate-100 transition-colors"
+                      >
+                        <span className="font-medium text-slate-700">{t('clientView.archiveSection')}</span>
+                        <span className="text-slate-500 text-sm">{t('clientView.propertiesCount', { count: pendingArchive.length })}</span>
+                        <span className={`text-slate-400 transition-transform ${archiveCollapsed ? '' : 'rotate-180'}`}>▾</span>
+                      </button>
+                      {!archiveCollapsed && (
+                        <div className="divide-y divide-slate-100 p-4 space-y-4">
+                          {pendingArchive.map((item) => renderPendingCard(item, true))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          )}
 
           {activeTab === 'upcoming' && (
             <>

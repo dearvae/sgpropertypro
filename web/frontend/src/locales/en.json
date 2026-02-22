@@ -172,8 +172,11 @@
     "mapMore": "more",
     "showAgentInfo": "Show agent info",
     "backToAgent": "Back to dashboard",
+    "pendingTab": "Pending",
     "upcoming": "Upcoming",
     "history": "History",
+    "noPending": "No pending properties",
+    "archiveSection": "Not interested",
     "noUpcoming": "No upcoming viewings",
     "noHistory": "No history",
     "propertiesCount": "{{count}} properties",
@@ -198,7 +201,8 @@
     "updating": "Updating...",
     "noRefreshSupport": "This property has no supported link (Property Guru / Property Group), cannot refresh",
     "refreshStarted": "Refresh started, will update when complete",
-    "refreshFailed": "Refresh failed"
+    "refreshFailed": "Refresh failed",
+    "refreshList": "Refresh list"
   },
   "profile": {
     "title": "Profile",
@@ -319,13 +323,21 @@
     "batchWhatsAppSuccess": "Opened {{count}} WhatsApp chats",
     "selectWithPhone": "Please select items with listing agent phone",
     "sendWhatsApp": "Send WhatsApp",
-    "createGroupFirst": "Please create a client first"
+    "createGroupFirst": "Please create a client first",
+    "allGroups": "All clients",
+    "openClientView": "Open client view"
   },
   "pendingStatus": {
     "not_scheduled": "Not scheduled",
     "to_consult": "To consult",
     "consulted": "Consulted",
     "awaiting_agent_reply": "Awaiting listing agent reply"
+  },
+  "clientFeedback": {
+    "interested": "Interested",
+    "neutral": "Neutral",
+    "not_interested": "Not interested",
+    "none": "No feedback"
   },
   "partyRole": {
     "buyer": "Buyer",

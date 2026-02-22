@@ -3,27 +3,32 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from './useAuth'
 import type { PendingAppointment, PendingAppointmentStatus } from '@/types'
 
-export function usePendingAppointments() {
+export function usePendingAppointments(customerGroupId?: string) {
   const { user } = useAuth()
   const qc = useQueryClient()
 
   const query = useQuery({
-    queryKey: ['pending_appointments', user?.id],
+    queryKey: ['pending_appointments', user?.id, customerGroupId],
     queryFn: async () => {
-      const { data: props } = await supabase.from('properties').select('id').eq('agent_id', user!.id)
-      const ids = props?.map((p) => p.id) ?? []
-      if (ids.length === 0) return []
-
-      const { data, error } = await supabase
+      let q = supabase
         .from('pending_appointments')
         .select(`
           *,
           properties (*),
           customer_groups (*)
         `)
-        .in('property_id', ids)
         .order('created_at', { ascending: false })
 
+      if (customerGroupId) {
+        q = q.eq('customer_group_id', customerGroupId)
+      } else {
+        const { data: props } = await supabase.from('properties').select('id').eq('agent_id', user!.id)
+        const ids = props?.map((p) => p.id) ?? []
+        if (ids.length === 0) return []
+        q = q.in('property_id', ids)
+      }
+
+      const { data, error } = await q
       if (error) throw error
       return data as PendingAppointment[]
     },

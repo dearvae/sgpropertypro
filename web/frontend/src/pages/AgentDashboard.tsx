@@ -22,7 +22,7 @@ import {
 import { useAuth } from '@/hooks/useAuth'
 import { useProfile } from '@/hooks/useProfile'
 import { AgentFeedbackSection } from '@/pages/AgentFeedback'
-import type { CustomerGroup, PartyRole, Property, Appointment, PendingAppointment, PendingAppointmentStatus } from '@/types'
+import type { CustomerGroup, PartyRole, Property, Appointment, PendingAppointment, PendingAppointmentStatus, ClientFeedback } from '@/types'
 import { formatPriceDisplay } from '@/types'
 
 function usePartyRoleLabels() {
@@ -61,6 +61,7 @@ export default function AgentDashboard({ clientMode = false }: { clientMode?: bo
   const [activeTab, setActiveTab] = useState<DashboardTab>(defaultTab)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null)
+  const [selectedPendingGroupId, setSelectedPendingGroupId] = useState<string | null>(null)
   const [showAddAppointment, setShowAddAppointment] = useState(false)
   const [initialAddAppointment, setInitialAddAppointment] = useState<{ propId: string; partyRole: 'seller' | 'landlord' } | null>(null)
 
@@ -73,7 +74,8 @@ export default function AgentDashboard({ clientMode = false }: { clientMode?: bo
   const effectiveGroupId = clientMode ? selfGroupId : selectedGroupId
   const appointments = useAppointments(effectiveGroupId || undefined)
   const allAppointments = useAppointments() // 用于冲突预检（需检查同一 agent 下全部预约）
-  const pendingAppointments = usePendingAppointments()
+  const effectivePendingGroupId = clientMode ? selfGroupId : selectedPendingGroupId
+  const pendingAppointments = usePendingAppointments(effectivePendingGroupId || undefined)
   useRealtimeAppointments(effectiveGroupId || undefined)
 
   const baseUrl = typeof window !== 'undefined' ? `${window.location.origin}/view/` : ''
@@ -201,6 +203,9 @@ export default function AgentDashboard({ clientMode = false }: { clientMode?: bo
             pendingAppointments={pendingAppointments}
             properties={properties}
             groups={groups}
+            baseUrl={baseUrl}
+            selectedPendingGroupId={clientMode ? selfGroupId : selectedPendingGroupId}
+            setSelectedPendingGroupId={clientMode ? () => {} : setSelectedPendingGroupId}
             clientMode={clientMode}
           />
         )}
@@ -906,18 +911,24 @@ function PendingAppointmentsSection({
   pendingAppointments,
   properties,
   groups,
+  baseUrl,
+  selectedPendingGroupId,
+  setSelectedPendingGroupId,
   clientMode = false,
 }: {
   pendingAppointments: ReturnType<typeof usePendingAppointments>
   properties: ReturnType<typeof useProperties>
   groups: ReturnType<typeof useCustomerGroups>
+  baseUrl: string
+  selectedPendingGroupId: string | null
+  setSelectedPendingGroupId: (id: string | null) => void
   clientMode?: boolean
 }) {
   const { t } = useTranslation()
   const { user } = useAuth()
   const { data: profile, update: profileUpdate } = useProfile()
   const PENDING_STATUS_OPTIONS = usePendingStatusOptions()
-  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
   const [refreshingPropertyId, setRefreshingPropertyId] = useState<string | null>(null)
   const [lightboxImage, setLightboxImage] = useState<string | null>(null)
   const [selectedPendingIds, setSelectedPendingIds] = useState<Set<string>>(new Set())
@@ -985,15 +996,10 @@ function PendingAppointmentsSection({
   }
 
   const toggleGroup = (gid: string) => {
-    setExpandedGroups((prev) => {
+    setCollapsedGroups((prev) => {
       const next = new Set(prev)
-      const currentlyExpanded = prev.size === 0 || prev.has(gid)
-      if (currentlyExpanded) {
-        if (prev.size === 0) groupIds.forEach((id) => { if (id !== gid) next.add(id) })
-        next.delete(gid)
-      } else {
-        next.add(gid)
-      }
+      if (prev.has(gid)) next.delete(gid)
+      else next.add(gid)
       return next
     })
   }
@@ -1009,7 +1015,7 @@ function PendingAppointmentsSection({
   }, {})
 
   const groupIds = Object.keys(byCustomer)
-  const isGroupExpanded = (gid: string) => expandedGroups.size === 0 || expandedGroups.has(gid)
+  const isGroupExpanded = (gid: string) => !collapsedGroups.has(gid)
 
   const [showBatchAddModal, setShowBatchAddModal] = useState(false)
   const [batchAddGroupId, setBatchAddGroupId] = useState('')
@@ -1073,6 +1079,7 @@ function PendingAppointmentsSection({
   }
 
   const activeGroups = groups.data?.filter((g) => g.is_active !== false) ?? []
+  const clientGroupsForFilter = activeGroups.filter((g) => g.group_type !== 'listing')
   const clientSettingUp = clientMode && activeGroups.length === 0 && groups.create.isPending
 
   return (
@@ -1083,8 +1090,37 @@ function PendingAppointmentsSection({
         </div>
       )}
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-sm font-medium text-[#2b5843]/90">{t('pendingSection.title')}</h2>
         <div className="flex items-center gap-2">
+          {!clientMode && (
+            <>
+              <select
+                value={selectedPendingGroupId || ''}
+                onChange={(e) => setSelectedPendingGroupId(e.target.value || null)}
+                className="text-sm border border-[#53868e]/25 rounded-xl px-3 py-1.5"
+              >
+                <option value="">{t('pendingSection.allGroups')}</option>
+                {clientGroupsForFilter.map((g) => (
+                  <option key={g.id} value={g.id}>{g.name}</option>
+                ))}
+              </select>
+              {selectedPendingGroupId && (() => {
+                const g = groups.data?.find((x) => x.id === selectedPendingGroupId)
+                const token = g?.share_token
+                if (!token) return null
+                return (
+                  <a
+                    href={`${baseUrl}${token}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-sm text-[#53868e] hover:text-[#2b5843] px-2 py-1"
+                    title={t('pendingSection.openClientView')}
+                  >
+                    {t('pendingSection.openClientView')}
+                  </a>
+                )
+              })()}
+            </>
+          )}
           <button
             onClick={() => {
               setShowTemplateModal(true)
@@ -1104,14 +1140,14 @@ function PendingAppointmentsSection({
           </button>
           <button
             onClick={() => {
-              if (activeGroups.length === 0) {
+              if (clientGroupsForFilter.length === 0) {
                 message.warning(t('pendingSection.createGroupFirst'))
                 return
               }
               setShowBatchAddModal(true)
               setBatchAddError(null)
               setBatchAddLinks('')
-              setBatchAddGroupId(activeGroups[0]?.id ?? '')
+              setBatchAddGroupId(clientGroupsForFilter[0]?.id ?? '')
             }}
             className="text-sm border border-[#53868e]/35 rounded-xl px-3 py-1.5 hover:bg-[#53868e]/15"
           >
@@ -1119,18 +1155,6 @@ function PendingAppointmentsSection({
           </button>
           {groupIds.length > 0 && (
             <>
-              <button
-                onClick={() => setSelectedPendingIds(new Set(list.map((p) => p.id)))}
-                className="text-sm text-[#2b5843]/80 hover:text-[#2b5843]"
-              >
-                {t('pendingSection.selectAll')}
-              </button>
-              <button
-                onClick={() => setSelectedPendingIds(new Set())}
-                className="text-sm text-[#2b5843]/80 hover:text-[#2b5843]"
-              >
-                {t('pendingSection.deselectAll')}
-              </button>
               <Popconfirm
                 title={t('pendingSection.batchDeleteConfirm', { count: selectedPendingIds.size })}
                 onConfirm={() => {
@@ -1261,7 +1285,7 @@ function PendingAppointmentsSection({
                   onChange={(e) => setBatchAddGroupId(e.target.value)}
                   className="w-full mt-1 px-3 py-2 border border-[#53868e]/25 rounded-xl text-sm bg-[#f6f3f1]"
                 >
-                  {activeGroups.map((g) => (
+                  {clientGroupsForFilter.map((g) => (
                     <option key={g.id} value={g.id}>{g.name}</option>
                   ))}
                 </select>
@@ -1311,21 +1335,42 @@ function PendingAppointmentsSection({
             const isExpanded = isGroupExpanded(gid)
             return (
               <div key={gid} className="border border-[#53868e]/25 rounded-xl bg-[#f6f3f1] overflow-hidden">
-                <button
+                <div
                   onClick={() => toggleGroup(gid)}
-                  className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-[#53868e]/10"
+                  className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-[#53868e]/10 cursor-pointer"
                 >
-                  <span className="font-medium text-[#2b5843] text-sm">{groupName}</span>
-                  <span className="text-[#2b5843]/70 text-xs">{t('pendingSection.itemsCount', { count: items.length })}</span>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="font-medium text-[#2b5843] text-sm shrink-0">{groupName}</span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setSelectedPendingIds((prev) => new Set([...prev, ...items.map((p) => p.id)]))
+                      }}
+                      className="text-sm text-[#2b5843]/80 hover:text-[#2b5843] shrink-0"
+                    >
+                      {t('pendingSection.selectAll')}
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        const ids = new Set(items.map((p) => p.id))
+                        setSelectedPendingIds((prev) => new Set([...prev].filter((id) => !ids.has(id))))
+                      }}
+                      className="text-sm text-[#2b5843]/80 hover:text-[#2b5843] shrink-0"
+                    >
+                      {t('pendingSection.deselectAll')}
+                    </button>
+                  </div>
+                  <span className="text-[#2b5843]/70 text-xs shrink-0">{t('pendingSection.itemsCount', { count: items.length })}</span>
                   <svg
-                    className={`w-5 h-5 text-[#2b5843]/70 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                    className={`w-5 h-5 text-[#2b5843]/70 transition-transform shrink-0 ${isExpanded ? 'rotate-180' : ''}`}
                     xmlns="http://www.w3.org/2000/svg"
                     viewBox="0 0 20 20"
                     fill="currentColor"
                   >
                     <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
                   </svg>
-                </button>
+                </div>
                 {isExpanded && (
                   <div className="border-t border-[#53868e]/15 divide-y divide-stone-100">
                     {items.map((p: PendingAppointment) => {
@@ -1382,6 +1427,31 @@ function PendingAppointmentsSection({
                                       {prop.listing_type === 'rent' ? t('clientView.rent') : t('clientView.sale')}
                                     </span>
                                   )}
+                                  {(() => {
+                                    const fb = p.client_feedback as ClientFeedback | null | undefined
+                                    const fbLabels: Record<string, string> = {
+                                      interested: t('clientFeedback.interested'),
+                                      neutral: t('clientFeedback.neutral'),
+                                      not_interested: t('clientFeedback.not_interested'),
+                                    }
+                                    const fbClasses: Record<string, string> = {
+                                      interested: 'bg-emerald-100 text-emerald-800',
+                                      neutral: 'bg-amber-100 text-amber-800',
+                                      not_interested: 'bg-slate-100 text-slate-600',
+                                    }
+                                    if (fb && fbLabels[fb]) {
+                                      return (
+                                        <span className={`px-1.5 py-0.5 rounded text-xs font-medium shrink-0 ${fbClasses[fb] ?? 'bg-slate-100 text-slate-600'}`}>
+                                          {fbLabels[fb]}
+                                        </span>
+                                      )
+                                    }
+                                    return (
+                                      <span className="px-1.5 py-0.5 rounded text-xs font-medium shrink-0 bg-slate-50 text-slate-500 border border-slate-200">
+                                        {t('clientFeedback.none')}
+                                      </span>
+                                    )
+                                  })()}
                                 </div>
                                 {formatPriceDisplay(prop!) && (
                                   <span className="font-medium text-emerald-700 shrink-0">{formatPriceDisplay(prop!)}</span>

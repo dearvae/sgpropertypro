@@ -84,11 +84,15 @@ export type PendingAppointmentStatus =
   | 'to_consult'     // 待咨询
   | 'awaiting_agent_reply' // 待对方中介回复正在确认时间
 
+/** 客户对待约房源的反馈 */
+export type ClientFeedback = 'interested' | 'neutral' | 'not_interested'
+
 export type PendingAppointment = {
   id: string
   property_id: string
   customer_group_id: string
   status: PendingAppointmentStatus
+  client_feedback?: ClientFeedback | null
   notes?: string | null
   created_at: string
   updated_at: string

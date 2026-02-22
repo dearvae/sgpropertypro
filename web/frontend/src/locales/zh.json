@@ -172,8 +172,11 @@
     "mapMore": "个更多",
     "showAgentInfo": "展示中介信息",
     "backToAgent": "返回工作台",
-    "upcoming": "准备看的",
+    "pendingTab": "待预约",
+    "upcoming": "已预约",
     "history": "历史记录",
+    "noPending": "暂无待约房源",
+    "archiveSection": "不感兴趣",
     "noUpcoming": "暂无即将看房的安排",
     "noHistory": "暂无历史记录",
     "propertiesCount": "{{count}} 套房源",
@@ -198,7 +201,8 @@
     "updating": "正在更新...",
     "noRefreshSupport": "该房源无支持的链接（Property Guru / Property Group），无法刷新",
     "refreshStarted": "已开始重新抓取，完成后会自动更新",
-    "refreshFailed": "刷新失败"
+    "refreshFailed": "刷新失败",
+    "refreshList": "刷新列表"
   },
   "profile": {
     "title": "个人资料",
@@ -319,13 +323,21 @@
     "batchWhatsAppSuccess": "已打开 {{count}} 个 WhatsApp 对话",
     "selectWithPhone": "请选择含卖家中介电话的记录",
     "sendWhatsApp": "发出 WhatsApp",
-    "createGroupFirst": "请先创建我的客户"
+    "createGroupFirst": "请先创建我的客户",
+    "allGroups": "全部客户",
+    "openClientView": "打开客户查看页面"
   },
   "pendingStatus": {
     "not_scheduled": "还未预约",
     "to_consult": "待咨询",
     "consulted": "已咨询",
     "awaiting_agent_reply": "待对方中介回复正在确认时间"
+  },
+  "clientFeedback": {
+    "interested": "感兴趣",
+    "neutral": "一般",
+    "not_interested": "不感兴趣",
+    "none": "未反馈"
   },
   "partyRole": {
     "buyer": "买家",
