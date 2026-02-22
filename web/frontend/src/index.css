@@ -3,16 +3,19 @@
 @tailwind utilities;
 
 :root {
-  --bg: #FAFAF9;
-  --text: #1C1917;
-  --text-muted: #78716C;
-  --border: #E7E5E4;
+  --zen-cream: #f6f3f1;
+  --zen-teal: #53868e;
+  --zen-green: #2b5843;
+  --bg: #f6f3f1;
+  --text: #2b5843;
+  --text-muted: #53868e;
+  --border: rgba(83, 134, 142, 0.25);
 }
 
 body {
   margin: 0;
   font-family: "Noto Sans SC", sans-serif;
-  background-color: var(--bg);
+  background: linear-gradient(180deg, #f6f3f1 0%, #ebece8 100%);
   color: var(--text);
   -webkit-font-smoothing: antialiased;
 }

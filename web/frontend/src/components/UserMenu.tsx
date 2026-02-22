@@ -1,8 +1,10 @@
 import { useState, useRef, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Link } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
 import { useProfile } from '@/hooks/useProfile'
 import { ProfileEditModal } from './ProfileEditModal'
+import { getDisplayName } from '@/types'
 
 export function UserMenu() {
   const { user, signOut } = useAuth()
@@ -23,44 +25,51 @@ export function UserMenu() {
   }, [])
 
   const avatarUrl = profile?.avatar_url
-  const displayName = profile?.full_name || user?.email?.split('@')[0] || '?'
+  const displayName = getDisplayName(profile) || user?.email?.split('@')[0] || '?'
 
   return (
     <div className="relative" ref={dropdownRef}>
       <button
         onClick={() => setShowDropdown((v) => !v)}
-        className="flex items-center gap-2 rounded-full border border-stone-200 p-0.5 hover:bg-stone-50 transition-colors"
+        className="flex items-center gap-2 rounded-full border border-[#53868e]/30 p-0.5 hover:bg-[#53868e]/10 transition-colors"
       >
         {avatarUrl ? (
           <img src={avatarUrl} alt={t('userMenu.avatar')} className="w-8 h-8 rounded-full object-cover" />
         ) : (
-          <div className="w-8 h-8 rounded-full bg-stone-200 flex items-center justify-center text-stone-600 text-sm font-medium">
-            {displayName[0].toUpperCase()}
+          <div className="w-8 h-8 rounded-full flex items-center justify-center text-[#53868e] text-sm font-medium" style={{ background: 'rgba(83,134,142,0.2)' }}>
+            {(displayName || '?')[0].toUpperCase()}
           </div>
         )}
       </button>
 
       {showDropdown && (
-        <div className="absolute right-0 top-full mt-1 py-1 min-w-[140px] bg-white border border-stone-200 rounded-sm shadow-lg z-50">
-          <div className="px-3 py-2 border-b border-stone-100">
-            <p className="text-sm text-stone-900 truncate">{profile?.full_name || t('userMenu.noName')}</p>
-            <p className="text-xs text-stone-500 truncate">{user?.email}</p>
+        <div className="absolute right-0 top-full mt-1 py-1 min-w-[140px] rounded-xl border border-[#53868e]/25 shadow-lg z-50" style={{ background: 'linear-gradient(145deg, #f6f3f1 0%, #ebece8 100%)' }}>
+          <div className="px-3 py-2 border-b border-[#53868e]/20">
+            <p className="text-sm text-[#2b5843] truncate">{getDisplayName(profile) || t('userMenu.noName')}</p>
+            <p className="text-xs text-[#2b5843]/70 truncate">{user?.email}</p>
           </div>
           <button
             onClick={() => {
               setShowDropdown(false)
               setShowProfileModal(true)
             }}
-            className="w-full text-left px-3 py-2 text-sm text-stone-700 hover:bg-stone-50"
+            className="w-full text-left px-3 py-2 text-sm text-[#2b5843]/90 hover:bg-[#53868e]/10 rounded-t-none"
           >
             {t('userMenu.profile')}
           </button>
+          <Link
+            to="/invite"
+            onClick={() => setShowDropdown(false)}
+            className="block w-full text-left px-3 py-2 text-sm text-[#2b5843]/90 hover:bg-[#53868e]/10"
+          >
+            {t('userMenu.inviteFriends')}
+          </Link>
           <button
             onClick={() => {
               setShowDropdown(false)
               signOut()
             }}
-            className="w-full text-left px-3 py-2 text-sm text-stone-600 hover:bg-stone-50"
+            className="w-full text-left px-3 py-2 text-sm text-[#2b5843]/80 hover:bg-[#53868e]/10 rounded-b-xl"
           >
             {t('userMenu.signOut')}
           </button>

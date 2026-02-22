@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { message } from 'antd'
-import { useParams } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
@@ -8,6 +8,7 @@ import { useRealtimeClientView } from '@/hooks/useRealtimeAppointments'
 import { useAuth } from '@/hooks/useAuth'
 import { getWhatsAppChatUrl } from '@/lib/whatsapp'
 import { getGoogleMapsSearchUrl } from '@/lib/mapUtils'
+import { MapViewModal } from '@/components/MapViewModal'
 import { triggerScrapeAsync, isSupportedScrapeUrl, normalizeSourceUrl } from '@/lib/scrapeApi'
 import { formatPriceDisplay } from '@/types'
 import { LanguageSwitcher } from '@/components/LanguageSwitcher'
@@ -31,6 +32,7 @@ type PropertyData = {
   listing_agent_name: string | null
   listing_agent_phone: string | null
   lease_tenure: string | null
+  top_year: string | null
 }
 
 type AppointmentItem = {
@@ -55,7 +57,7 @@ function CopyIcon({ onClick, title, t }: { onClick: () => void; title?: string; 
     <button
       type="button"
       onClick={(e) => { e.stopPropagation(); onClick() }}
-      className="inline-flex items-center justify-center p-1 rounded hover:bg-slate-100 text-slate-500 hover:text-slate-700 transition-colors"
+      className="inline-flex items-center justify-center p-1 rounded hover:bg-[#53868e]/10 text-[#2b5843]/70 hover:text-[#2b5843] transition-colors"
       title={title ?? t('common.copy')}
       aria-label={title ?? t('common.copy')}
     >
@@ -69,6 +71,7 @@ function CopyIcon({ onClick, title, t }: { onClick: () => void; title?: string; 
 
 export default function ClientView() {
   const { token } = useParams<{ token: string }>()
+  const navigate = useNavigate()
   const { t, i18n } = useTranslation()
   const { user } = useAuth()
   const isAgent = !!(user && (user.user_metadata?.role as string) === 'agent')
@@ -80,6 +83,7 @@ export default function ClientView() {
   const [collapsedDates, setCollapsedDates] = useState<Set<string>>(new Set())
   const [lightboxImage, setLightboxImage] = useState<string | null>(null)
   const [noteModal, setNoteModal] = useState<{ appointmentId: string; content: string } | null>(null)
+  const [showMapModal, setShowMapModal] = useState(false)
   const [refreshingPropertyId, setRefreshingPropertyId] = useState<string | null>(null)
 
   useEffect(() => {
@@ -87,6 +91,7 @@ export default function ClientView() {
       if (e.key === 'Escape') {
         setLightboxImage(null)
         setNoteModal(null)
+        setShowMapModal(false)
       }
     }
     window.addEventListener('keydown', onKey)
@@ -94,10 +99,10 @@ export default function ClientView() {
   }, [])
 
   useEffect(() => {
-    const open = !!lightboxImage || !!noteModal
+    const open = !!lightboxImage || !!noteModal || showMapModal
     document.body.style.overflow = open ? 'hidden' : ''
     return () => { document.body.style.overflow = '' }
-  }, [lightboxImage, noteModal])
+  }, [lightboxImage, noteModal, showMapModal])
 
   const { data, isLoading, isFetching, error } = useQuery({
     queryKey: ['client-view', token],
@@ -118,21 +123,21 @@ export default function ClientView() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-slate-50">
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4" style={{ background: 'linear-gradient(180deg, #f6f3f1 0%, #e8ebe8 100%)' }}>
         <div className="relative">
-          <div className="w-10 h-10 rounded-full border-2 border-slate-200 border-t-emerald-500 animate-spin" />
+          <div className="w-10 h-10 rounded-full border-2 border-[#53868e]/30 border-t-[#53868e] animate-spin" />
         </div>
-        <p className="text-slate-500 text-sm">{t('clientView.loadingSchedule')}</p>
+        <p className="text-[#2b5843]/70 text-sm">{t('clientView.loadingSchedule')}</p>
       </div>
     )
   }
 
   if (error || !data || data.error) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-stone-50 px-4">
+      <div className="min-h-screen flex items-center justify-center px-4" style={{ background: 'linear-gradient(180deg, #f6f3f1 0%, #e8ebe8 100%)' }}>
         <div className="text-center">
-          <p className="text-stone-600">{t('clientView.invalidLink')}</p>
-          <p className="text-stone-400 text-sm mt-2">{t('clientView.invalidLinkHint')}</p>
+          <p className="text-[#2b5843]/90">{t('clientView.invalidLink')}</p>
+          <p className="text-[#2b5843]/60 text-sm mt-2">{t('clientView.invalidLinkHint')}</p>
         </div>
       </div>
     )
@@ -151,6 +156,13 @@ export default function ClientView() {
     return acc
   }, {})
   const historyDates = Object.keys(historyByDate).sort((a, b) => new Date(b).getTime() - new Date(a).getTime())
+
+  // 提取所有预约房源的 title 用于地图展示（去重）
+  const mapProperties = [...new Map(
+    [...upcoming, ...history]
+      .filter((a) => a?.property?.title?.trim())
+      .map((a) => [a.property.title.trim(), { id: a.property.id, title: a.property.title.trim() } as const])
+  ).values()]
 
   const toggleDate = (d: string) => {
     setCollapsedDates((prev) => {
@@ -227,50 +239,60 @@ export default function ClientView() {
     return (
       <div
         key={a.id}
-        className={`bg-white overflow-hidden hover:shadow-md transition-shadow ${inHistory ? 'p-4' : 'rounded-xl shadow-sm border border-slate-100'}`}
+        className={`overflow-hidden hover:shadow-md transition-shadow ${inHistory ? 'p-4' : 'rounded-xl shadow-sm border border-[#53868e]/20'}`}
+        style={{ background: inHistory ? undefined : 'linear-gradient(145deg, #f6f3f1 0%, #ebece8 100%)' }}
       >
         <div className="flex">
-          <div className="flex flex-col w-28 sm:w-32 flex-shrink-0 gap-0.5 p-2 bg-slate-50">
+          <div className={`flex flex-col w-28 sm:w-32 flex-shrink-0 gap-0.5 p-2 ${imgs.length <= 1 ? 'justify-center' : ''}`} style={{ background: 'rgba(83,134,142,0.08)' }}>
             {imgs[0] ? (
-              <button type="button" onClick={() => setLightboxImage(imgs[0])} className="block w-full h-20 rounded-lg overflow-hidden cursor-zoom-in hover:opacity-90 transition-opacity text-left">
-                <img src={imgs[0]} alt={a.property.title} className="w-full h-20 object-cover" />
+              <button
+                type="button"
+                onClick={() => setLightboxImage(imgs[0])}
+                className={`block w-full rounded-lg overflow-hidden cursor-zoom-in hover:opacity-90 transition-opacity text-left ${imgs.length >= 2 ? 'h-20' : 'h-40'}`}
+              >
+                <img src={imgs[0]} alt={a.property.title} className={`w-full object-cover ${imgs.length >= 2 ? 'h-20' : 'h-40'}`} />
               </button>
             ) : (
-              <div className="w-full h-20 rounded-lg bg-slate-200 flex items-center justify-center text-slate-400 text-xs">{t('common.noImage')}</div>
+              <div className="w-full h-20 rounded-lg flex items-center justify-center text-[#2b5843]/50 text-xs" style={{ background: 'rgba(83,134,142,0.15)' }}>{t('common.noImage')}</div>
             )}
-            {imgs[1] ? (
+            {imgs[1] && (
               <button type="button" onClick={() => setLightboxImage(imgs[1])} className="block w-full h-20 rounded-lg overflow-hidden cursor-zoom-in hover:opacity-90 transition-opacity text-left">
                 <img src={imgs[1]} alt={a.property.title} className="w-full h-20 object-cover" />
               </button>
-            ) : imgs[0] ? null : (
-              <div className="w-full h-20 rounded-lg bg-slate-200" />
             )}
           </div>
           <div className="flex-1 min-w-0 p-4 flex flex-col justify-center">
-            <div className="flex items-center gap-2 flex-wrap">
-              <p className={`font-semibold text-base leading-tight ${inHistory ? 'text-slate-700' : 'text-slate-900'}`}>{a.property.title}</p>
-              {a.property.listing_type && (
-                <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${a.property.listing_type === 'rent' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>
-                  {a.property.listing_type === 'rent' ? t('clientView.rent') : t('clientView.sale')}
-                </span>
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex items-center gap-2 flex-wrap min-w-0">
+                <p className={`font-semibold text-base leading-tight ${inHistory ? 'text-[#2b5843]/90' : 'text-[#2b5843]'}`}>{a.property.title}</p>
+                {a.property.listing_type && (
+                  <span className={`px-1.5 py-0.5 rounded text-xs font-medium shrink-0 ${a.property.listing_type === 'rent' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>
+                    {a.property.listing_type === 'rent' ? t('clientView.rent') : t('clientView.sale')}
+                  </span>
+                )}
+              </div>
+              {formatPriceDisplay(a.property) && (
+                <span className="font-medium text-emerald-700 shrink-0">{formatPriceDisplay(a.property)}</span>
               )}
             </div>
-            <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-1.5 text-sm text-slate-600">
-              {formatPriceDisplay(a.property) && <span className="font-medium text-emerald-700">{formatPriceDisplay(a.property)}</span>}
+            <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-1.5 text-sm text-[#2b5843]/80">
               {a.property.bedrooms && <span>{a.property.bedrooms}</span>}
               {a.property.bathrooms && <span>{a.property.bathrooms}</span>}
               {(a.property.size_sqft || a.property.basic_info) && (
                 <span>{(a.property.size_sqft || a.property.basic_info)}</span>
               )}
               {a.property.listing_type === 'sale' && a.property.lease_tenure && (
-                <span className="text-slate-500">{a.property.lease_tenure}</span>
+                <span className="text-[#2b5843]/70">{a.property.lease_tenure}</span>
+              )}
+              {a.property.top_year && (
+                <span className="text-[#2b5843]/70">{a.property.top_year}</span>
               )}
             </div>
-            <p className="text-slate-500 text-sm mt-2">
+            <p className="text-[#2b5843]/70 text-sm mt-2">
               {new Date(a.start_time).toLocaleString(i18n.language === 'zh' ? 'zh-CN' : 'en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
             </p>
             {a.notes && (
-              <p className="text-slate-600 text-sm mt-2 px-3 py-2 rounded-lg bg-slate-50 border border-slate-100">
+              <p className="text-[#2b5843]/80 text-sm mt-2 px-3 py-2 rounded-lg border border-[#53868e]/20" style={{ background: 'rgba(83,134,142,0.08)' }}>
                 {t('clientView.agentNote')}：{a.notes}
               </p>
             )}
@@ -304,7 +326,7 @@ export default function ClientView() {
                   type="button"
                   onClick={() => handleRefreshProperty(a.property)}
                   disabled={refreshingPropertyId === a.property.id}
-                  className="text-xs text-slate-400 hover:text-slate-700 disabled:opacity-50 flex items-center gap-1"
+                  className="text-xs text-[#2b5843]/60 hover:text-[#2b5843] disabled:opacity-50 flex items-center gap-1"
                   title={t('clientView.refreshTitle')}
                 >
                   {refreshingPropertyId === a.property.id ? (
@@ -317,14 +339,14 @@ export default function ClientView() {
               )}
             </div>
             {hasAgentInfo && (
-              <div className="mt-2 px-3 py-2 rounded-lg bg-slate-50 border border-slate-100 space-y-1.5">
-                <p className="text-xs text-slate-500">{t('clientView.listingAgent')}</p>
+              <div className="mt-2 px-3 py-2 rounded-lg border border-[#53868e]/20 space-y-1.5" style={{ background: 'rgba(83,134,142,0.08)' }}>
+                <p className="text-xs text-[#2b5843]/70">{t('clientView.listingAgent')}</p>
                 {(p.listing_agent_name || p.listing_agent_phone) && (
                   <div className="flex flex-wrap items-center gap-1.5">
-                    {p.listing_agent_name && <span className="text-sm font-medium text-slate-700">{p.listing_agent_name}</span>}
+                    {p.listing_agent_name && <span className="text-sm font-medium text-[#2b5843]/90">{p.listing_agent_name}</span>}
                     {p.listing_agent_phone && (
                       <span className="inline-flex items-center gap-0.5">
-                        <a href={`tel:${p.listing_agent_phone}`} className="text-sm text-slate-600 hover:text-slate-800">
+                        <a href={`tel:${p.listing_agent_phone}`} className="text-sm text-[#53868e] hover:text-[#2b5843]">
                           {p.listing_agent_phone}
                         </a>
                         <CopyIcon onClick={() => copyPhone(p.listing_agent_phone!)} title={t('clientView.copyNumber')} t={t} />
@@ -353,14 +375,14 @@ export default function ClientView() {
                 onClick={() => setNoteModal({ appointmentId: a.id, content: a.client_note || '' })}
                 className={`mt-2 text-left text-sm w-full px-3 py-2 rounded-lg border transition-colors ${
                   hasNote
-                    ? 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
-                    : 'border-dashed border-slate-300 text-slate-500 hover:border-slate-400 hover:text-slate-600'
+                    ? 'border-[#53868e]/30 bg-[#53868e]/10 text-[#2b5843]/90 hover:bg-[#53868e]/15'
+                    : 'border-dashed border-[#53868e]/30 text-[#2b5843]/70 hover:border-[#53868e] hover:text-[#2b5843]/80'
                 }`}
               >
                 {hasNote ? a.client_note : t('clientView.addNote')}
               </button>
             ) : hasNote ? (
-              <p className="mt-2 text-sm text-slate-600 px-3 py-2 rounded-lg bg-slate-50 border border-slate-100">{t('clientView.noteLabel')}：{a.client_note}</p>
+              <p className="mt-2 text-sm text-[#2b5843]/80 px-3 py-2 rounded-lg border border-[#53868e]/20" style={{ background: 'rgba(83,134,142,0.08)' }}>{t('clientView.noteLabel')}：{a.client_note}</p>
             ) : null}
           </div>
         </div>
@@ -369,20 +391,31 @@ export default function ClientView() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 relative">
+    <div className="min-h-screen relative" style={{ background: 'linear-gradient(180deg, #f6f3f1 0%, #e8ebe8 100%)' }}>
       {isFetching && (
         <div className="absolute top-0 left-0 right-0 h-0.5 bg-emerald-500/80 animate-pulse z-10" title={t('clientView.updating')} />
       )}
-      <header className="border-b border-slate-200 bg-white shadow-sm">
+      <header className="border-b border-[#53868e]/20 rounded-b-2xl mx-2 sm:mx-4 mt-2 shadow-sm" style={{ background: 'linear-gradient(135deg, #f6f3f1 0%, #ebece8 100%)' }}>
         <div className="max-w-2xl mx-auto px-6 py-6">
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1 min-w-0">
-              <h1 className="text-xl font-semibold text-slate-900">{t('clientView.scheduleTitle')}</h1>
-              {group && <p className="text-slate-500 text-sm mt-1">{group.name}</p>}
+              <h1 className="text-xl font-semibold text-[#2b5843]">{t('clientView.scheduleTitle')}</h1>
+              {group && <p className="text-[#2b5843]/70 text-sm mt-1">{group.name}</p>}
             </div>
             {isAgent && (
-              <label className="flex items-center gap-2 shrink-0 cursor-pointer">
-                <span className="text-sm text-slate-600">{t('clientView.showAgentInfo')}</span>
+              <div className="flex items-center gap-3 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => navigate('/home/agent')}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-[#53868e] hover:text-[#2b5843] border border-[#53868e]/30 rounded-lg hover:bg-[#53868e]/10 transition-colors"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+                    <path d="M19 12H5M12 19l-7-7 7-7" />
+                  </svg>
+                  {t('clientView.backToAgent')}
+                </button>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <span className="text-sm text-[#2b5843]/80">{t('clientView.showAgentInfo')}</span>
                 <button
                   type="button"
                   role="switch"
@@ -399,6 +432,7 @@ export default function ClientView() {
                   />
                 </button>
               </label>
+              </div>
             )}
             <div className="shrink-0">
               <LanguageSwitcher />
@@ -409,6 +443,23 @@ export default function ClientView() {
 
       <main className="max-w-2xl mx-auto px-6 py-8 space-y-10">
         <section>
+          {mapProperties.length > 0 && (
+            <div className="flex justify-end mb-3">
+              <button
+                type="button"
+                onClick={() => setShowMapModal(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-emerald-700 bg-emerald-50 rounded-lg hover:bg-emerald-100 transition-colors"
+                title={t('clientView.viewAllOnMapTitle')}
+                aria-label={t('clientView.viewAllOnMapTitle')}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+                  <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
+                  <circle cx="12" cy="10" r="3" />
+                </svg>
+                {t('clientView.viewAllOnMap')}
+              </button>
+            </div>
+          )}
           <div className="flex gap-1 border-b border-slate-200 mb-4">
             <button
               type="button"
@@ -542,6 +593,14 @@ export default function ClientView() {
             onClick={(e) => e.stopPropagation()}
           />
         </div>
+      )}
+
+      {showMapModal && (
+        <MapViewModal
+          properties={mapProperties}
+          onClose={() => setShowMapModal(false)}
+          title={t('clientView.viewAllOnMapTitle')}
+        />
       )}
     </div>
   )

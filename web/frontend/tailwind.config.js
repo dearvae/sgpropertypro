@@ -7,6 +7,11 @@ export default {
   theme: {
     extend: {
       colors: {
+        zen: {
+          cream: '#f6f3f1',
+          teal: '#53868e',
+          green: '#2b5843',
+        },
         stone: {
           50: '#FAFAF9',
           100: '#F5F5F4',

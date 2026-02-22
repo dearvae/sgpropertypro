@@ -40,6 +40,7 @@ export function useProperties() {
       listing_agent_phone?: string
       listing_type?: 'sale' | 'rent'
       lease_tenure?: string
+      top_year?: string
       site_plan_url?: string
     }) => {
       const { data, error } = await supabase
@@ -63,6 +64,7 @@ export function useProperties() {
           listing_agent_phone: p.listing_agent_phone || null,
           listing_type: p.listing_type || null,
           lease_tenure: p.lease_tenure || null,
+          top_year: p.top_year || null,
           site_plan_url: p.site_plan_url || null,
         })
         .select()
@@ -87,9 +89,10 @@ export function useProperties() {
   const update = useMutation({
     mutationFn: async (p: Partial<Property> & { id: string }) => {
       const { id, ...rest } = p
+      const payload = { ...rest, updated_at: new Date().toISOString() }
       const { data, error } = await supabase
         .from('properties')
-        .update({ ...rest, updated_at: new Date().toISOString() })
+        .update(payload)
         .eq('id', id)
         .select()
         .single()

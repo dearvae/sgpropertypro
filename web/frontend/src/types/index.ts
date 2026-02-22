@@ -19,6 +19,7 @@ export type Property = {
   basic_info: string | null
   source_url: string | null
   price: string | null
+  last_scraped_at?: string | null
   price_value: string | null  // 价格数值，如 S$1,500,000
   price_description: string | null  // 价格描述，如 negotiable、Starting from
   size_sqft: string | null
@@ -31,6 +32,7 @@ export type Property = {
   listing_agent_phone: string | null
   listing_type: 'sale' | 'rent' | null  // 出售 | 出租（爬虫识别）
   lease_tenure: string | null  // 地契：99年地契、999年地契、永久地契（买卖时展示）
+  top_year: string | null  // TOP 年份（入伙年份），如 2020
   site_plan_url: string | null  // 公寓小区平面图，从 99.co 抓取
   created_at: string
   updated_at: string
@@ -101,19 +103,49 @@ export type Profile = {
   id: string
   role: string
   full_name: string | null
+  family_name: string | null
+  given_name: string | null
   agent_number: string | null
   phone: string | null
   avatar_url: string | null
   name_changed_at: string | null
+  company: string | null
+  whatsapp_template_agent: string | null
+  whatsapp_template_client: string | null
+  invite_code: string | null
+  invited_by_id: string | null
+  verification_status: string
+  is_admin: boolean
+  is_super_admin: boolean
   created_at: string
   updated_at: string
 }
+
+/** 右上角等处展示：family_name + given_name，兼容旧 full_name */
+export function getDisplayName(profile: { family_name?: string | null; given_name?: string | null; full_name?: string | null } | null): string {
+  if (!profile) return ''
+  const fn = profile.family_name?.trim()
+  const gn = profile.given_name?.trim()
+  if (fn || gn) return [fn, gn].filter(Boolean).join(' ')
+  return profile.full_name?.trim() ?? ''
+}
+
+/** 模板 my_name 仅使用 given_name */
+export function getGivenName(profile: { given_name?: string | null; full_name?: string | null } | null): string {
+  if (!profile) return ''
+  const gn = profile.given_name?.trim()
+  if (gn) return gn
+  return profile.full_name?.trim() ?? ''
+}
+
+export type AgentFeedbackVisibility = 'all' | 'developer_only'
 
 export type AgentFeedback = {
   id: string
   author_id: string | null
   author_display: string | null
   content: string
+  visibility: AgentFeedbackVisibility
   created_at: string
   vote_count?: number
   has_voted?: boolean

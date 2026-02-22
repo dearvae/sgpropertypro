@@ -1,40 +1,88 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useProfile } from '@/hooks/useProfile'
+import { useAuth } from '@/hooks/useAuth'
+import { getDisplayName } from '@/types'
+import { checkPhoneAvailableForUpdate } from '@/lib/checkAvailability'
+
+const COMPANY_OPTIONS = ['POP', 'Next Huttons', 'ERA', 'others'] as const
+
+function parsePhone(phone: string | null): string {
+  if (!phone) return ''
+  const m = phone.match(/^\+65(\d{8})$/)
+  return m ? m[1] : phone.replace(/\D/g, '').slice(0, 8)
+}
 
 export function ProfileEditModal({ onClose }: { onClose: () => void }) {
+  const { user } = useAuth()
   const { data: profile, update, canChangeName: checkCanChange } = useProfile()
-  const [fullName, setFullName] = useState('')
+  const [familyName, setFamilyName] = useState('')
+  const [givenName, setGivenName] = useState('')
   const [agentNumber, setAgentNumber] = useState('')
-  const [phone, setPhone] = useState('')
+  const [company, setCompany] = useState<string>('POP')
+  const [companyOthers, setCompanyOthers] = useState('')
+  const [phoneDigits, setPhoneDigits] = useState('')
   const [avatarUrl, setAvatarUrl] = useState('')
   const [error, setError] = useState('')
   const { t } = useTranslation()
 
   useEffect(() => {
     if (profile) {
-      setFullName(profile.full_name ?? '')
+      setFamilyName(profile.family_name ?? '')
+      setGivenName(profile.given_name ?? profile.full_name ?? '')
       setAgentNumber(profile.agent_number ?? '')
-      setPhone(profile.phone ?? '')
+      const c = profile.company ?? ''
+      if (COMPANY_OPTIONS.includes(c as (typeof COMPANY_OPTIONS)[number])) {
+        setCompany(c)
+        setCompanyOthers('')
+      } else {
+        setCompany('others')
+        setCompanyOthers(c)
+      }
+      setPhoneDigits(parsePhone(profile.phone))
       setAvatarUrl(profile.avatar_url ?? '')
     }
   }, [profile])
 
   const nameChangeable = profile ? checkCanChange(profile.name_changed_at) : false
 
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setPhoneDigits(e.target.value.replace(/\D/g, '').slice(0, 8))
+  }
+
+  const getCompanyValue = () => (company === 'others' ? companyOthers.trim() : company)
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
-    const nameChanged = profile && fullName.trim() !== (profile.full_name ?? '')
+    const newFamily = familyName.trim()
+    const newGiven = givenName.trim()
+    const oldFamily = profile?.family_name ?? ''
+    const oldGiven = profile?.given_name ?? ''
+    const nameChanged = profile && (newFamily !== oldFamily || newGiven !== oldGiven)
     if (nameChanged && !nameChangeable) {
       setError(t('profile.nameChangeError'))
       return
     }
+    if (phoneDigits.length !== 8) {
+      setError(t('register.phoneMustBe8'))
+      return
+    }
+    const phone = `+65${phoneDigits}`
+    if (user?.id) {
+      const ok = await checkPhoneAvailableForUpdate(phone, user.id)
+      if (!ok) {
+        setError(t('register.phoneExists'))
+        return
+      }
+    }
     try {
       await update.mutateAsync({
-        full_name: fullName.trim() || undefined,
+        family_name: newFamily || undefined,
+        given_name: newGiven || undefined,
         agent_number: agentNumber.trim() || undefined,
-        phone: phone.trim() || undefined,
+        company: profile?.role === 'agent' ? getCompanyValue() || undefined : undefined,
+        phone,
         avatar_url: avatarUrl.trim() || undefined,
         updateNameChangedAt: nameChanged,
       })
@@ -46,23 +94,26 @@ export function ProfileEditModal({ onClose }: { onClose: () => void }) {
 
   if (!profile) return null
 
+  const displayName = getDisplayName({ family_name: familyName, given_name: givenName, full_name: profile.full_name })
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
       <div
-        className="bg-white rounded-sm shadow-lg p-6 w-full max-w-md mx-4 border border-stone-200"
+        className="rounded-2xl shadow-lg p-6 w-full max-w-md mx-4 border border-[#53868e]/25"
+        style={{ background: 'linear-gradient(145deg, #f6f3f1 0%, #ebece8 100%)' }}
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="text-sm font-medium text-stone-900 mb-4">{t('profile.title')}</h3>
+        <h3 className="text-sm font-medium text-[#2b5843] mb-4">{t('profile.title')}</h3>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs text-stone-600 mb-1">{t('profile.avatarUrl')}</label>
+            <label className="block text-xs text-[#2b5843]/80 mb-1">{t('profile.avatarUrl')}</label>
             <div className="flex gap-3 items-center">
-              <div className="w-14 h-14 rounded-full shrink-0 overflow-hidden bg-stone-200 border border-stone-200">
+              <div className="w-14 h-14 rounded-full shrink-0 overflow-hidden border border-[#53868e]/25" style={{ background: 'rgba(83,134,142,0.15)' }}>
                 {avatarUrl ? (
                   <img src={avatarUrl} alt={t('profile.avatar')} className="w-full h-full object-cover" />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center text-stone-500 text-xl">
-                    {fullName ? fullName[0] : '?'}
+                  <div className="w-full h-full flex items-center justify-center text-[#53868e] text-xl">
+                    {(displayName || '?')[0]}
                   </div>
                 )}
               </div>
@@ -71,54 +122,97 @@ export function ProfileEditModal({ onClose }: { onClose: () => void }) {
                 value={avatarUrl}
                 onChange={(e) => setAvatarUrl(e.target.value)}
                 placeholder="https://..."
-                className="flex-1 px-3 py-2 border border-stone-200 rounded-sm text-sm"
+                className="flex-1 px-3 py-2 border border-[#53868e]/25 rounded-xl text-sm text-[#2b5843] focus:outline-none focus:border-[#53868e]"
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-stone-600 mb-1">
+                {t('profile.familyName')}
+                {!nameChangeable && <span className="text-[#53868e] ml-1">{t('profile.nameChangedHint')}</span>}
+              </label>
+              <input
+                type="text"
+                value={familyName}
+                onChange={(e) => setFamilyName(e.target.value)}
+                disabled={!nameChangeable}
+                placeholder={t('register.familyNamePlaceholder')}
+                className="w-full px-3 py-2 border border-[#53868e]/25 rounded-xl text-sm text-[#2b5843] focus:outline-none focus:border-[#53868e] disabled:bg-[#53868e]/10 disabled:text-[#2b5843]/50"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-[#2b5843]/80 mb-1">{t('profile.givenName')}</label>
+              <input
+                type="text"
+                value={givenName}
+                onChange={(e) => setGivenName(e.target.value)}
+                disabled={!nameChangeable}
+                placeholder={t('register.givenNamePlaceholder')}
+                className="w-full px-3 py-2 border border-[#53868e]/25 rounded-xl text-sm text-[#2b5843] focus:outline-none focus:border-[#53868e] disabled:bg-[#53868e]/10 disabled:text-[#2b5843]/50"
               />
             </div>
           </div>
           <div>
-            <label className="block text-xs text-stone-600 mb-1">
-              {t('profile.fullName')}
-              {!nameChangeable && <span className="text-amber-600 ml-1">{t('profile.nameChangedHint')}</span>}
-            </label>
-            <input
-              type="text"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              disabled={!nameChangeable}
-              placeholder={t('login.namePlaceholder')}
-              className="w-full px-3 py-2 border border-stone-200 rounded-sm text-sm disabled:bg-stone-100 disabled:text-stone-500"
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-stone-600 mb-1">{t('profile.agentNumber')}</label>
+            <label className="block text-xs text-[#2b5843]/80 mb-1">{t('profile.agentNumber')}</label>
             <input
               type="text"
               value={agentNumber}
               onChange={(e) => setAgentNumber(e.target.value)}
               placeholder={t('login.agentNumberPlaceholder')}
-              className="w-full px-3 py-2 border border-stone-200 rounded-sm text-sm"
+              className="w-full px-3 py-2 border border-[#53868e]/25 rounded-xl text-sm text-[#2b5843] focus:outline-none focus:border-[#53868e]"
             />
           </div>
+          {profile.role === 'agent' && (
+            <div>
+              <label className="block text-xs text-[#2b5843]/80 mb-1">{t('profile.company')}</label>
+              <select
+                value={company}
+                onChange={(e) => setCompany(e.target.value)}
+                className="w-full px-3 py-2 border border-[#53868e]/25 rounded-xl text-sm text-[#2b5843] focus:outline-none focus:border-[#53868e]"
+              >
+                <option value="POP">POP</option>
+                <option value="Next Huttons">Next Huttons</option>
+                <option value="ERA">ERA</option>
+                <option value="others">{t('register.companyOthers')}</option>
+              </select>
+              {company === 'others' && (
+                <input
+                  type="text"
+                  value={companyOthers}
+                  onChange={(e) => setCompanyOthers(e.target.value)}
+                  className="mt-2 w-full px-3 py-2 border border-[#53868e]/25 rounded-xl text-sm text-[#2b5843]"
+                  placeholder={t('register.companyOthersPlaceholder')}
+                />
+              )}
+            </div>
+          )}
           <div>
-            <label className="block text-xs text-stone-600 mb-1">{t('profile.phone')}</label>
-            <input
-              type="tel"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder={t('login.phonePlaceholder')}
-              className="w-full px-3 py-2 border border-stone-200 rounded-sm text-sm"
-            />
+            <label className="block text-xs text-[#2b5843]/80 mb-1">{t('profile.phone')}</label>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-[#2b5843]/80 shrink-0">+65</span>
+              <input
+                type="tel"
+                inputMode="numeric"
+                maxLength={8}
+                value={phoneDigits}
+                onChange={handlePhoneChange}
+                className="w-full px-3 py-2 border border-[#53868e]/25 rounded-xl text-sm text-[#2b5843] focus:outline-none focus:border-[#53868e]"
+                placeholder={t('register.phonePlaceholder')}
+              />
+            </div>
           </div>
           {error && <p className="text-sm text-red-600">{error}</p>}
           <div className="flex gap-2 pt-2">
             <button
               type="submit"
               disabled={update.isPending}
-              className="px-4 py-2 text-sm border border-stone-300 rounded-sm hover:bg-stone-100 disabled:opacity-50"
+              className="px-4 py-2 text-sm rounded-full text-[#f6f3f1] hover:opacity-95 transition-opacity disabled:opacity-50"
+              style={{ background: 'linear-gradient(135deg, #53868e 0%, #2b5843 100%)' }}
             >
               {update.isPending ? t('profile.saving') : t('common.save')}
             </button>
-            <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-stone-500 hover:text-stone-700">
+            <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-[#2b5843]/70 hover:text-[#2b5843]">
               {t('common.cancel')}
             </button>
           </div>

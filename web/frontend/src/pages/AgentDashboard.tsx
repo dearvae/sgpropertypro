@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { UserMenu } from '@/components/UserMenu'
 import { LanguageSwitcher } from '@/components/LanguageSwitcher'
 import { useCustomerGroups } from '@/hooks/useCustomerGroups'
+import { useClientSelfGroup } from '@/hooks/useClientSelfGroup'
 import { useProperties } from '@/hooks/useProperties'
 import { useAppointments } from '@/hooks/useAppointments'
 import { usePendingAppointments } from '@/hooks/usePendingAppointments'
@@ -11,6 +12,13 @@ import { useRealtimeAppointments } from '@/hooks/useRealtimeAppointments'
 import { checkAppointmentConflict } from '@/lib/conflictCheck'
 import { scrapeProperty, triggerScrapeAsync } from '@/lib/scrapeApi'
 import { getWhatsAppChatUrl } from '@/lib/whatsapp'
+import {
+  applyTemplate,
+  buildTemplateVars,
+  DEFAULT_WHATSAPP_TEMPLATE_AGENT,
+  DEFAULT_WHATSAPP_TEMPLATE_CLIENT,
+} from '@/lib/whatsappTemplate'
+import { useProfile } from '@/hooks/useProfile'
 import { AgentFeedbackSection } from '@/pages/AgentFeedback'
 import type { CustomerGroup, PartyRole, Property, Appointment, PendingAppointment, PendingAppointmentStatus } from '@/types'
 import { formatPriceDisplay } from '@/types'
@@ -35,40 +43,54 @@ function usePendingStatusOptions() {
   ]
 }
 
-export default function AgentDashboard() {
+type DashboardTab = 'groups' | 'appointments' | 'pending' | 'schedule' | 'feedback'
+
+export default function AgentDashboard({ clientMode = false }: { clientMode?: boolean }) {
   const { t } = useTranslation()
-  const [activeTab, setActiveTab] = useState<'groups' | 'appointments' | 'pending' | 'schedule' | 'feedback'>('groups')
+  const defaultTab: DashboardTab = clientMode ? 'appointments' : 'groups'
+  const [activeTab, setActiveTab] = useState<DashboardTab>(defaultTab)
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null)
   const [showAddAppointment, setShowAddAppointment] = useState(false)
 
-  const groups = useCustomerGroups()
+  const agentGroups = useCustomerGroups()
+  const clientGroups = useClientSelfGroup()
+  const groups = clientMode ? clientGroups : agentGroups
+  const selfGroupId = clientMode ? clientGroups.selfGroup?.id ?? null : null
+
   const properties = useProperties()
-  const appointments = useAppointments(selectedGroupId || undefined)
+  const effectiveGroupId = clientMode ? selfGroupId : selectedGroupId
+  const appointments = useAppointments(effectiveGroupId || undefined)
   const allAppointments = useAppointments() // 用于冲突预检（需检查同一 agent 下全部预约）
   const pendingAppointments = usePendingAppointments()
-  useRealtimeAppointments(selectedGroupId || undefined)
+  useRealtimeAppointments(effectiveGroupId || undefined)
 
   const baseUrl = typeof window !== 'undefined' ? `${window.location.origin}/view/` : ''
 
+  const tabList: DashboardTab[] = clientMode
+    ? (['appointments', 'pending', 'schedule', 'feedback'] as const)
+    : (['groups', 'appointments', 'pending', 'schedule', 'feedback'] as const)
+
+  const pageTitle = clientMode ? t('landing.myViewings') : t('app.title')
+
   return (
-    <div className="min-h-screen bg-stone-50">
-      <header className="border-b border-stone-200 bg-white">
+    <div className="min-h-screen" style={{ background: 'linear-gradient(180deg, #f6f3f1 0%, #e8ebe8 100%)' }}>
+      <header className="border-b border-[#53868e]/20 rounded-b-2xl mx-4 mt-2 sm:mx-6" style={{ background: 'linear-gradient(135deg, #f6f3f1 0%, #ebece8 100%)' }}>
         <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
-          <h1 className="text-lg font-medium text-stone-900">{t('app.title')}</h1>
+          <h1 className="text-lg font-medium text-[#2b5843]">{pageTitle}</h1>
           <div className="flex items-center gap-2">
-            <LanguageSwitcher />
+            <LanguageSwitcher zen />
             <UserMenu />
           </div>
         </div>
-        <div className="max-w-5xl mx-auto px-6 flex gap-1 border-t border-stone-100">
-          {(['groups', 'appointments', 'pending', 'schedule', 'feedback'] as const).map((tab) => (
+        <div className="max-w-5xl mx-auto px-6 flex gap-1 border-t border-[#53868e]/10">
+          {tabList.map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`px-4 py-3 text-sm -mb-px border-b-2 transition-colors ${
+              className={`px-4 py-3 text-sm -mb-px border-b-2 transition-colors rounded-t-lg ${
                 activeTab === tab
-                  ? 'border-stone-900 text-stone-900'
-                  : 'border-transparent text-stone-500 hover:text-stone-700'
+                  ? 'border-[#53868e] text-[#2b5843]'
+                  : 'border-transparent text-[#2b5843]/60 hover:text-[#2b5843]'
               }`}
             >
               {tab === 'groups' && t('dashboard.groups')}
@@ -97,10 +119,11 @@ export default function AgentDashboard() {
             properties={properties}
             appointments={appointments}
             allAppointments={allAppointments}
-            selectedGroupId={selectedGroupId}
-            setSelectedGroupId={setSelectedGroupId}
+            selectedGroupId={clientMode ? selfGroupId : selectedGroupId}
+            setSelectedGroupId={clientMode ? () => {} : setSelectedGroupId}
             showAddAppointment={showAddAppointment}
             setShowAddAppointment={setShowAddAppointment}
+            clientMode={clientMode}
           />
         )}
         {activeTab === 'pending' && (
@@ -108,6 +131,7 @@ export default function AgentDashboard() {
             pendingAppointments={pendingAppointments}
             properties={properties}
             groups={groups}
+            clientMode={clientMode}
           />
         )}
         {activeTab === 'schedule' && (
@@ -145,6 +169,8 @@ function CustomerGroupsSection({
   const [editName, setEditName] = useState('')
   const [editIntent, setEditIntent] = useState<'buy' | 'rent'>('buy')
   const [confirmInactiveId, setConfirmInactiveId] = useState<string | null>(null)
+  const [confirmResetTokenId, setConfirmResetTokenId] = useState<string | null>(null)
+  const [menuOpenGroupId, setMenuOpenGroupId] = useState<string | null>(null)
 
   const handleOpenCreateModal = () => {
     setNewName('')
@@ -201,73 +227,73 @@ function CustomerGroupsSection({
     }
   }
 
+  const handleResetTokens = async (groupId: string) => {
+    try {
+      const result = await groups.resetTokens.mutateAsync(groupId)
+      setConfirmResetTokenId(null)
+      navigator.clipboard.writeText(`${baseUrl}${result.share_token}`)
+      message.success(t('dashboard.resetTokenSuccess'))
+    } catch (e) {
+      message.error((e as Error).message)
+    }
+  }
+
+  const parsePropertyLinks = (text: string): string[] => {
+    const raw = text.split(/[\s\n]+/).map((s) => s.trim()).filter(Boolean)
+    return [...new Set(raw.map((s) => normalizeSourceUrl(s)).filter((u) => u && isSupportedScrapeUrl(u)))]
+  }
+
   const handleAddPending = async () => {
     if (!addPendingForGroupId || !addPendingLink.trim()) {
       setAddPendingError(t('dashboard.enterPropertyLink'))
       return
     }
-    const sourceUrl = normalizeSourceUrl(addPendingLink)
-    if (!isSupportedScrapeUrl(sourceUrl)) {
+    const urls = parsePropertyLinks(addPendingLink)
+    if (urls.length === 0) {
       setAddPendingError(t('dashboard.propertyLinkOnly'))
       return
     }
     setAddPendingError(null)
     setAddPendingLoading(true)
+    const notes = addPendingNotes.trim() || null
+    const groupId = addPendingForGroupId
+    let added = 0
+    const existingPending = new Set(
+      (pendingAppointments.data ?? [])
+        .filter((p) => p.customer_group_id === groupId)
+        .map((p) => (p.properties as Property)?.source_url || (p.properties as Property)?.link)
+    )
     try {
-      const scraped = await scrapeProperty(sourceUrl)
-      const existing = await properties.findBySourceUrl(sourceUrl)
-      let propId: string
-      if (existing) {
-        await properties.update.mutateAsync({
-          id: existing.id,
-          title: scraped.title,
-          link: scraped.link,
-          basic_info: scraped.basic_info || undefined,
-          price: scraped.price || undefined,
-          price_value: scraped.price_value || undefined,
-          price_description: scraped.price_description || undefined,
-          size_sqft: scraped.size_sqft || undefined,
-          bedrooms: scraped.bedrooms || undefined,
-          bathrooms: scraped.bathrooms || undefined,
-          main_image_url: scraped.main_image_url || undefined,
-          image_urls: scraped.image_urls || undefined,
-          floor_plan_url: scraped.floor_plan_url || undefined,
-          site_plan_url: scraped.site_plan_url || existing.site_plan_url || undefined,
-          listing_agent_name: scraped.listing_agent_name || undefined,
-          listing_agent_phone: scraped.listing_agent_phone || undefined,
-          listing_type: scraped.listing_type || undefined,
-          lease_tenure: scraped.lease_tenure || undefined,
+      for (const url of urls) {
+        const src = normalizeSourceUrl(url)
+        if (existingPending.has(src)) continue
+        const existing = await properties.findBySourceUrl(src)
+        let propId: string
+        if (existing) {
+          propId = existing.id
+          const alreadyPending = (pendingAppointments.data ?? []).some(
+            (p) => p.property_id === existing.id && p.customer_group_id === groupId
+          )
+          if (alreadyPending) continue
+        } else {
+          const created = await properties.create.mutateAsync({
+            title: t('pendingSection.scraping'),
+            link: src,
+            source_url: src,
+          })
+          propId = created.id
+          triggerScrapeAsync(propId, src).catch(() => {})
+        }
+        await pendingAppointments.create.mutateAsync({
+          property_id: propId,
+          customer_group_id: groupId,
+          status: 'not_scheduled',
+          notes,
         })
-        propId = existing.id
-      } else {
-        const created = await properties.create.mutateAsync({
-          title: scraped.title,
-          link: scraped.link,
-          basic_info: scraped.basic_info || undefined,
-          source_url: sourceUrl,
-          price: scraped.price || undefined,
-          price_value: scraped.price_value || undefined,
-          price_description: scraped.price_description || undefined,
-          size_sqft: scraped.size_sqft || undefined,
-          bedrooms: scraped.bedrooms || undefined,
-          bathrooms: scraped.bathrooms || undefined,
-          main_image_url: scraped.main_image_url || undefined,
-          image_urls: scraped.image_urls || undefined,
-          floor_plan_url: scraped.floor_plan_url || undefined,
-          site_plan_url: scraped.site_plan_url || undefined,
-          listing_agent_name: scraped.listing_agent_name || undefined,
-          listing_agent_phone: scraped.listing_agent_phone || undefined,
-          listing_type: scraped.listing_type || undefined,
-          lease_tenure: scraped.lease_tenure || undefined,
-        })
-        propId = created.id
+        existingPending.add(src)
+        added += 1
       }
-      await pendingAppointments.create.mutateAsync({
-        property_id: propId,
-        customer_group_id: addPendingForGroupId,
-        status: 'not_scheduled',
-        notes: addPendingNotes.trim() || null,
-      })
+      if (added > 0) message.success(t('pendingSection.batchAddSuccess', { count: added }))
       setAddPendingForGroupId(null)
       setAddPendingLink('')
       setAddPendingNotes('')
@@ -280,10 +306,10 @@ function CustomerGroupsSection({
 
   return (
     <section>
-      <h2 className="text-sm font-medium text-stone-700 mb-4">{t('dashboard.groupsTitle')}</h2>
+      <h2 className="text-sm font-medium text-[#2b5843]/90 mb-4">{t('dashboard.groupsTitle')}</h2>
       <button
         onClick={handleOpenCreateModal}
-        className="mb-6 text-sm border border-stone-300 rounded-sm px-4 py-2 hover:bg-stone-100"
+        className="mb-6 text-sm border border-[#53868e]/35 rounded-xl px-4 py-2 hover:bg-[#53868e]/15"
       >
         {t('dashboard.create')}
       </button>
@@ -291,23 +317,23 @@ function CustomerGroupsSection({
       {showCreateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowCreateModal(false)}>
           <div
-            className="bg-white rounded-sm shadow-lg p-6 w-full max-w-md mx-4 border border-stone-200"
+            className="bg-[#f6f3f1] rounded-xl shadow-lg p-6 w-full max-w-md mx-4 border border-[#53868e]/25"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-sm font-medium text-stone-900 mb-4">{t('dashboard.createGroupTitle')}</h3>
+            <h3 className="text-sm font-medium text-[#2b5843] mb-4">{t('dashboard.createGroupTitle')}</h3>
             <div className="space-y-3">
               <div>
-                <label className="text-xs text-stone-600">{t('dashboard.groupName')}</label>
+                <label className="text-xs text-[#2b5843]/80">{t('dashboard.groupName')}</label>
                 <input
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
                   placeholder={t('dashboard.groupNamePlaceholder')}
-                  className="w-full mt-1 px-3 py-2 border border-stone-200 rounded-sm text-sm"
+                  className="w-full mt-1 px-3 py-2 border border-[#53868e]/25 rounded-xl text-sm"
                   autoFocus
                 />
               </div>
               <div>
-                <label className="text-xs text-stone-600">{t('dashboard.customerNeed')} <span className="text-amber-600">{t('dashboard.required')}</span></label>
+                <label className="text-xs text-[#2b5843]/80">{t('dashboard.customerNeed')} <span className="text-[#53868e]">{t('dashboard.required')}</span></label>
                 <div className="flex gap-4 mt-2">
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input type="radio" name="intent" value="buy" checked={newIntent === 'buy'} onChange={() => setNewIntent('buy')} className="text-emerald-600" />
@@ -320,13 +346,13 @@ function CustomerGroupsSection({
                 </div>
               </div>
               <div>
-                <label className="text-xs text-stone-600">{t('dashboard.description')}</label>
+                <label className="text-xs text-[#2b5843]/80">{t('dashboard.description')}</label>
                 <textarea
                   value={newDescription}
                   onChange={(e) => setNewDescription(e.target.value)}
                   placeholder={t('dashboard.descriptionPlaceholder')}
                   rows={3}
-                  className="w-full mt-1 px-3 py-2 border border-stone-200 rounded-sm text-sm resize-none"
+                  className="w-full mt-1 px-3 py-2 border border-[#53868e]/25 rounded-xl text-sm resize-none"
                 />
               </div>
             </div>
@@ -334,13 +360,13 @@ function CustomerGroupsSection({
               <button
                 onClick={handleCreate}
                 disabled={groups.create.isPending}
-                className="px-4 py-2 text-sm border border-stone-300 rounded-sm hover:bg-stone-100"
+                className="px-4 py-2 text-sm border border-[#53868e]/35 rounded-xl hover:bg-[#53868e]/15"
               >
                 {t('common.create')}
               </button>
               <button
                 onClick={() => setShowCreateModal(false)}
-                className="px-4 py-2 text-sm text-stone-500 hover:text-stone-700"
+                className="px-4 py-2 text-sm text-[#2b5843]/70 hover:text-[#2b5843]/90"
               >
                 {t('common.cancel')}
               </button>
@@ -352,30 +378,32 @@ function CustomerGroupsSection({
       {addPendingForGroupId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => { setAddPendingForGroupId(null); setAddPendingError(null) }}>
           <div
-            className="bg-white rounded-sm shadow-lg p-6 w-full max-w-md mx-4 border border-stone-200"
+            className="bg-[#f6f3f1] rounded-xl shadow-lg p-6 w-full max-w-md mx-4 border border-[#53868e]/25"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-sm font-medium text-stone-900 mb-3">
+            <h3 className="text-sm font-medium text-[#2b5843] mb-3">
               {t('dashboard.addPending')} · {groups.data?.find((g) => g.id === addPendingForGroupId)?.name ?? ''}
             </h3>
             <div className="space-y-3">
               <div>
-                <label className="text-xs text-stone-600">{t('dashboard.propertyLink')}</label>
-                <input
+                <label className="text-xs text-[#2b5843]/80">{t('dashboard.propertyLink')}</label>
+                <textarea
                   value={addPendingLink}
                   onChange={(e) => { setAddPendingLink(e.target.value); setAddPendingError(null) }}
                   placeholder={t('dashboard.propertyLinkPlaceholder')}
-                  className="w-full mt-1 px-3 py-2 border border-stone-200 rounded-sm text-sm"
+                  rows={4}
+                  className="w-full mt-1 px-3 py-2 border border-[#53868e]/25 rounded-xl text-sm resize-y"
                   autoFocus
                 />
+                <p className="text-xs text-[#2b5843]/70 mt-1">{t('dashboard.propertyLinksMultiHint')}</p>
               </div>
               <div>
-                <label className="text-xs text-stone-600">{t('dashboard.notesOptional')}</label>
+                <label className="text-xs text-[#2b5843]/80">{t('dashboard.notesOptional')}</label>
                 <input
                   value={addPendingNotes}
                   onChange={(e) => setAddPendingNotes(e.target.value)}
                   placeholder={t('dashboard.notesPlaceholder')}
-                  className="w-full mt-1 px-3 py-2 border border-stone-200 rounded-sm text-sm"
+                  className="w-full mt-1 px-3 py-2 border border-[#53868e]/25 rounded-xl text-sm"
                 />
               </div>
               {addPendingError && <p className="text-xs text-red-600">{addPendingError}</p>}
@@ -384,10 +412,10 @@ function CustomerGroupsSection({
               <button
                 onClick={handleAddPending}
                 disabled={addPendingLoading}
-                className="px-4 py-2 text-sm border border-stone-300 rounded-sm hover:bg-stone-100 disabled:opacity-50 flex items-center gap-2"
+                className="px-4 py-2 text-sm border border-[#53868e]/35 rounded-xl hover:bg-[#53868e]/15 disabled:opacity-50 flex items-center gap-2"
               >
                 {addPendingLoading && (
-                  <svg className="animate-spin h-4 w-4 text-stone-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <svg className="animate-spin h-4 w-4 text-[#2b5843]/70" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                   </svg>
@@ -396,7 +424,7 @@ function CustomerGroupsSection({
               </button>
               <button
                 onClick={() => { setAddPendingForGroupId(null); setAddPendingError(null) }}
-                className="px-4 py-2 text-sm text-stone-500 hover:text-stone-700"
+                className="px-4 py-2 text-sm text-[#2b5843]/70 hover:text-[#2b5843]/90"
               >
                 {t('common.cancel')}
               </button>
@@ -405,102 +433,129 @@ function CustomerGroupsSection({
         </div>
       )}
 
-      <div className="space-y-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {groups.data?.map((g) => (
           <div
             key={g.id}
-            className="border border-stone-200 rounded-sm bg-white p-4 flex items-center justify-between"
+            className="border border-[#53868e]/25 rounded-lg bg-[#f6f3f1] p-4 flex flex-col gap-4 shadow-md hover:shadow-lg transition-shadow min-w-0"
           >
             {editingId === g.id ? (
-              <div className="flex flex-wrap items-center gap-2 flex-1">
+              <div className="flex flex-col gap-3">
                 <input
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
-                  className="flex-1 min-w-[100px] px-2 py-1 border border-stone-200 rounded-sm text-sm"
+                  className="w-full px-3 py-2 border border-[#53868e]/25 rounded-md text-sm"
                 />
-                <div className="flex items-center gap-2">
-                  <label className="flex items-center gap-1 text-xs cursor-pointer">
+                <div className="flex items-center gap-3">
+                  <label className="flex items-center gap-1.5 text-xs cursor-pointer">
                     <input type="radio" name={`edit-intent-${g.id}`} checked={editIntent === 'buy'} onChange={() => setEditIntent('buy')} />
                     {t('dashboard.buy')}
                   </label>
-                  <label className="flex items-center gap-1 text-xs cursor-pointer">
+                  <label className="flex items-center gap-1.5 text-xs cursor-pointer">
                     <input type="radio" name={`edit-intent-${g.id}`} checked={editIntent === 'rent'} onChange={() => setEditIntent('rent')} />
                     {t('dashboard.rent')}
                   </label>
                 </div>
-                <button onClick={handleUpdate} className="text-sm text-stone-600">{t('common.save')}</button>
-                <button onClick={() => setEditingId(null)} className="text-sm text-stone-400">{t('common.cancel')}</button>
+                <div className="flex gap-2">
+                  <button onClick={handleUpdate} className="text-sm text-[#2b5843]/80 px-3 py-1.5 border border-[#53868e]/25 rounded-md hover:bg-[#53868e]/10">{t('common.save')}</button>
+                  <button onClick={() => setEditingId(null)} className="text-sm text-[#2b5843]/60 hover:text-[#2b5843]/80">{t('common.cancel')}</button>
+                </div>
               </div>
             ) : (
               <>
-                <div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <p className="font-medium text-stone-900 text-sm">{g.name}</p>
-                    <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${g.intent === 'rent' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>
-                      {g.intent === 'rent' ? t('dashboard.rent') : t('dashboard.buy')}
-                    </span>
-                    {g.is_active === false && (
-                      <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-stone-200 text-stone-600">
-                        inactive
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2 flex-wrap min-w-0">
+                      <p className="font-medium text-[#2b5843] text-sm truncate">{g.name}</p>
+                      <span className={`flex-shrink-0 px-1.5 py-0.5 rounded text-xs font-medium ${g.intent === 'rent' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>
+                        {g.intent === 'rent' ? t('dashboard.rent') : t('dashboard.buy')}
                       </span>
-                    )}
+                      {g.is_active === false && (
+                        <span className="flex-shrink-0 px-1.5 py-0.5 rounded text-xs font-medium bg-[#53868e]/15 text-[#2b5843]/80">
+                          inactive
+                        </span>
+                      )}
+                    </div>
+                    <div className="relative flex-shrink-0">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setMenuOpenGroupId(menuOpenGroupId === g.id ? null : g.id) }}
+                        className="p-1 rounded hover:bg-[#53868e]/15 text-[#2b5843]/70 hover:text-[#2b5843]/90"
+                        aria-label="更多选项"
+                      >
+                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                          <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
+                        </svg>
+                      </button>
+                      {menuOpenGroupId === g.id && (
+                        <>
+                          <div className="fixed inset-0 z-40" onClick={() => setMenuOpenGroupId(null)} />
+                          <div className="absolute right-0 top-full mt-0.5 py-1 bg-[#f6f3f1] rounded-md shadow-lg border border-[#53868e]/25 z-50 min-w-[160px]">
+                            {g.is_active !== false && (
+                              <button
+                                onClick={() => { setMenuOpenGroupId(null); handleStartEdit(g) }}
+                                className="block w-full text-left px-3 py-1.5 text-sm text-[#2b5843]/80 hover:bg-[#53868e]/10"
+                              >
+                                {t('common.edit')}
+                              </button>
+                            )}
+                            <button
+                              onClick={() => { setMenuOpenGroupId(null); navigator.clipboard.writeText(`${baseUrl}${g.share_token}`); message.success(t('dashboard.viewLinkCopied')) }}
+                              className="block w-full text-left px-3 py-1.5 text-sm text-[#2b5843]/80 hover:bg-[#53868e]/10"
+                            >
+                              {t('dashboard.copyViewLink')}
+                            </button>
+                            {g.is_active !== false ? (
+                              <button
+                                onClick={() => { setMenuOpenGroupId(null); setConfirmInactiveId(g.id) }}
+                                className="block w-full text-left px-3 py-1.5 text-sm text-[#2b5843]/80 hover:bg-[#53868e]/10"
+                              >
+                                {t('dashboard.setInactive')}
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => { setMenuOpenGroupId(null); handleSetActive(g.id) }}
+                                className="block w-full text-left px-3 py-1.5 text-sm text-emerald-600 hover:bg-[#53868e]/10"
+                              >
+                                {t('dashboard.setActive')}
+                              </button>
+                            )}
+                            <button
+                              onClick={() => { setMenuOpenGroupId(null); setConfirmResetTokenId(g.id) }}
+                              className="block w-full text-left px-3 py-1.5 text-sm text-[#53868e] hover:bg-[#53868e]/10"
+                            >
+                              {t('dashboard.resetToken')}
+                            </button>
+                            <button
+                              onClick={() => { setMenuOpenGroupId(null); groups.remove.mutate(g.id) }}
+                              className="block w-full text-left px-3 py-1.5 text-sm text-[#2b5843]/60 hover:text-red-600"
+                            >
+                              {t('common.delete')}
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
                   </div>
-                  {g.description && <p className="text-stone-600 text-xs mt-1">{g.description}</p>}
+                  {g.description && <p className="text-[#2b5843]/80 text-xs mt-1 line-clamp-2">{g.description}</p>}
                 </div>
-                <div className="flex gap-2 flex-wrap">
-                  {g.is_active !== false && (
-                    <button
-                      onClick={() => setAddPendingForGroupId(g.id)}
-                      className="text-sm text-amber-600 hover:text-amber-700"
-                    >
-                      {t('dashboard.addPending')}
-                    </button>
-                  )}
-                  {g.is_active !== false ? (
-                    <button
-                      onClick={() => setConfirmInactiveId(g.id)}
-                      className="text-sm text-stone-500 hover:text-stone-700"
-                    >
-                      {t('dashboard.setInactive')}
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => handleSetActive(g.id)}
-                      className="text-sm text-emerald-600 hover:text-emerald-700"
-                    >
-                      {t('dashboard.setActive')}
-                    </button>
-                  )}
-                  <button
-                    onClick={() => handleStartEdit(g)}
-                    className="text-sm text-stone-500 hover:text-stone-700"
-                  >
-                    {t('common.edit')}
-                  </button>
-                  <button
-                    onClick={() => {
-                      navigator.clipboard.writeText(`${baseUrl}${g.share_token}`)
-                      message.success(t('dashboard.viewLinkCopied'))
-                    }}
-                    className="text-sm text-stone-500 hover:text-stone-700"
-                  >
-                    {t('dashboard.copyViewLink')}
-                  </button>
+                <div className="flex flex-col gap-1.5 border-t border-[#53868e]/15 pt-3">
                   <button
                     onClick={() => {
                       navigator.clipboard.writeText(`${baseUrl}${g.share_token_edit ?? g.share_token}`)
                       message.success(t('dashboard.editLinkCopied'))
                     }}
-                    className="text-sm text-stone-500 hover:text-stone-700"
+                    className="text-left text-sm text-[#2b5843]/70 hover:text-[#2b5843]/90 py-1"
                   >
                     {t('dashboard.copyEditLink')}
                   </button>
-                  <button
-                    onClick={() => groups.remove.mutate(g.id)}
-                    className="text-sm text-stone-400 hover:text-red-600"
-                  >
-                    {t('common.delete')}
-                  </button>
+                  {g.is_active !== false && (
+                    <button
+                      onClick={() => { setMenuOpenGroupId(null); setAddPendingForGroupId(g.id) }}
+                      className="text-left text-sm text-[#53868e] hover:text-[#2b5843] py-1"
+                    >
+                      {t('dashboard.addPending')}
+                    </button>
+                  )}
                 </div>
               </>
             )}
@@ -511,23 +566,52 @@ function CustomerGroupsSection({
       {confirmInactiveId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={() => setConfirmInactiveId(null)}>
           <div
-            className="bg-white rounded-sm border border-stone-200 p-5 w-full max-w-sm shadow-lg"
+            className="bg-[#f6f3f1] rounded-xl border border-[#53868e]/25 p-5 w-full max-w-sm shadow-lg"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-sm font-medium text-stone-900 mb-2">{t('dashboard.inactiveConfirmTitle')}</h3>
-            <p className="text-xs text-stone-600 mb-4">
+            <h3 className="text-sm font-medium text-[#2b5843] mb-2">{t('dashboard.inactiveConfirmTitle')}</h3>
+            <p className="text-xs text-[#2b5843]/80 mb-4">
               {t('dashboard.inactiveConfirmDesc')}
             </p>
             <div className="flex gap-2">
               <button
                 onClick={() => confirmInactiveId && handleSetInactive(confirmInactiveId)}
-                className="flex-1 text-sm px-4 py-2 border border-stone-300 rounded-sm hover:bg-stone-100"
+                className="flex-1 text-sm px-4 py-2 border border-[#53868e]/35 rounded-xl hover:bg-[#53868e]/15"
               >
                 {t('common.confirm')}
               </button>
               <button
                 onClick={() => setConfirmInactiveId(null)}
-                className="text-sm px-4 py-2 border border-stone-200 rounded-sm hover:bg-stone-100"
+                className="text-sm px-4 py-2 border border-[#53868e]/25 rounded-xl hover:bg-[#53868e]/15"
+              >
+                {t('common.cancel')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmResetTokenId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={() => setConfirmResetTokenId(null)}>
+          <div
+            className="bg-[#f6f3f1] rounded-xl border border-[#53868e]/25 p-5 w-full max-w-sm shadow-lg"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-sm font-medium text-[#2b5843] mb-2">{t('dashboard.resetTokenTitle')}</h3>
+            <p className="text-xs text-[#2b5843]/80 mb-4">
+              {t('dashboard.resetTokenDesc')}
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => confirmResetTokenId && handleResetTokens(confirmResetTokenId)}
+                disabled={groups.resetTokens.isPending}
+                className="flex-1 text-sm px-4 py-2 border border-[#53868e]/40 rounded-xl hover:bg-[#53868e]/15 text-[#2b5843] disabled:opacity-50"
+              >
+                {groups.resetTokens.isPending ? t('common.loading') : t('common.confirm')}
+              </button>
+              <button
+                onClick={() => setConfirmResetTokenId(null)}
+                className="text-sm px-4 py-2 border border-[#53868e]/25 rounded-xl hover:bg-[#53868e]/15"
               >
                 {t('common.cancel')}
               </button>
@@ -554,16 +638,22 @@ function PendingAppointmentsSection({
   pendingAppointments,
   properties,
   groups,
+  clientMode = false,
 }: {
   pendingAppointments: ReturnType<typeof usePendingAppointments>
   properties: ReturnType<typeof useProperties>
   groups: ReturnType<typeof useCustomerGroups>
+  clientMode?: boolean
 }) {
   const { t } = useTranslation()
+  const { data: profile, update: profileUpdate } = useProfile()
   const PENDING_STATUS_OPTIONS = usePendingStatusOptions()
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
   const [refreshingPropertyId, setRefreshingPropertyId] = useState<string | null>(null)
   const [lightboxImage, setLightboxImage] = useState<string | null>(null)
+  const [selectedPendingIds, setSelectedPendingIds] = useState<Set<string>>(new Set())
+  const [showTemplateModal, setShowTemplateModal] = useState(false)
+  const [templateEdit, setTemplateEdit] = useState('')
 
   const displayImages = (p: Property | undefined): string[] => {
     if (!p) return []
@@ -614,6 +704,8 @@ function PendingAppointmentsSection({
         listing_agent_phone: scraped.listing_agent_phone || undefined,
         listing_type: scraped.listing_type || undefined,
         lease_tenure: scraped.lease_tenure || undefined,
+        top_year: scraped.top_year || undefined,
+        last_scraped_at: new Date().toISOString(),
       })
     } catch (e) {
       message.error((e as Error).message || t('pendingSection.refreshFailed'))
@@ -649,12 +741,255 @@ function PendingAppointmentsSection({
   const groupIds = Object.keys(byCustomer)
   const isGroupExpanded = (gid: string) => expandedGroups.size === 0 || expandedGroups.has(gid)
 
+  const [showBatchAddModal, setShowBatchAddModal] = useState(false)
+  const [batchAddGroupId, setBatchAddGroupId] = useState('')
+  const [batchAddLinks, setBatchAddLinks] = useState('')
+  const [batchAddLoading, setBatchAddLoading] = useState(false)
+  const [batchAddError, setBatchAddError] = useState<string | null>(null)
+
+  const parsePropertyLinks = (text: string): string[] => {
+    const raw = text.split(/[\s\n]+/).map((s) => s.trim()).filter(Boolean)
+    return raw
+      .map((s) => normalizeSourceUrl(s))
+      .filter((u) => u && isSupportedScrapeUrl(u))
+  }
+
+  const handleBatchAdd = async () => {
+    if (!batchAddGroupId.trim()) {
+      setBatchAddError(t('pendingSection.selectGroupRequired'))
+      return
+    }
+    const urls = [...new Set(parsePropertyLinks(batchAddLinks))]
+    if (urls.length === 0) {
+      setBatchAddError(t('pendingSection.enterValidLinks'))
+      return
+    }
+    setBatchAddError(null)
+    setBatchAddLoading(true)
+    let added = 0
+    const existingPending = new Set(
+      (pendingAppointments.data ?? [])
+        .filter((p) => p.customer_group_id === batchAddGroupId)
+        .map((p) => (p.properties as Property)?.source_url || (p.properties as Property)?.link)
+    )
+    try {
+      for (const url of urls) {
+        const src = normalizeSourceUrl(url)
+        if (existingPending.has(src)) continue
+        const existing = await properties.findBySourceUrl(src)
+        let propId: string
+        if (existing) {
+          propId = existing.id
+          const alreadyPending = (pendingAppointments.data ?? []).some(
+            (p) => p.property_id === existing.id && p.customer_group_id === batchAddGroupId
+          )
+          if (alreadyPending) continue
+        } else {
+          const created = await properties.create.mutateAsync({
+            title: t('pendingSection.scraping'),
+            link: src,
+            source_url: src,
+          })
+          propId = created.id
+        }
+        await pendingAppointments.create.mutateAsync({
+          property_id: propId,
+          customer_group_id: batchAddGroupId,
+          status: 'not_scheduled',
+        })
+        existingPending.add(src)
+        added += 1
+        triggerScrapeAsync(propId, src).catch(() => {})
+      }
+      message.success(t('pendingSection.batchAddSuccess', { count: added }))
+      setShowBatchAddModal(false)
+      setBatchAddGroupId('')
+      setBatchAddLinks('')
+    } catch (e) {
+      setBatchAddError((e as Error).message)
+    } finally {
+      setBatchAddLoading(false)
+    }
+  }
+
+  const activeGroups = groups.data?.filter((g) => g.is_active !== false) ?? []
+  const clientSettingUp = clientMode && activeGroups.length === 0 && groups.create.isPending
+
   return (
     <section>
-      <h2 className="text-sm font-medium text-stone-700 mb-4">{t('pendingSection.title')}</h2>
+      {clientSettingUp && (
+        <div className="mb-4 py-4 text-center text-[#2b5843]/70 text-sm">
+          {t('common.loading')}
+        </div>
+      )}
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-sm font-medium text-[#2b5843]/90">{t('pendingSection.title')}</h2>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              setShowTemplateModal(true)
+              const isAgent = profile?.role === 'agent'
+              const custom = isAgent ? profile?.whatsapp_template_agent : profile?.whatsapp_template_client
+              setTemplateEdit(custom ?? (isAgent ? DEFAULT_WHATSAPP_TEMPLATE_AGENT : DEFAULT_WHATSAPP_TEMPLATE_CLIENT))
+            }}
+            className="text-sm text-[#2b5843]/80 hover:text-[#2b5843]"
+          >
+            {t('pendingSection.editTemplate')}
+          </button>
+          <button
+            onClick={() => {
+              if (activeGroups.length === 0) {
+                message.warning(t('pendingSection.createGroupFirst'))
+                return
+              }
+              setShowBatchAddModal(true)
+              setBatchAddError(null)
+              setBatchAddLinks('')
+              setBatchAddGroupId(activeGroups[0]?.id ?? '')
+            }}
+            className="text-sm border border-[#53868e]/35 rounded-xl px-3 py-1.5 hover:bg-[#53868e]/15"
+          >
+            {t('pendingSection.batchAddButton')}
+          </button>
+          {groupIds.length > 0 && (
+            <>
+              <button
+                onClick={() => setSelectedPendingIds(new Set(list.map((p) => p.id)))}
+                className="text-sm text-[#2b5843]/80 hover:text-[#2b5843]"
+              >
+                {t('pendingSection.selectAll')}
+              </button>
+              <button
+                onClick={() => setSelectedPendingIds(new Set())}
+                className="text-sm text-[#2b5843]/80 hover:text-[#2b5843]"
+              >
+                {t('pendingSection.deselectAll')}
+              </button>
+              <button
+                onClick={() => {
+                  const selectedWithPhone = list.filter(
+                    (p) => selectedPendingIds.has(p.id) && (p.properties as Property)?.listing_agent_phone
+                  )
+                  if (selectedWithPhone.length === 0) {
+                    message.warning(t('pendingSection.selectWithPhone'))
+                    return
+                  }
+                  const isAgent = profile?.role === 'agent'
+                  const template =
+                    (isAgent ? profile?.whatsapp_template_agent : profile?.whatsapp_template_client) ??
+                    (isAgent ? DEFAULT_WHATSAPP_TEMPLATE_AGENT : DEFAULT_WHATSAPP_TEMPLATE_CLIENT)
+                  selectedWithPhone.forEach((p, i) => {
+                    const prop = p.properties as Property
+                    const vars = buildTemplateVars(prop, profile ?? {}, !!isAgent)
+                    const msg = applyTemplate(template, vars)
+                    setTimeout(() => {
+                      window.open(getWhatsAppChatUrl(prop.listing_agent_phone!, msg), '_blank', 'noopener')
+                    }, i * 400)
+                  })
+                  message.success(t('pendingSection.batchWhatsAppSuccess', { count: selectedWithPhone.length }))
+                }}
+                disabled={selectedPendingIds.size === 0}
+                className="text-sm border border-[#25D366] text-[#25D366] rounded-xl px-3 py-1.5 hover:bg-[#25D366]/10 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {t('pendingSection.batchWhatsApp')}
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+      {showTemplateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowTemplateModal(false)}>
+          <div className="bg-[#f6f3f1] rounded-xl shadow-lg p-6 w-full max-w-lg mx-4 border border-[#53868e]/25 max-h-[90vh] overflow-auto" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-sm font-medium text-[#2b5843] mb-2">{t('pendingSection.editTemplateTitle')}</h3>
+            <p className="text-xs text-[#2b5843]/70 mb-3">{t('pendingSection.editTemplateHint')}</p>
+            <textarea
+              value={templateEdit}
+              onChange={(e) => setTemplateEdit(e.target.value)}
+              rows={12}
+              className="w-full px-3 py-2 border border-[#53868e]/25 rounded-xl text-sm font-mono resize-y"
+            />
+            <div className="flex gap-2 mt-4">
+              <button
+                onClick={async () => {
+                  await profileUpdate.mutateAsync(
+                    profile?.role === 'agent'
+                      ? { whatsapp_template_agent: templateEdit.trim() || null }
+                      : { whatsapp_template_client: templateEdit.trim() || null }
+                  )
+                  message.success(t('common.save'))
+                  setShowTemplateModal(false)
+                }}
+                disabled={profileUpdate.isPending}
+                className="px-4 py-2 text-sm border border-[#53868e]/35 rounded-xl hover:bg-[#53868e]/15 disabled:opacity-50"
+              >
+                {t('common.save')}
+              </button>
+              <button
+                onClick={() => setTemplateEdit(profile?.role === 'agent' ? DEFAULT_WHATSAPP_TEMPLATE_AGENT : DEFAULT_WHATSAPP_TEMPLATE_CLIENT)}
+                className="px-4 py-2 text-sm text-[#2b5843]/70 hover:text-[#2b5843]/90"
+              >
+                {t('pendingSection.restoreDefault')}
+              </button>
+              <button onClick={() => setShowTemplateModal(false)} className="px-4 py-2 text-sm text-[#2b5843]/70 hover:text-[#2b5843]/90">
+                {t('common.cancel')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showBatchAddModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowBatchAddModal(false)}>
+          <div className="bg-[#f6f3f1] rounded-xl shadow-lg p-6 w-full max-w-md mx-4 border border-[#53868e]/25" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-sm font-medium text-[#2b5843] mb-3">{t('pendingSection.batchAddTitle')}</h3>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-[#2b5843]/80">{t('pendingSection.batchAddGroup')}</label>
+                <select
+                  value={batchAddGroupId}
+                  onChange={(e) => setBatchAddGroupId(e.target.value)}
+                  className="w-full mt-1 px-3 py-2 border border-[#53868e]/25 rounded-xl text-sm bg-[#f6f3f1]"
+                >
+                  {activeGroups.map((g) => (
+                    <option key={g.id} value={g.id}>{g.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-[#2b5843]/80">{t('pendingSection.batchAddLinks')}</label>
+                <textarea
+                  value={batchAddLinks}
+                  onChange={(e) => { setBatchAddLinks(e.target.value); setBatchAddError(null) }}
+                  placeholder={t('pendingSection.batchAddLinksPlaceholder')}
+                  rows={6}
+                  className="w-full mt-1 px-3 py-2 border border-[#53868e]/25 rounded-xl text-sm resize-none"
+                />
+              </div>
+              {batchAddError && <p className="text-xs text-red-600">{batchAddError}</p>}
+            </div>
+            <div className="flex gap-2 mt-4">
+              <button
+                onClick={handleBatchAdd}
+                disabled={batchAddLoading}
+                className="px-4 py-2 text-sm border border-[#53868e]/35 rounded-xl hover:bg-[#53868e]/15 disabled:opacity-50 flex items-center gap-2"
+              >
+                {batchAddLoading && (
+                  <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                )}
+                {t('common.add')}
+              </button>
+              <button onClick={() => setShowBatchAddModal(false)} className="px-4 py-2 text-sm text-[#2b5843]/70 hover:text-[#2b5843]/90">
+                {t('common.cancel')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="space-y-2">
         {groupIds.length === 0 ? (
-          <div className="py-12 text-center text-stone-500 text-sm border border-dashed border-stone-200 rounded-sm">
+          <div className="py-12 text-center text-[#2b5843]/70 text-sm border border-dashed border-[#53868e]/25 rounded-xl">
             {t('pendingSection.noPending')}
           </div>
         ) : (
@@ -663,15 +998,15 @@ function PendingAppointmentsSection({
             const groupName = (items[0]?.customer_groups as CustomerGroup)?.name ?? '—'
             const isExpanded = isGroupExpanded(gid)
             return (
-              <div key={gid} className="border border-stone-200 rounded-sm bg-white overflow-hidden">
+              <div key={gid} className="border border-[#53868e]/25 rounded-xl bg-[#f6f3f1] overflow-hidden">
                 <button
                   onClick={() => toggleGroup(gid)}
-                  className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-stone-50"
+                  className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-[#53868e]/10"
                 >
-                  <span className="font-medium text-stone-900 text-sm">{groupName}</span>
-                  <span className="text-stone-500 text-xs">{t('pendingSection.itemsCount', { count: items.length })}</span>
+                  <span className="font-medium text-[#2b5843] text-sm">{groupName}</span>
+                  <span className="text-[#2b5843]/70 text-xs">{t('pendingSection.itemsCount', { count: items.length })}</span>
                   <svg
-                    className={`w-5 h-5 text-stone-500 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                    className={`w-5 h-5 text-[#2b5843]/70 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
                     xmlns="http://www.w3.org/2000/svg"
                     viewBox="0 0 20 20"
                     fill="currentColor"
@@ -680,7 +1015,7 @@ function PendingAppointmentsSection({
                   </svg>
                 </button>
                 {isExpanded && (
-                  <div className="border-t border-stone-100 divide-y divide-stone-100">
+                  <div className="border-t border-[#53868e]/15 divide-y divide-stone-100">
                     {items.map((p: PendingAppointment) => {
                       const prop = p.properties as Property | undefined
                       const agentName = prop?.listing_agent_name
@@ -689,41 +1024,65 @@ function PendingAppointmentsSection({
                       const whatsappUrl = agentPhone ? getWhatsAppChatUrl(agentPhone) : null
                       const imgs = displayImages(prop)
                       return (
-                        <div key={p.id} className="p-4 flex bg-white border-t border-stone-100 first:border-t-0">
-                          <div className="flex flex-col w-28 sm:w-32 flex-shrink-0 gap-0.5 p-2 bg-stone-50 rounded-lg mr-4">
+                        <div key={p.id} className="p-4 flex bg-[#f6f3f1] border-t border-[#53868e]/15 first:border-t-0">
+                          <div className="flex items-start pt-1 pr-2">
+                            <input
+                              type="checkbox"
+                              checked={selectedPendingIds.has(p.id)}
+                              onChange={(e) => {
+                                setSelectedPendingIds((prev) => {
+                                  const next = new Set(prev)
+                                  if (e.target.checked) next.add(p.id)
+                                  else next.delete(p.id)
+                                  return next
+                                })
+                              }}
+                              className="mt-1 rounded border-[#53868e]/35 text-emerald-600 focus:ring-emerald-500"
+                            />
+                          </div>
+                          <div className={`flex flex-col w-28 sm:w-32 flex-shrink-0 gap-0.5 p-2 bg-[#53868e]/5 rounded-lg mr-4 ${imgs.length <= 1 ? 'justify-center' : ''}`}>
                             {imgs[0] ? (
-                              <button type="button" onClick={() => setLightboxImage(imgs[0])} className="block w-full h-20 rounded-lg overflow-hidden cursor-zoom-in hover:opacity-90 transition-opacity text-left">
-                                <img src={imgs[0]} alt={prop?.title ?? ''} className="w-full h-20 object-cover" />
+                              <button
+                                type="button"
+                                onClick={() => setLightboxImage(imgs[0])}
+                                className={`block w-full rounded-lg overflow-hidden cursor-zoom-in hover:opacity-90 transition-opacity text-left ${imgs.length >= 2 ? 'h-20' : 'h-40'}`}
+                              >
+                                <img src={imgs[0]} alt={prop?.title ?? ''} className={`w-full object-cover ${imgs.length >= 2 ? 'h-20' : 'h-40'}`} />
                               </button>
                             ) : (
-                              <div className="w-full h-20 rounded-lg bg-stone-200 flex items-center justify-center text-stone-400 text-xs">{t('common.noImage')}</div>
+                              <div className="w-full h-20 rounded-lg bg-[#53868e]/15 flex items-center justify-center text-[#2b5843]/60 text-xs">{t('common.noImage')}</div>
                             )}
-                            {imgs[1] ? (
+                            {imgs[1] && (
                               <button type="button" onClick={() => setLightboxImage(imgs[1])} className="block w-full h-20 rounded-lg overflow-hidden cursor-zoom-in hover:opacity-90 transition-opacity text-left">
                                 <img src={imgs[1]} alt={prop?.title ?? ''} className="w-full h-20 object-cover" />
                               </button>
-                            ) : imgs[0] ? null : <div className="w-full h-20 rounded-lg bg-stone-200" />}
+                            )}
                           </div>
                           <div className="flex-1 min-w-0 flex flex-col justify-between">
                             <div>
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <p className="font-semibold text-base leading-tight text-stone-900">{prop?.title ?? '—'}</p>
-                                {prop?.listing_type && (
-                                  <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${prop.listing_type === 'rent' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>
-                                    {prop.listing_type === 'rent' ? t('clientView.rent') : t('clientView.sale')}
-                                  </span>
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex items-center gap-2 flex-wrap min-w-0">
+                                  <p className="font-semibold text-base leading-tight text-[#2b5843]">{prop?.title ?? '—'}</p>
+                                  {prop?.listing_type && (
+                                    <span className={`px-1.5 py-0.5 rounded text-xs font-medium shrink-0 ${prop.listing_type === 'rent' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>
+                                      {prop.listing_type === 'rent' ? t('clientView.rent') : t('clientView.sale')}
+                                    </span>
+                                  )}
+                                </div>
+                                {formatPriceDisplay(prop!) && (
+                                  <span className="font-medium text-emerald-700 shrink-0">{formatPriceDisplay(prop!)}</span>
                                 )}
                               </div>
-                              <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-1.5 text-sm text-stone-600">
-                                {formatPriceDisplay(prop!) && <span className="font-medium text-emerald-700">{formatPriceDisplay(prop!)}</span>}
+                              <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-1.5 text-sm text-[#2b5843]/80">
                                 {prop?.bedrooms && <span>{prop.bedrooms}</span>}
                                 {prop?.bathrooms && <span>{prop.bathrooms}</span>}
                                 {(prop?.size_sqft || prop?.basic_info) && <span>{(prop.size_sqft || prop.basic_info)}</span>}
-                                {prop?.listing_type === 'sale' && prop?.lease_tenure && <span className="text-stone-500">{prop.lease_tenure}</span>}
+                                {prop?.listing_type === 'sale' && prop?.lease_tenure && <span className="text-[#2b5843]/70">{prop.lease_tenure}</span>}
+                                {prop?.top_year && <span className="text-[#2b5843]/70">{prop.top_year}</span>}
                               </div>
-                              <p className="text-stone-500 text-sm mt-1">{t('pendingSection.timeTbd')}</p>
+                              <p className="text-[#2b5843]/70 text-sm mt-1">{t('pendingSection.timeTbd')}</p>
                               {p.notes && (
-                                <p className="text-stone-600 text-sm mt-2 px-3 py-2 rounded-lg bg-stone-50 border border-stone-100">{t('clientView.noteLabel')}：{p.notes}</p>
+                                <p className="text-[#2b5843]/80 text-sm mt-2 px-3 py-2 rounded-lg bg-[#53868e]/5 border border-[#53868e]/15">{t('clientView.noteLabel')}：{p.notes}</p>
                               )}
                               <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-sm">
                                 {prop?.floor_plan_url && (
@@ -742,15 +1101,15 @@ function PendingAppointmentsSection({
                               </div>
                               {hasAgent && (
                                 <div className="mt-2 flex flex-wrap items-center gap-2">
-                                  <span className="text-xs text-stone-600">
-                                    {t('clientView.listingAgent')}：{agentName && <span className="font-medium text-stone-700">{agentName}</span>}
-                                    {agentName && agentPhone && <span className="text-stone-400 mx-1">·</span>}
+                                  <span className="text-xs text-[#2b5843]/80">
+                                    {t('clientView.listingAgent')}：{agentName && <span className="font-medium text-[#2b5843]/90">{agentName}</span>}
+                                    {agentName && agentPhone && <span className="text-[#2b5843]/60 mx-1">·</span>}
                                     {agentPhone && (
                                       <a href={`tel:${agentPhone}`} className="text-emerald-600 hover:text-emerald-700 font-medium hover:underline">{agentPhone}</a>
                                     )}
                                   </span>
                                   {whatsappUrl && (
-                                    <a href={whatsappUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-sm bg-[#25D366] text-white hover:bg-[#20BD5A]">
+                                    <a href={whatsappUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-xl bg-[#25D366] text-white hover:bg-[#20BD5A]">
                                       <svg viewBox="0 0 24 24" className="w-4 h-4" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
                                       WhatsApp
                                     </a>
@@ -758,12 +1117,17 @@ function PendingAppointmentsSection({
                                 </div>
                               )}
                             </div>
-                            <div className="flex items-center gap-2 mt-2 pt-2 border-t border-stone-100 shrink-0">
+                            <div className="flex items-center gap-2 mt-2 pt-2 border-t border-[#53868e]/15 shrink-0 flex-wrap">
+                              {agentPhone && (
+                                <a href={getWhatsAppChatUrl(agentPhone)} target="_blank" rel="noreferrer" className="text-xs text-[#25D366] hover:underline">
+                                  {t('pendingSection.sendWhatsApp')}
+                                </a>
+                              )}
                               {prop && (prop.source_url || prop.link) && isSupportedScrapeUrl((prop.source_url || prop.link)!) && (
                                 <button
                                   onClick={() => handleRefreshProperty(prop)}
                                   disabled={refreshingPropertyId === prop.id}
-                                  className="text-xs text-stone-400 hover:text-stone-700 disabled:opacity-50 flex items-center gap-1"
+                                  className="text-xs text-[#2b5843]/60 hover:text-[#2b5843]/90 disabled:opacity-50 flex items-center gap-1"
                                   title={t('pendingSection.refreshTitle')}
                                 >
                                   {refreshingPropertyId === prop.id ? (
@@ -777,11 +1141,11 @@ function PendingAppointmentsSection({
                               <select
                                 value={p.status}
                                 onChange={(e) => { const v = e.target.value as PendingAppointmentStatus; pendingAppointments.update.mutate({ id: p.id, status: v }) }}
-                                className="text-xs border border-stone-200 rounded-sm px-2 py-1.5 bg-white"
+                                className="text-xs border border-[#53868e]/25 rounded-xl px-2 py-1.5 bg-[#f6f3f1]"
                               >
                                 {PENDING_STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                               </select>
-                              <button onClick={() => pendingAppointments.remove.mutate(p.id)} className="text-xs text-stone-400 hover:text-red-600">{t('common.delete')}</button>
+                              <button onClick={() => pendingAppointments.remove.mutate(p.id)} className="text-xs text-[#2b5843]/60 hover:text-red-600">{t('common.delete')}</button>
                             </div>
                           </div>
                         </div>
@@ -814,6 +1178,7 @@ function AppointmentsSection({
   setSelectedGroupId,
   showAddAppointment,
   setShowAddAppointment,
+  clientMode = false,
 }: {
   groups: ReturnType<typeof useCustomerGroups>
   properties: ReturnType<typeof useProperties>
@@ -823,6 +1188,7 @@ function AppointmentsSection({
   setSelectedGroupId: (id: string | null) => void
   showAddAppointment: boolean
   setShowAddAppointment: (v: boolean) => void
+  clientMode?: boolean
 }) {
   const { t, i18n } = useTranslation()
   const PARTY_ROLE_LABELS = usePartyRoleLabels()
@@ -901,6 +1267,8 @@ function AppointmentsSection({
         listing_agent_phone: scraped.listing_agent_phone || undefined,
         listing_type: scraped.listing_type || undefined,
         lease_tenure: scraped.lease_tenure || undefined,
+        top_year: scraped.top_year || undefined,
+        last_scraped_at: new Date().toISOString(),
       })
     } catch (e) {
       message.error((e as Error).message || t('pendingSection.refreshFailed'))
@@ -963,7 +1331,8 @@ function AppointmentsSection({
   // 实时计算新增预约是否有时间冲突（用于红色标签展示）
   const createConflictInfo = useMemo(() => {
     if (!startTime || !propId) return null
-    if (needsCustomerGroup && !groupId) return null
+    const effGroup = clientMode && needsCustomerGroup ? selectedGroupId : groupId
+    if (needsCustomerGroup && !effGroup) return null
     const startDate = new Date(startTime)
     const endDate = new Date(startDate.getTime() + 15 * 60 * 1000)
     const startIso = startDate.toISOString()
@@ -979,7 +1348,7 @@ function AppointmentsSection({
       return t('appointmentsSection.conflictWith', { date: new Date(conflictingWith.start_time).toLocaleString(i18n.language === 'zh' ? 'zh-CN' : 'en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) })
     }
     return t('appointmentsSection.adjustTime')
-  }, [startTime, propId, groupId, partyRole, allAppointments.data])
+  }, [startTime, propId, groupId, selectedGroupId, clientMode, partyRole, allAppointments.data])
 
   const handleCreate = async () => {
     setConflictError(null)
@@ -987,7 +1356,8 @@ function AppointmentsSection({
       message.warning(t('appointmentsSection.fillComplete'))
       return
     }
-    if (needsCustomerGroup && !groupId) {
+    const effectiveGroupId = clientMode && needsCustomerGroup ? selectedGroupId : groupId
+    if (needsCustomerGroup && !effectiveGroupId) {
       message.warning(t('appointmentsSection.selectGroupRequired'))
       return
     }
@@ -999,7 +1369,7 @@ function AppointmentsSection({
       await appointments.create.mutateAsync({
         property_id: propId,
         party_role: partyRole,
-        customer_group_id: needsCustomerGroup ? groupId : null,
+        customer_group_id: needsCustomerGroup ? effectiveGroupId : null,
         customer_info: isSellerOrLandlord ? (customerInfo.trim() || null) : null,
         customer_phone: isSellerOrLandlord ? (customerPhone.trim() || null) : null,
         start_time: startIso,
@@ -1121,6 +1491,11 @@ function AppointmentsSection({
       setSelectedGroupId(null)
     }
   }, [selectedGroupId, activeGroupIds, setSelectedGroupId])
+  useEffect(() => {
+    if (clientMode && showAddAppointment && selectedGroupId && (partyRole === 'buyer' || partyRole === 'tenant')) {
+      setGroupId(selectedGroupId)
+    }
+  }, [clientMode, showAddAppointment, selectedGroupId, partyRole])
   const rawAppts = appointments.data ?? []
   const appts =
     selectedGroupId
@@ -1153,35 +1528,37 @@ function AppointmentsSection({
   return (
     <section>
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-sm font-medium text-stone-700">{t('appointmentsSection.title')}</h2>
+        <h2 className="text-sm font-medium text-[#2b5843]/90">{t('appointmentsSection.title')}</h2>
         <div className="flex gap-2 items-center">
-          <select
-            value={selectedGroupId || ''}
-            onChange={(e) => setSelectedGroupId(e.target.value || null)}
-            className="text-sm border border-stone-200 rounded-sm px-3 py-1.5"
-          >
-            <option value="">{t('appointmentsSection.allGroups')}</option>
-            {activeGroups.map((g) => (
-              <option key={g.id} value={g.id}>{g.name}</option>
-            ))}
-          </select>
+          {!clientMode && (
+            <select
+              value={selectedGroupId || ''}
+              onChange={(e) => setSelectedGroupId(e.target.value || null)}
+              className="text-sm border border-[#53868e]/25 rounded-xl px-3 py-1.5"
+            >
+              <option value="">{t('appointmentsSection.allGroups')}</option>
+              {activeGroups.map((g) => (
+                <option key={g.id} value={g.id}>{g.name}</option>
+              ))}
+            </select>
+          )}
           <button
             onClick={() => setShowAddAppointment(!showAddAppointment)}
-            className="text-sm border border-stone-300 rounded-sm px-4 py-1.5 hover:bg-stone-100"
+            className="text-sm border border-[#53868e]/35 rounded-xl px-4 py-1.5 hover:bg-[#53868e]/15"
           >
             {showAddAppointment ? t('common.cancel') : t('appointmentsSection.addAppointment')}
           </button>
         </div>
       </div>
 
-      <div className="flex gap-1 mb-4 border-b border-stone-200">
+      <div className="flex gap-1 mb-4 border-b border-[#53868e]/25">
         <button
           type="button"
           onClick={() => setApptSubTab('future')}
           className={`px-3 py-2 text-sm rounded-t border-b -mb-px ${
             apptSubTab === 'future'
-              ? 'border-stone-400 text-stone-900 font-medium bg-white'
-              : 'border-transparent text-stone-500 hover:text-stone-700'
+              ? 'border-stone-400 text-[#2b5843] font-medium bg-[#f6f3f1]'
+              : 'border-transparent text-[#2b5843]/70 hover:text-[#2b5843]/90'
           }`}
         >
           {t('appointmentsSection.future')} {upcomingAppts.length > 0 && `(${upcomingAppts.length})`}
@@ -1191,8 +1568,8 @@ function AppointmentsSection({
           onClick={() => setApptSubTab('history')}
           className={`px-3 py-2 text-sm rounded-t border-b -mb-px ${
             apptSubTab === 'history'
-              ? 'border-stone-400 text-stone-900 font-medium bg-white'
-              : 'border-transparent text-stone-500 hover:text-stone-700'
+              ? 'border-stone-400 text-[#2b5843] font-medium bg-[#f6f3f1]'
+              : 'border-transparent text-[#2b5843]/70 hover:text-[#2b5843]/90'
           }`}
         >
           {t('appointmentsSection.history')} {pastAppts.length > 0 && `(${pastAppts.length})`}
@@ -1200,14 +1577,14 @@ function AppointmentsSection({
       </div>
 
       {showAddAppointment && (
-        <div className="mb-6 p-4 border border-stone-200 rounded-sm bg-white space-y-3">
+        <div className="mb-6 p-4 border border-[#53868e]/25 rounded-xl bg-[#f6f3f1] space-y-3">
           {conflictError && (
-            <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-sm border border-red-200">
+            <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-xl border border-red-200">
               {conflictError}
             </p>
           )}
           <div className="flex items-center justify-between gap-4">
-            <label className="text-xs text-stone-600">{t('appointmentsSection.partyRole')}</label>
+            <label className="text-xs text-[#2b5843]/80">{t('appointmentsSection.partyRole')}</label>
             <div className="flex gap-1 flex-wrap justify-end">
               {(['buyer', 'seller', 'tenant', 'landlord'] as const).map((role) => (
                 <button
@@ -1218,10 +1595,10 @@ function AppointmentsSection({
                     if (role === 'seller' || role === 'landlord') setGroupId('')
                     else { setCustomerInfo(''); setCustomerPhone('') }
                   }}
-                  className={`px-2.5 py-1 text-xs rounded-sm border ${
+                  className={`px-2.5 py-1 text-xs rounded-xl border ${
                     partyRole === role
-                      ? 'border-stone-600 bg-stone-100 text-stone-900'
-                      : 'border-stone-200 text-stone-600 hover:bg-stone-50'
+                      ? 'border-stone-600 bg-[#53868e]/10 text-[#2b5843]'
+                      : 'border-[#53868e]/25 text-[#2b5843]/80 hover:bg-[#53868e]/10'
                   }`}
                 >
                   {PARTY_ROLE_LABELS[role]}
@@ -1230,19 +1607,19 @@ function AppointmentsSection({
             </div>
           </div>
           <div>
-            <label className="text-xs text-stone-600">房源</label>
+            <label className="text-xs text-[#2b5843]/80">房源</label>
             <div className="flex gap-2 mt-1 mb-1">
               <button
                 type="button"
                 onClick={() => { setPropertyInputMode('select'); setScrapeError(null) }}
-                className={`text-xs px-2 py-1.5 border rounded-sm ${propertyInputMode === 'select' ? 'border-stone-600 bg-stone-100' : 'border-stone-200'}`}
+                className={`text-xs px-2 py-1.5 border rounded-xl ${propertyInputMode === 'select' ? 'border-stone-600 bg-[#53868e]/10' : 'border-[#53868e]/25'}`}
               >
                 {t('appointmentsSection.selectExisting')}
               </button>
               <button
                 type="button"
                 onClick={() => { setPropertyInputMode('byLink'); setScrapeError(null); setScrapeSuccess(false) }}
-                className={`text-xs px-2 py-1.5 border rounded-sm ${propertyInputMode === 'byLink' ? 'border-stone-600 bg-stone-100' : 'border-stone-200'}`}
+                className={`text-xs px-2 py-1.5 border rounded-xl ${propertyInputMode === 'byLink' ? 'border-stone-600 bg-[#53868e]/10' : 'border-[#53868e]/25'}`}
               >
                 {t('appointmentsSection.addByLink')}
               </button>
@@ -1251,7 +1628,7 @@ function AppointmentsSection({
               <select
                 value={propId}
                 onChange={(e) => { setPropId(e.target.value); setConflictError(null) }}
-                className="w-full mt-1 px-3 py-2 border border-stone-200 rounded-sm text-sm"
+                className="w-full mt-1 px-3 py-2 border border-[#53868e]/25 rounded-xl text-sm"
               >
                 <option value="">{t('appointmentsSection.selectProperty')}</option>
                 {properties.data?.map((p) => (
@@ -1266,7 +1643,7 @@ function AppointmentsSection({
                   value={propertyLinkInput}
                   onChange={(e) => { setPropertyLinkInput(e.target.value); setScrapeError(null) }}
                   placeholder={t('appointmentsSection.propertyLinkPlaceholder')}
-                  className="w-full px-3 py-2 border border-stone-200 rounded-sm text-sm"
+                  className="w-full px-3 py-2 border border-[#53868e]/25 rounded-xl text-sm"
                 />
                 {scrapeError && (
                   <p className="text-xs text-red-600">{scrapeError}</p>
@@ -1276,10 +1653,10 @@ function AppointmentsSection({
                     type="button"
                     onClick={handleScrapeAndAdd}
                     disabled={scrapeLoading}
-                    className="text-sm px-4 py-1.5 border border-stone-300 rounded-sm hover:bg-stone-100 disabled:opacity-50 flex items-center gap-2"
+                    className="text-sm px-4 py-1.5 border border-[#53868e]/35 rounded-xl hover:bg-[#53868e]/15 disabled:opacity-50 flex items-center gap-2"
                   >
                     {scrapeLoading && (
-                      <svg className="animate-spin h-4 w-4 text-stone-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <svg className="animate-spin h-4 w-4 text-[#2b5843]/70" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                       </svg>
@@ -1297,7 +1674,7 @@ function AppointmentsSection({
                     <button
                       type="button"
                       onClick={handleScrapeAndAdd}
-                      className="p-1 text-stone-500 hover:text-stone-700 hover:bg-stone-100 rounded"
+                      className="p-1 text-[#2b5843]/70 hover:text-[#2b5843]/90 hover:bg-[#53868e]/15 rounded"
                       title={t('common.retry')}
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
@@ -1309,13 +1686,13 @@ function AppointmentsSection({
               </div>
             )}
           </div>
-          {needsCustomerGroup && (
+          {needsCustomerGroup && !clientMode && (
             <div>
-              <label className="text-xs text-stone-600">{t('appointmentsSection.selectGroup')}</label>
+              <label className="text-xs text-[#2b5843]/80">{t('appointmentsSection.selectGroup')}</label>
               <select
                 value={groupId}
                 onChange={(e) => { setGroupId(e.target.value); setConflictError(null) }}
-                className="w-full mt-1 px-3 py-2 border border-stone-200 rounded-sm text-sm"
+                className="w-full mt-1 px-3 py-2 border border-[#53868e]/25 rounded-xl text-sm"
               >
                 <option value="">{t('appointmentsSection.selectGroup')}</option>
                 {activeGroups.map((g) => (
@@ -1327,28 +1704,28 @@ function AppointmentsSection({
           {isSellerOrLandlord && (
             <>
               <div>
-                <label className="text-xs text-stone-600">潜在{buyerOrTenantLabel}手机号（可选）</label>
+                <label className="text-xs text-[#2b5843]/80">潜在{buyerOrTenantLabel}手机号（可选）</label>
                 <input
                   type="tel"
                   value={customerPhone}
                   onChange={(e) => setCustomerPhone(e.target.value)}
                   placeholder={t('appointmentsSection.phonePlaceholder')}
-                  className="w-full mt-1 px-3 py-2 border border-stone-200 rounded-sm text-sm"
+                  className="w-full mt-1 px-3 py-2 border border-[#53868e]/25 rounded-xl text-sm"
                 />
               </div>
               <div>
-                <label className="text-xs text-stone-600">{t('appointmentsSection.customerInfo')}</label>
+                <label className="text-xs text-[#2b5843]/80">{t('appointmentsSection.customerInfo')}</label>
                 <input
                   value={customerInfo}
                   onChange={(e) => setCustomerInfo(e.target.value)}
                   placeholder={t('appointmentsSection.customerInfoPlaceholder')}
-                  className="w-full mt-1 px-3 py-2 border border-stone-200 rounded-sm text-sm"
+                  className="w-full mt-1 px-3 py-2 border border-[#53868e]/25 rounded-xl text-sm"
                 />
               </div>
             </>
           )}
           <div>
-            <label className="text-xs text-stone-600">{t('appointmentsSection.viewTime')}</label>
+            <label className="text-xs text-[#2b5843]/80">{t('appointmentsSection.viewTime')}</label>
             {createConflictInfo && (
               <span className="ml-2 inline-flex items-center px-2.5 py-1 rounded text-xs font-medium bg-red-100 text-red-700 border border-red-200" title={createConflictInfo}>
                 {t('appointmentsSection.timeConflict')}
@@ -1364,7 +1741,7 @@ function AppointmentsSection({
                   setStartTime(d ? `${d}T${t}` : '')
                   setConflictError(null)
                 }}
-                className="flex-1 min-w-[120px] px-3 py-2 border border-stone-200 rounded-sm text-sm"
+                className="flex-1 min-w-[120px] px-3 py-2 border border-[#53868e]/25 rounded-xl text-sm"
               />
               <select
                 value={startTime ? startTime.slice(11, 13) : ''}
@@ -1375,7 +1752,7 @@ function AppointmentsSection({
                   setStartTime(h ? `${d}T${h}:${m}` : '')
                   setConflictError(null)
                 }}
-                className="w-20 px-2 py-2 border border-stone-200 rounded-sm text-sm bg-white"
+                className="w-20 px-2 py-2 border border-[#53868e]/25 rounded-xl text-sm bg-[#f6f3f1]"
               >
                 <option value="">{t('scheduleSection.hourSuffix') || ''}</option>
                 {Array.from({ length: 18 }, (_, i) => {
@@ -1396,7 +1773,7 @@ function AppointmentsSection({
                   setStartTime(m !== '' ? `${d}T${h}:${m}` : '')
                   setConflictError(null)
                 }}
-                className="w-24 px-2 py-2 border border-stone-200 rounded-sm text-sm bg-white"
+                className="w-24 px-2 py-2 border border-[#53868e]/25 rounded-xl text-sm bg-[#f6f3f1]"
               >
                 <option value="">{t('scheduleSection.minuteSuffix') || ''}</option>
                 {[0, 15, 30, 45].map((m) => (
@@ -1408,19 +1785,19 @@ function AppointmentsSection({
             </div>
           </div>
           <div>
-            <label className="text-xs text-stone-600">{t('appointmentsSection.notesOptional')}</label>
+            <label className="text-xs text-[#2b5843]/80">{t('appointmentsSection.notesOptional')}</label>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder={t('appointmentsSection.notesPlaceholder')}
               rows={2}
-              className="w-full mt-1 px-3 py-2 border border-stone-200 rounded-sm text-sm resize-none"
+              className="w-full mt-1 px-3 py-2 border border-[#53868e]/25 rounded-xl text-sm resize-none"
             />
           </div>
           <button
             onClick={handleCreate}
             disabled={appointments.create.isPending || (propertyInputMode === 'byLink' && scrapeLoading)}
-            className="text-sm px-4 py-2 border border-stone-300 rounded-sm hover:bg-stone-100 disabled:opacity-50"
+            className="text-sm px-4 py-2 border border-[#53868e]/35 rounded-xl hover:bg-[#53868e]/15 disabled:opacity-50"
           >
             {t('common.create')}
           </button>
@@ -1430,12 +1807,12 @@ function AppointmentsSection({
       {editingAppointment && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 overflow-y-auto py-8" onClick={() => setEditingAppointment(null)}>
           <div
-            className="bg-white rounded-sm border border-stone-200 p-5 w-full max-w-md shadow-lg my-auto"
+            className="bg-[#f6f3f1] rounded-xl border border-[#53868e]/25 p-5 w-full max-w-md shadow-lg my-auto"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-sm font-medium text-stone-900 mb-3">{t('appointmentsSection.editTitle')}</h3>
+            <h3 className="text-sm font-medium text-[#2b5843] mb-3">{t('appointmentsSection.editTitle')}</h3>
             {conflictError && (
-              <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-sm border border-red-200 mb-3">
+              <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-xl border border-red-200 mb-3">
                 {conflictError}
               </p>
             )}
@@ -1446,7 +1823,7 @@ function AppointmentsSection({
             )}
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-4">
-                <label className="text-xs text-stone-600">预约角色</label>
+                <label className="text-xs text-[#2b5843]/80">预约角色</label>
                 <div className="flex gap-1 flex-wrap justify-end">
                   {(['buyer', 'seller', 'tenant', 'landlord'] as const).map((role) => (
                     <button
@@ -1457,10 +1834,10 @@ function AppointmentsSection({
                         if (role === 'seller' || role === 'landlord') setEditGroupId('')
                         else { setEditCustomerInfo(''); setEditCustomerPhone('') }
                       }}
-                      className={`px-2.5 py-1 text-xs rounded-sm border ${
+                      className={`px-2.5 py-1 text-xs rounded-xl border ${
                         editPartyRole === role
-                          ? 'border-stone-600 bg-stone-100 text-stone-900'
-                          : 'border-stone-200 text-stone-600 hover:bg-stone-50'
+                          ? 'border-stone-600 bg-[#53868e]/10 text-[#2b5843]'
+                          : 'border-[#53868e]/25 text-[#2b5843]/80 hover:bg-[#53868e]/10'
                       }`}
                     >
                       {PARTY_ROLE_LABELS[role]}
@@ -1469,11 +1846,11 @@ function AppointmentsSection({
                 </div>
               </div>
               <div>
-                <label className="text-xs text-stone-600">房源</label>
+                <label className="text-xs text-[#2b5843]/80">房源</label>
                 <select
                   value={editPropId}
                   onChange={(e) => { setEditPropId(e.target.value); setConflictError(null) }}
-                  className="w-full mt-1 px-3 py-2 border border-stone-200 rounded-sm text-sm"
+                  className="w-full mt-1 px-3 py-2 border border-[#53868e]/25 rounded-xl text-sm"
                 >
                   <option value="">{t('appointmentsSection.selectProperty')}</option>
                   {properties.data?.map((p) => (
@@ -1485,11 +1862,11 @@ function AppointmentsSection({
               </div>
               {editNeedsCustomerGroup && (
                 <div>
-                  <label className="text-xs text-stone-600">客户分组</label>
+                  <label className="text-xs text-[#2b5843]/80">客户分组</label>
                   <select
                     value={editGroupId}
                     onChange={(e) => { setEditGroupId(e.target.value); setConflictError(null) }}
-                    className="w-full mt-1 px-3 py-2 border border-stone-200 rounded-sm text-sm"
+                    className="w-full mt-1 px-3 py-2 border border-[#53868e]/25 rounded-xl text-sm"
                   >
                     <option value="">{t('appointmentsSection.selectGroup')}</option>
                     {activeGroups.map((g) => (
@@ -1501,28 +1878,28 @@ function AppointmentsSection({
               {editIsSellerOrLandlord && (
                 <>
                   <div>
-                    <label className="text-xs text-stone-600">{t('appointmentsSection.potentialBuyerPhone', { role: editPartyRole === 'seller' ? t('partyRole.buyer') : t('partyRole.tenant') })}</label>
+                    <label className="text-xs text-[#2b5843]/80">{t('appointmentsSection.potentialBuyerPhone', { role: editPartyRole === 'seller' ? t('partyRole.buyer') : t('partyRole.tenant') })}</label>
                     <input
                       type="tel"
                       value={editCustomerPhone}
                       onChange={(e) => setEditCustomerPhone(e.target.value)}
                       placeholder="如：81234567 或 +65 8123 4567"
-                      className="w-full mt-1 px-3 py-2 border border-stone-200 rounded-sm text-sm"
+                      className="w-full mt-1 px-3 py-2 border border-[#53868e]/25 rounded-xl text-sm"
                     />
                   </div>
                   <div>
-                    <label className="text-xs text-stone-600">客户信息（可选）</label>
+                    <label className="text-xs text-[#2b5843]/80">客户信息（可选）</label>
                     <input
                       value={editCustomerInfo}
                       onChange={(e) => setEditCustomerInfo(e.target.value)}
                       placeholder="如：潜在买家/租客姓名等"
-                      className="w-full mt-1 px-3 py-2 border border-stone-200 rounded-sm text-sm"
+                      className="w-full mt-1 px-3 py-2 border border-[#53868e]/25 rounded-xl text-sm"
                     />
                   </div>
                 </>
               )}
               <div>
-                <label className="text-xs text-stone-600">看房时间（每 15 分钟一个时段）</label>
+                <label className="text-xs text-[#2b5843]/80">看房时间（每 15 分钟一个时段）</label>
                 <div className="flex flex-wrap gap-2 mt-1">
                   <input
                     type="date"
@@ -1533,7 +1910,7 @@ function AppointmentsSection({
                       setEditStartTime(d ? `${d}T${t}` : '')
                       setConflictError(null)
                     }}
-                    className="flex-1 min-w-[120px] px-3 py-2 border border-stone-200 rounded-sm text-sm"
+                    className="flex-1 min-w-[120px] px-3 py-2 border border-[#53868e]/25 rounded-xl text-sm"
                   />
                   <select
                     value={editStartTime ? editStartTime.slice(11, 13) : ''}
@@ -1544,7 +1921,7 @@ function AppointmentsSection({
                       setEditStartTime(h ? `${d}T${h}:${m}` : '')
                       setConflictError(null)
                     }}
-                    className="w-20 px-2 py-2 border border-stone-200 rounded-sm text-sm bg-white"
+                    className="w-20 px-2 py-2 border border-[#53868e]/25 rounded-xl text-sm bg-[#f6f3f1]"
                   >
                     <option value="">{t('scheduleSection.hourSuffix') || ''}</option>
                     {Array.from({ length: 18 }, (_, i) => {
@@ -1565,7 +1942,7 @@ function AppointmentsSection({
                       setEditStartTime(m !== '' ? `${d}T${h}:${m}` : '')
                       setConflictError(null)
                     }}
-                    className="w-24 px-2 py-2 border border-stone-200 rounded-sm text-sm bg-white"
+                    className="w-24 px-2 py-2 border border-[#53868e]/25 rounded-xl text-sm bg-[#f6f3f1]"
                   >
                     <option value="">{t('scheduleSection.minuteSuffix') || ''}</option>
                     {[0, 15, 30, 45].map((min) => (
@@ -1577,26 +1954,26 @@ function AppointmentsSection({
                 </div>
               </div>
               <div>
-                <label className="text-xs text-stone-600">{t('appointmentsSection.notesOptional')}</label>
+                <label className="text-xs text-[#2b5843]/80">{t('appointmentsSection.notesOptional')}</label>
                 <textarea
                   value={editNotes}
                   onChange={(e) => setEditNotes(e.target.value)}
                   placeholder={t('appointmentsSection.notesPlaceholder')}
                   rows={2}
-                  className="w-full mt-1 px-3 py-2 border border-stone-200 rounded-sm text-sm resize-none"
+                  className="w-full mt-1 px-3 py-2 border border-[#53868e]/25 rounded-xl text-sm resize-none"
                 />
               </div>
               <div className="flex gap-2 pt-1">
                 <button
                   onClick={handleSaveEdit}
                   disabled={appointments.update.isPending}
-                  className="flex-1 text-sm px-4 py-2 border border-stone-300 rounded-sm hover:bg-stone-100 disabled:opacity-50"
+                  className="flex-1 text-sm px-4 py-2 border border-[#53868e]/35 rounded-xl hover:bg-[#53868e]/15 disabled:opacity-50"
                 >
                   {t('common.save')}
                 </button>
                 <button
                   onClick={() => setEditingAppointment(null)}
-                  className="text-sm px-4 py-2 border border-stone-200 rounded-sm hover:bg-stone-100"
+                  className="text-sm px-4 py-2 border border-[#53868e]/25 rounded-xl hover:bg-[#53868e]/15"
                 >
                   {t('common.cancel')}
                 </button>
@@ -1608,14 +1985,14 @@ function AppointmentsSection({
 
       <div className="space-y-6">
         {displayAppts.length === 0 ? (
-          <p className="text-sm text-stone-500 py-8 text-center">
+          <p className="text-sm text-[#2b5843]/70 py-8 text-center">
             {apptSubTab === 'future' ? t('appointmentsSection.noFuture') : t('appointmentsSection.noHistory')}
           </p>
         ) : sortedDates.map((date) => {
           const list = groupedByDate[date]
           return (
           <div key={date}>
-            <p className="text-xs text-stone-500 mb-2">{new Date(date).toLocaleDateString('zh-CN')}</p>
+            <p className="text-xs text-[#2b5843]/70 mb-2">{new Date(date).toLocaleDateString('zh-CN')}</p>
             <div className="space-y-2">
               {list.map((a) => {
                 const prop = a.properties as Property | undefined
@@ -1639,61 +2016,68 @@ function AppointmentsSection({
                 return (
                   <div
                     key={a.id}
-                    className="border border-stone-200 rounded-xl overflow-hidden bg-white shadow-sm hover:shadow-md transition-shadow flex"
+                    className="border border-[#53868e]/25 rounded-xl overflow-hidden bg-[#f6f3f1] shadow-sm hover:shadow-md transition-shadow flex"
                   >
-                    <div className="flex flex-col w-28 sm:w-32 flex-shrink-0 gap-0.5 p-2 bg-stone-50">
+                    <div className={`flex flex-col w-28 sm:w-32 flex-shrink-0 gap-0.5 p-2 bg-[#53868e]/5 ${imgs.length <= 1 ? 'justify-center' : ''}`}>
                       {imgs[0] ? (
-                        <button type="button" onClick={() => setLightboxImage(imgs[0])} className="block w-full h-20 rounded-lg overflow-hidden cursor-zoom-in hover:opacity-90 transition-opacity text-left">
-                          <img src={imgs[0]} alt={prop?.title ?? ''} className="w-full h-20 object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => setLightboxImage(imgs[0])}
+                          className={`block w-full rounded-lg overflow-hidden cursor-zoom-in hover:opacity-90 transition-opacity text-left ${imgs.length >= 2 ? 'h-20' : 'h-40'}`}
+                        >
+                          <img src={imgs[0]} alt={prop?.title ?? ''} className={`w-full object-cover ${imgs.length >= 2 ? 'h-20' : 'h-40'}`} />
                         </button>
                       ) : (
-                        <div className="w-full h-20 rounded-lg bg-stone-200 flex items-center justify-center text-stone-400 text-xs">{t('common.noImage')}</div>
+                        <div className="w-full h-20 rounded-lg bg-[#53868e]/15 flex items-center justify-center text-[#2b5843]/60 text-xs">{t('common.noImage')}</div>
                       )}
-                      {imgs[1] ? (
+                      {imgs[1] && (
                         <button type="button" onClick={() => setLightboxImage(imgs[1])} className="block w-full h-20 rounded-lg overflow-hidden cursor-zoom-in hover:opacity-90 transition-opacity text-left">
                           <img src={imgs[1]} alt={prop?.title ?? ''} className="w-full h-20 object-cover" />
                         </button>
-                      ) : imgs[0] ? null : (
-                        <div className="w-full h-20 rounded-lg bg-stone-200" />
                       )}
                     </div>
                     <div className="flex-1 min-w-0 p-4 flex flex-col justify-between">
                       <div>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p className="font-semibold text-base leading-tight text-stone-900">{prop?.title ?? '—'}</p>
-                          {prop?.listing_type && (
-                            <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${prop.listing_type === 'rent' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>
-                              {prop.listing_type === 'rent' ? t('clientView.rent') : t('clientView.sale')}
-                            </span>
-                          )}
-                          {(a.party_role === 'seller' || a.party_role === 'landlord') && (
-                            <span className="px-1.5 py-0.5 rounded text-xs bg-stone-100 text-stone-700">
-                              {t('appointmentsSection.represent', { role: PARTY_ROLE_LABELS[a.party_role] })}
-                            </span>
-                          )}
-                          {hasConflictTag && (
-                            <span className="px-2.5 py-1 rounded text-xs font-medium bg-red-100 text-red-700 border border-red-200">
-                              {t('appointmentsSection.timeConflict')}
-                            </span>
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-2 flex-wrap min-w-0">
+                            <p className="font-semibold text-base leading-tight text-[#2b5843]">{prop?.title ?? '—'}</p>
+                            {prop?.listing_type && (
+                              <span className={`px-1.5 py-0.5 rounded text-xs font-medium shrink-0 ${prop.listing_type === 'rent' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>
+                                {prop.listing_type === 'rent' ? t('clientView.rent') : t('clientView.sale')}
+                              </span>
+                            )}
+                            {(a.party_role === 'seller' || a.party_role === 'landlord') && (
+                              <span className="px-1.5 py-0.5 rounded text-xs bg-[#53868e]/10 text-[#2b5843]/90 shrink-0">
+                                {t('appointmentsSection.represent', { role: PARTY_ROLE_LABELS[a.party_role] })}
+                              </span>
+                            )}
+                            {hasConflictTag && (
+                              <span className="px-2.5 py-1 rounded text-xs font-medium bg-red-100 text-red-700 border border-red-200 shrink-0">
+                                {t('appointmentsSection.timeConflict')}
+                              </span>
+                            )}
+                          </div>
+                          {formatPriceDisplay(prop!) && (
+                            <span className="font-medium text-emerald-700 shrink-0">{formatPriceDisplay(prop!)}</span>
                           )}
                         </div>
-                        <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-1.5 text-sm text-stone-600">
-                          {formatPriceDisplay(prop!) && <span className="font-medium text-emerald-700">{formatPriceDisplay(prop!)}</span>}
+                        <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-1.5 text-sm text-[#2b5843]/80">
                           {prop?.bedrooms && <span>{prop.bedrooms}</span>}
                           {prop?.bathrooms && <span>{prop.bathrooms}</span>}
                           {(prop?.size_sqft || prop?.basic_info) && (
                             <span>{(prop.size_sqft || prop.basic_info)}</span>
                           )}
                           {prop?.listing_type === 'sale' && prop?.lease_tenure && (
-                            <span className="text-stone-500">{prop.lease_tenure}</span>
+                            <span className="text-[#2b5843]/70">{prop.lease_tenure}</span>
                           )}
+                          {prop?.top_year && <span className="text-[#2b5843]/70">{prop.top_year}</span>}
                         </div>
-                        <p className="text-stone-500 text-sm mt-2">
+                        <p className="text-[#2b5843]/70 text-sm mt-2">
                           {(a.customer_groups as CustomerGroup | null)?.name ?? a.customer_info ?? t('appointmentsSection.represent', { role: PARTY_ROLE_LABELS[a.party_role ?? 'buyer'] })} ·{' '}
                           {new Date(a.start_time).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                         </p>
                         {a.notes && (
-                          <p className="text-stone-600 text-sm mt-2 px-3 py-2 rounded-lg bg-stone-50 border border-stone-100">
+                          <p className="text-[#2b5843]/80 text-sm mt-2 px-3 py-2 rounded-lg bg-[#53868e]/5 border border-[#53868e]/15">
                             {t('appointmentsSection.agentNote')}：{a.notes}
                           </p>
                         )}
@@ -1718,9 +2102,9 @@ function AppointmentsSection({
                           <div className="mt-2 flex flex-wrap items-center gap-2">
                             {customerPhone && (
                               <>
-                                <span className="text-xs text-stone-600">
+                                <span className="text-xs text-[#2b5843]/80">
                                   {t('appointmentsSection.potentialBuyer', { role: a.party_role === 'seller' ? t('partyRole.buyer') : t('partyRole.tenant') })}
-                                  <a href={`tel:${customerPhone}`} className="font-medium text-stone-700 hover:underline ml-1">
+                                  <a href={`tel:${customerPhone}`} className="font-medium text-[#2b5843]/90 hover:underline ml-1">
                                     {customerPhone}
                                   </a>
                                 </span>
@@ -1729,7 +2113,7 @@ function AppointmentsSection({
                                     href={customerWhatsAppUrl}
                                     target="_blank"
                                     rel="noreferrer"
-                                    className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-sm bg-[#25D366] text-white hover:bg-[#20BD5A]"
+                                    className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-xl bg-[#25D366] text-white hover:bg-[#20BD5A]"
                                   >
                                     <svg viewBox="0 0 24 24" className="w-4 h-4" fill="currentColor">
                                       <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
@@ -1741,10 +2125,10 @@ function AppointmentsSection({
                             )}
                             {hasAgent && (
                               <>
-                                <span className="text-xs text-stone-600">
+                                <span className="text-xs text-[#2b5843]/80">
                                   {t('appointmentsSection.listingAgent')}
-                                  {agentName && <span className="font-medium text-stone-700">{agentName}</span>}
-                                  {agentName && agentPhone && <span className="text-stone-400 mx-1">·</span>}
+                                  {agentName && <span className="font-medium text-[#2b5843]/90">{agentName}</span>}
+                                  {agentName && agentPhone && <span className="text-[#2b5843]/60 mx-1">·</span>}
                                   {agentPhone && (
                                     <a href={`tel:${agentPhone}`} className="text-emerald-600 hover:text-emerald-700 font-medium hover:underline">
                                       {agentPhone}
@@ -1756,7 +2140,7 @@ function AppointmentsSection({
                                     href={whatsappUrl}
                                     target="_blank"
                                     rel="noreferrer"
-                                    className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-sm bg-[#25D366] text-white hover:bg-[#20BD5A]"
+                                    className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-xl bg-[#25D366] text-white hover:bg-[#20BD5A]"
                                   >
                                     <svg viewBox="0 0 24 24" className="w-4 h-4" fill="currentColor">
                                       <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
@@ -1769,12 +2153,12 @@ function AppointmentsSection({
                           </div>
                         )}
                       </div>
-                      <div className="flex items-center gap-2 mt-2 pt-2 border-t border-stone-100 shrink-0">
+                      <div className="flex items-center gap-2 mt-2 pt-2 border-t border-[#53868e]/15 shrink-0">
                         {prop && (prop.source_url || prop.link) && isSupportedScrapeUrl((prop.source_url || prop.link)!) && (
                           <button
                             onClick={() => handleRefreshProperty(prop)}
                             disabled={refreshingPropertyId === prop.id}
-                            className="text-xs text-stone-400 hover:text-stone-700 disabled:opacity-50 flex items-center gap-1"
+                            className="text-xs text-[#2b5843]/60 hover:text-[#2b5843]/90 disabled:opacity-50 flex items-center gap-1"
                             title={t('pendingSection.refreshTitle')}
                           >
                             {refreshingPropertyId === prop.id ? (
@@ -1792,13 +2176,13 @@ function AppointmentsSection({
                         )}
                         <button
                           onClick={() => handleOpenEdit(a)}
-                          className="text-xs text-stone-400 hover:text-stone-700"
+                          className="text-xs text-[#2b5843]/60 hover:text-[#2b5843]/90"
                         >
                           {t('common.edit')}
                         </button>
                         <button
                           onClick={() => appointments.remove.mutate(a.id)}
-                          className="text-xs text-stone-400 hover:text-red-600"
+                          className="text-xs text-[#2b5843]/60 hover:text-red-600"
                         >
                           {t('common.delete')}
                         </button>
@@ -2002,24 +2386,24 @@ function AgentScheduleSection({
   return (
     <section>
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-sm font-medium text-stone-700">{t('scheduleSection.title')}</h2>
-        <div className="flex gap-1 border border-stone-200 rounded-sm p-0.5">
+        <h2 className="text-sm font-medium text-[#2b5843]/90">{t('scheduleSection.title')}</h2>
+        <div className="flex gap-1 border border-[#53868e]/25 rounded-xl p-0.5">
           <button
             onClick={() => setRangeMode('twoWeeks')}
-            className={`px-3 py-1.5 text-sm rounded-sm ${
+            className={`px-3 py-1.5 text-sm rounded-xl ${
               rangeMode === 'twoWeeks'
                 ? 'bg-stone-800 text-white'
-                : 'text-stone-600 hover:bg-stone-100'
+                : 'text-[#2b5843]/80 hover:bg-[#53868e]/15'
             }`}
           >
             {t('scheduleSection.twoWeeks')}
           </button>
           <button
             onClick={() => setRangeMode('all')}
-            className={`px-3 py-1.5 text-sm rounded-sm ${
+            className={`px-3 py-1.5 text-sm rounded-xl ${
               rangeMode === 'all'
                 ? 'bg-stone-800 text-white'
-                : 'text-stone-600 hover:bg-stone-100'
+                : 'text-[#2b5843]/80 hover:bg-[#53868e]/15'
             }`}
           >
             {t('scheduleSection.all')}
@@ -2028,7 +2412,7 @@ function AgentScheduleSection({
       </div>
 
       {sortedDates.length === 0 ? (
-        <div className="py-12 text-center text-stone-500 text-sm border border-dashed border-stone-200 rounded-sm">
+        <div className="py-12 text-center text-[#2b5843]/70 text-sm border border-dashed border-[#53868e]/25 rounded-xl">
           {rangeMode === 'twoWeeks'
             ? t('scheduleSection.noTwoWeeks')
             : t('scheduleSection.noFuture')}
@@ -2054,13 +2438,13 @@ function AgentScheduleSection({
             return (
               <div
                 key={dateStr}
-                className="border border-stone-200 rounded-xl bg-white overflow-hidden shadow-sm"
+                className="border border-[#53868e]/25 rounded-xl bg-[#f6f3f1] overflow-hidden shadow-sm"
               >
-                <div className="px-4 py-3 bg-stone-50 border-b border-stone-100 flex items-center justify-between">
+                <div className="px-4 py-3 bg-[#53868e]/5 border-b border-[#53868e]/15 flex items-center justify-between">
                   <span className="font-medium text-stone-800 text-sm">
                     {date.toLocaleDateString(i18n.language === 'zh' ? 'zh-CN' : 'en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
                   </span>
-                  <span className="text-stone-500 text-xs">{dayName}</span>
+                  <span className="text-[#2b5843]/70 text-xs">{dayName}</span>
                 </div>
                 <div
                   className="flex flex-col p-2 gap-1"
@@ -2098,16 +2482,16 @@ function AgentScheduleSection({
                         style={{ flex: `${flexRatio} 1 0`, minHeight: 64 }}
                       >
                         <div className="flex-1 min-w-0">
-                          <p className="text-xs text-stone-500 mb-0.5">
+                          <p className="text-xs text-[#2b5843]/70 mb-0.5">
                             {t('scheduleSection.serveRole', { role: PARTY_ROLE_LABELS[block.partyRole] })}
                           </p>
-                          <p className="font-medium text-stone-900 text-sm truncate">
+                          <p className="font-medium text-[#2b5843] text-sm truncate">
                             {block.customerGroupName}
                           </p>
-                          <p className="text-stone-600 text-xs mt-0.5">
+                          <p className="text-[#2b5843]/80 text-xs mt-0.5">
                             {timeStr}
                             {block.propertyCount > 1 && (
-                              <span className="ml-1.5 text-amber-700">
+                              <span className="ml-1.5 text-[#2b5843]">
                                 · {t('scheduleSection.viewProperties', { count: block.propertyCount })}
                               </span>
                             )}
@@ -2119,7 +2503,7 @@ function AgentScheduleSection({
                             return (
                               <span
                                 key={a.id}
-                                className="text-xs px-2 py-0.5 rounded bg-white border border-stone-200 text-stone-600 truncate max-w-[120px]"
+                                className="text-xs px-2 py-0.5 rounded bg-[#f6f3f1] border border-[#53868e]/25 text-[#2b5843]/80 truncate max-w-[120px]"
                                 title={prop?.title}
                               >
                                 {prop?.title?.slice(0, 12) ?? '—'}
@@ -2128,7 +2512,7 @@ function AgentScheduleSection({
                             )
                           })}
                           {block.propertyCount > 3 && (
-                            <span className="text-xs text-stone-400 self-center">
+                            <span className="text-xs text-[#2b5843]/60 self-center">
                               +{block.propertyCount - 3}
                             </span>
                           )}

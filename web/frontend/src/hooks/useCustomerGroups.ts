@@ -61,5 +61,16 @@ export function useCustomerGroups() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['customer-groups', user?.id] }),
   })
 
-  return { ...query, create, update, remove }
+  const resetTokens = useMutation({
+    mutationFn: async (groupId: string) => {
+      const { data, error } = await supabase.rpc('reset_customer_group_tokens', {
+        p_group_id: groupId,
+      })
+      if (error) throw error
+      return data as { share_token: string; share_token_edit: string }
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['customer-groups', user?.id] }),
+  })
+
+  return { ...query, create, update, remove, resetTokens }
 }

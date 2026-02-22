@@ -11,7 +11,14 @@ type AuthContextType = {
     email: string,
     password: string,
     role?: 'agent' | 'client',
-    meta?: { fullName?: string; agentNumber?: string; phone?: string }
+    meta?: {
+      familyName?: string
+      givenName?: string
+      agentNumber?: string
+      company?: string
+      phone?: string
+      inviteCode?: string
+    }
   ) => Promise<{ error: Error | null }>
   signOut: () => Promise<void>
 }
@@ -48,21 +55,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       email: string,
       password: string,
       role: 'agent' | 'client' = 'agent',
-      meta?: { fullName?: string; agentNumber?: string; phone?: string }
+      meta?: {
+        familyName?: string
+        givenName?: string
+        agentNumber?: string
+        company?: string
+        phone?: string
+        inviteCode?: string
+      }
     ) => {
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
           data: {
             role,
-            full_name: meta?.fullName?.trim() || null,
+            family_name: meta?.familyName?.trim() || null,
+            given_name: meta?.givenName?.trim() || null,
             agent_number: meta?.agentNumber?.trim() || null,
             phone: meta?.phone?.trim() || null,
+            company: meta?.company?.trim() || null,
+            invited_by_code: meta?.inviteCode?.trim() || null,
           },
         },
       })
-      return { error: error as Error | null }
+      if (error) return { error: error as Error }
+      if (data.user && !(data.user.identities && data.user.identities.length > 0)) {
+        return { error: new Error('EMAIL_EXISTS') }
+      }
+      return { error: null }
     },
     []
   )

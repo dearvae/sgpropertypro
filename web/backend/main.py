@@ -2,13 +2,19 @@
 Property Guru 房源抓取 API
 POST /api/scrape-property 传入 URL，返回抓取到的房源信息（同步，用于刷新按钮）
 POST /api/trigger-scrape 传入 property_id + url，立即返回 202，后台异步抓取并写入数据库
+
+限流规则：
+- 同一 URL/property 正在抓取时，返回 429「点得太快了」
+- 同一 property_id 1 小时内已抓取过，返回 202 但不实际执行（静默跳过）
 """
 import os
 import re
+import time
+from threading import Lock
 from typing import Optional
 
 from dotenv import load_dotenv
-from fastapi import BackgroundTasks, FastAPI, HTTPException
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from playwright.async_api import async_playwright
@@ -66,6 +72,7 @@ class ScrapeResponse(BaseModel):
     listing_agent_phone: Optional[str] = None  # 卖家中介电话
     listing_type: Optional[str] = None  # 'sale' | 'rent' 出售 vs 出租
     lease_tenure: Optional[str] = None  # 地契：99年地契、999年地契、永久地契
+    top_year: Optional[str] = None  # TOP 年份（入伙年份），如 2020
     site_plan_url: Optional[str] = None  # 公寓小区平面图，从 99.co 抓取
 
 
@@ -113,15 +120,29 @@ def _normalize_propertyguru_url(url: str) -> str:
 
 
 def _detect_lease_tenure(body: str) -> Optional[str]:
-    """从页面内容识别地契/租期，仅对出售房源有意义"""
+    """从页面内容识别地契/租期，仅对出售房源有意义（兜底逻辑，优先从项目页抓取）"""
     body_lower = body.lower()
-    # 永久/Freehold 优先
-    if re.search(r"freehold|永久|永久地契", body_lower):
+    # 永久/Freehold 优先。注意：不能用裸的「永久」，否则会误匹配「永久居民」(PR)，把99年地契误判为永久
+    if re.search(r"\bfreehold\b|永久地契|永久产权|永久(?!居民)", body_lower):
         return "永久地契"
     # 999 必须先于 99 检查，避免误判
     if re.search(r"999\s*[- ]?year|999\s*年|999年地契", body_lower):
         return "999年地契"
     if re.search(r"\b99\s*[- ]?year|\b99\s*年|99年地契|leasehold", body_lower):
+        return "99年地契"
+    return None
+
+
+def _normalize_tenure_text(raw: str) -> Optional[str]:
+    """将项目页抓取的 tenure 原始文本标准化为 99年地契/999年地契/永久地契"""
+    if not raw or not raw.strip():
+        return None
+    t = raw.strip().lower()
+    if re.search(r"\bfreehold\b|永久", t) and "居民" not in t:
+        return "永久地契"
+    if re.search(r"999\s*[- ]?year|999\s*年", t):
+        return "999年地契"
+    if re.search(r"\b99\s*[- ]?year|\b99\s*年|leasehold", t):
         return "99年地契"
     return None
 
@@ -522,9 +543,90 @@ async def _run_property_scraper(url: str) -> ScrapeResponse:
 
             listing_type = _detect_listing_type(url, body)
             # 地契仅对出售房源有意义，租房不抓取
-            lease_tenure = None
+            # 优先从 Property Guru 小区项目页抓取 tenure（更准确，避免页面中「永久居民」等误判）
+            lease_tenure: Optional[str] = None
+            top_year: Optional[str] = None
             if listing_type == "sale":
-                lease_tenure = _detect_lease_tenure(body)
+                project_url: Optional[str] = None
+                if "propertyguru" in url.lower() or "propertygroup" in url.lower():
+                    try:
+                        proj_link = page.locator('a[href*="/project/"]').first
+                        if await proj_link.count() > 0:
+                            href = await proj_link.get_attribute("href")
+                            if href:
+                                base = "https://www.propertyguru.com.sg" if "propertyguru" in url.lower() else "https://www.propertygroup.com.sg"
+                                project_url = href if href.startswith("http") else f"{base}{href.split('?')[0]}"
+                    except Exception:
+                        pass
+                if project_url:
+                    try:
+                        project_page = await context.new_page()
+                        await project_page.goto(project_url, wait_until="load", timeout=15000)
+                        await project_page.wait_for_timeout(1500)
+                        # 从项目页 #details 表格抓取 Tenure
+                        # 用户提供的 selector: #details > div > div.listing-details-primary > table > tbody:nth-child(4) > tr > td.label-block > h4
+                        # 遍历表格行，找到含 "Tenure" 标签的那行，取其值所在单元格
+                        tenure_raw: Optional[str] = None
+                        for sel in [
+                            "#details .listing-details-primary table tr",
+                            "#details div.listing-details-primary table tbody tr",
+                            "div.listing-details-primary table tr",
+                        ]:
+                            try:
+                                rows = await project_page.locator(sel).all()
+                                for tr in rows:
+                                    txt = await tr.text_content()
+                                    if txt and "tenure" in txt.lower():
+                                        tds = tr.locator("td")
+                                        n = await tds.count()
+                                        for i in range(n):
+                                            cell_txt = (await tds.nth(i).text_content() or "").strip()
+                                            if cell_txt and "tenure" not in cell_txt.lower() and len(cell_txt) < 80:
+                                                tenure_raw = cell_txt
+                                                break
+                                        if tenure_raw:
+                                            break
+                                if tenure_raw:
+                                    break
+                            except Exception:
+                                continue
+                        # 从项目页抓取 TOP 年份（入伙年份）
+                        top_year_raw: Optional[str] = None
+                        for sel in [
+                            "#details .listing-details-primary table tr",
+                            "#details div.listing-details-primary table tbody tr",
+                            "div.listing-details-primary table tr",
+                        ]:
+                            try:
+                                rows = await project_page.locator(sel).all()
+                                for tr in rows:
+                                    txt = await tr.text_content()
+                                    if txt and ("top" in txt.lower() or "completion" in txt.lower() or "built" in txt.lower()):
+                                        tds = tr.locator("td")
+                                        n = await tds.count()
+                                        for i in range(n):
+                                            cell_txt = (await tds.nth(i).text_content() or "").strip()
+                                            if cell_txt and ("top" not in cell_txt.lower() and "completion" not in cell_txt.lower() and "built" not in cell_txt.lower()):
+                                                m = re.search(r"\b(19|20)\d{2}\b", cell_txt)
+                                                if m:
+                                                    top_year_raw = m.group(0)
+                                                    break
+                                        if top_year_raw:
+                                            break
+                                if top_year_raw:
+                                    break
+                            except Exception:
+                                continue
+
+                        await project_page.close()
+                        if tenure_raw:
+                            lease_tenure = _normalize_tenure_text(tenure_raw)
+                        if top_year_raw:
+                            top_year = top_year_raw
+                    except Exception:
+                        pass
+                if not lease_tenure:
+                    lease_tenure = _detect_lease_tenure(body)
 
             # 从 99.co 抓取公寓 site plan（best-effort，失败不影响主流程）
             site_plan_url: Optional[str] = None
@@ -578,6 +680,7 @@ async def _run_property_scraper(url: str) -> ScrapeResponse:
                 listing_agent_phone=listing_agent_phone,
                 listing_type=listing_type,
                 lease_tenure=lease_tenure,
+                top_year=top_year,
                 site_plan_url=site_plan_url,
             )
 
@@ -592,12 +695,64 @@ def _validate_scrape_url(url: str) -> None:
         raise HTTPException(status_code=400, detail="仅支持 Property Guru / Property Group 链接")
 
 
+# 限流状态：进行中的抓取 key -> 开始时间戳
+_scrape_in_progress: dict[str, float] = {}
+_scrape_lock = Lock()
+SCRAPE_COOLDOWN_SEC = 3600  # 1 小时
+
+# 全局 Rate limit：IP -> [(timestamp, count in window)]
+_rate_limit: dict[str, list[float]] = {}
+RATE_LIMIT_WINDOW = 60  # 秒
+RATE_LIMIT_SCRAPE_PROPERTY = 15  # 同步抓取每 IP 每分钟
+RATE_LIMIT_TRIGGER_SCRAPE = 30  # 异步触发每 IP 每分钟
+
+
+def _check_rate_limit(ip: str, limit: int) -> bool:
+    """True 表示通过，False 表示超限"""
+    now = time.time()
+    with _scrape_lock:
+        if ip not in _rate_limit:
+            _rate_limit[ip] = []
+        times = _rate_limit[ip]
+        times[:] = [t for t in times if now - t < RATE_LIMIT_WINDOW]
+        if len(times) >= limit:
+            return False
+        times.append(now)
+        return True
+
+
+def _check_and_mark_in_progress(key: str) -> bool:
+    """若已有进行中的同 key 抓取，返回 False；否则标记并返回 True"""
+    with _scrape_lock:
+        now = time.time()
+        if key in _scrape_in_progress:
+            return False
+        _scrape_in_progress[key] = now
+        return True
+
+
+def _clear_in_progress(key: str) -> None:
+    with _scrape_lock:
+        _scrape_in_progress.pop(key, None)
+
+
+def _get_client_ip(request: Request) -> str:
+    return request.client.host if request.client else "unknown"
+
+
 @app.post("/api/scrape-property", response_model=ScrapeResponse)
-async def scrape_property(req: ScrapeRequest):
+async def scrape_property(req: ScrapeRequest, request: Request):
     """同步抓取，用于刷新按钮（用户等待结果）"""
+    if not _check_rate_limit(_get_client_ip(request), RATE_LIMIT_SCRAPE_PROPERTY):
+        raise HTTPException(status_code=429, detail="请求过于频繁，请稍后再试")
     url = _normalize_propertyguru_url(req.url)
     _validate_scrape_url(url)
-    return await _run_property_scraper(url)
+    if not _check_and_mark_in_progress(f"url:{url}"):
+        raise HTTPException(status_code=429, detail="你点得太快了，请稍后再点")
+    try:
+        return await _run_property_scraper(url)
+    finally:
+        _clear_in_progress(f"url:{url}")
 
 
 def _get_supabase_client():
@@ -613,14 +768,37 @@ def _get_supabase_client():
     return create_client(url, key)
 
 
+def _record_scrape_failure(property_id: str, url: str, error: Exception) -> None:
+    """将抓取失败记录写入 scrape_failures 表，供管理员查看"""
+    client = _get_supabase_client()
+    if not client:
+        return
+    error_type = type(error).__name__
+    if isinstance(error, TimeoutError):
+        error_type = "timeout"
+    try:
+        client.table("scrape_failures").insert({
+            "property_id": property_id,
+            "source_url": url,
+            "error_message": str(error),
+            "error_type": error_type,
+        }).execute()
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception("写入 scrape_failures 失败")
+
+
 async def _background_scrape_and_update(property_id: str, url: str) -> None:
-    """后台执行抓取，成功后更新 Supabase properties 表"""
+    """后台执行抓取，成功后更新 Supabase properties 表；失败时写入 scrape_failures"""
     try:
         result = await _run_property_scraper(url)
     except Exception as e:
         import logging
         logging.getLogger(__name__).exception("异步抓取失败: %s", e)
+        _record_scrape_failure(property_id, url, e)
         return
+    finally:
+        _clear_in_progress(f"prop:{property_id}")
     client = _get_supabase_client()
     if not client:
         import logging
@@ -645,7 +823,9 @@ async def _background_scrape_and_update(property_id: str, url: str) -> None:
         "listing_agent_phone": result.listing_agent_phone,
         "listing_type": result.listing_type,
         "lease_tenure": result.lease_tenure,
+        "top_year": result.top_year,
         "site_plan_url": result.site_plan_url,
+        "last_scraped_at": datetime.now(timezone.utc).isoformat(),
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
     # 过滤掉 None 值，保留空字符串等
@@ -657,13 +837,42 @@ async def _background_scrape_and_update(property_id: str, url: str) -> None:
         logging.getLogger(__name__).exception("更新数据库失败: %s", e)
 
 
+def _is_property_scraped_recently(property_id: str) -> bool:
+    """检查该房源是否在 1 小时内已抓取过"""
+    client = _get_supabase_client()
+    if not client:
+        return False
+    try:
+        r = client.table("properties").select("last_scraped_at").eq("id", property_id).maybe_single().execute()
+        if not r.data or not r.data.get("last_scraped_at"):
+            return False
+        from datetime import datetime, timezone
+        last = r.data["last_scraped_at"]
+        if isinstance(last, str):
+            last_ts = datetime.fromisoformat(last.replace("Z", "+00:00")).timestamp()
+        else:
+            return False
+        return (time.time() - last_ts) < SCRAPE_COOLDOWN_SEC
+    except Exception:
+        return False
+
+
 @app.post("/api/trigger-scrape")
-async def trigger_scrape(req: TriggerScrapeRequest, background_tasks: BackgroundTasks):
-    """异步触发抓取：立即返回 202，后台抓取完成后写入数据库"""
+async def trigger_scrape(req: TriggerScrapeRequest, request: Request, background_tasks: BackgroundTasks):
+    """异步触发抓取：立即返回 202，后台抓取完成后写入数据库。
+    若同房源 1 小时内已抓取，返回 202 但不实际执行。"""
     from fastapi.responses import Response
 
+    if not _check_rate_limit(_get_client_ip(request), RATE_LIMIT_TRIGGER_SCRAPE):
+        raise HTTPException(status_code=429, detail="请求过于频繁，请稍后再试")
     url = _normalize_propertyguru_url(req.url)
     _validate_scrape_url(url)
+    prop_key = f"prop:{req.property_id}"
+    if not _check_and_mark_in_progress(prop_key):
+        raise HTTPException(status_code=429, detail="你点得太快了，请稍后再点")
+    if _is_property_scraped_recently(req.property_id):
+        _clear_in_progress(prop_key)
+        return Response(status_code=202, content=b"", media_type="text/plain")
     background_tasks.add_task(_background_scrape_and_update, req.property_id, url)
     return Response(status_code=202, content=b"", media_type="text/plain")
 

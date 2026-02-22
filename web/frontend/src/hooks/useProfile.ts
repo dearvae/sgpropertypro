@@ -51,17 +51,27 @@ export function useProfile() {
   const update = useMutation({
     mutationFn: async (updates: {
       full_name?: string
+      family_name?: string
+      given_name?: string
       agent_number?: string
       phone?: string
       avatar_url?: string
+      company?: string
+      whatsapp_template_agent?: string | null
+      whatsapp_template_client?: string | null
       updateNameChangedAt?: boolean
     }) => {
-      const { full_name, agent_number, phone, avatar_url, updateNameChangedAt } = updates
+      const { full_name, family_name, given_name, agent_number, phone, avatar_url, company, whatsapp_template_agent, whatsapp_template_client, updateNameChangedAt } = updates
       const payload: Record<string, unknown> = { updated_at: new Date().toISOString() }
       if (full_name !== undefined) payload.full_name = full_name || null
+      if (family_name !== undefined) payload.family_name = family_name || null
+      if (given_name !== undefined) payload.given_name = given_name || null
       if (agent_number !== undefined) payload.agent_number = agent_number || null
       if (phone !== undefined) payload.phone = phone || null
       if (avatar_url !== undefined) payload.avatar_url = avatar_url || null
+      if (company !== undefined) payload.company = company || null
+      if (whatsapp_template_agent !== undefined) payload.whatsapp_template_agent = whatsapp_template_agent || null
+      if (whatsapp_template_client !== undefined) payload.whatsapp_template_client = whatsapp_template_client || null
       if (updateNameChangedAt) payload.name_changed_at = new Date().toISOString()
 
       const { data, error } = await supabase

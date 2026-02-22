@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from './useAuth'
 import type { AgentFeedback } from '@/types'
+import { getDisplayName } from '@/types'
 
 export type FeedbackSort = 'recent' | 'top'
 
@@ -50,18 +51,20 @@ export function useAgentFeedback(sort: FeedbackSort) {
     mutationFn: async ({
       content,
       isAnonymous,
+      visibility,
     }: {
       content: string
       isAnonymous: boolean
+      visibility: 'all' | 'developer_only'
     }) => {
       let authorDisplay: string | null = null
       if (!isAnonymous) {
         const { data: profile } = await supabase
           .from('profiles')
-          .select('full_name')
+          .select('family_name, given_name, full_name')
           .eq('id', user!.id)
           .maybeSingle()
-        authorDisplay = (profile?.full_name?.trim() || user!.email) ?? null
+        authorDisplay = (getDisplayName(profile as { family_name?: string; given_name?: string; full_name?: string } | null) || user!.email) ?? null
       }
       const { data, error } = await supabase
         .from('agent_feedback')
@@ -69,6 +72,7 @@ export function useAgentFeedback(sort: FeedbackSort) {
           author_id: isAnonymous ? null : user!.id,
           author_display: authorDisplay,
           content,
+          visibility: visibility || 'all',
         })
         .select()
         .single()
