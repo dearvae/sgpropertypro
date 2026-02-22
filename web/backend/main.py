@@ -57,6 +57,14 @@ class BatchScrapeRequest(BaseModel):
     notes: Optional[str] = None
 
 
+class AddAgentListingRequest(BaseModel):
+    """添加 agent 自售/出租房源：创建 property + customer_group (listing)，后台抓取"""
+    url: str
+    agent_id: str
+    client_name: Optional[str] = None
+    listing_type: str  # 'sale' | 'rent'
+
+
 class SitePlanRequest(BaseModel):
     apartment_name: str
 
@@ -832,15 +840,16 @@ def _batch_create_properties_and_pending(
     if notes is not None and notes.strip():
         pending_payload["notes"] = notes.strip()
     for url in urls:
-        r = client.table("properties").select("id").eq("agent_id", agent_id).eq("source_url", url).maybe_single().execute()
-        if r.data:
-            prop_id = r.data["id"]
+        r = client.table("properties").select("id").eq("agent_id", agent_id).eq("source_url", url).limit(1).execute()
+        r_row = r.data[0] if r.data else None
+        if r_row:
+            prop_id = r_row["id"]
             exists = (
                 client.table("pending_appointments")
                 .select("id")
                 .eq("property_id", prop_id)
                 .eq("customer_group_id", customer_group_id)
-                .maybe_single()
+                .limit(1)
                 .execute()
             )
             if exists.data:
@@ -854,7 +863,6 @@ def _batch_create_properties_and_pending(
                     "link": url,
                     "source_url": url,
                 })
-                .select("id")
                 .execute()
             )
             if not ins.data:
@@ -912,6 +920,128 @@ async def batch_scrape_properties(req: BatchScrapeRequest, request: Request, bac
         return JSONResponse(status_code=200, content={"added": 0, "message": "无新增（可能已存在）"})
     background_tasks.add_task(_background_batch_scrape, todo)
     return JSONResponse(status_code=202, content={"added": len(todo), "message": "已添加，抓取进行中"})
+
+
+def _create_agent_listing(
+    url: str,
+    agent_id: str,
+    client_name: Optional[str],
+    listing_type: str,
+) -> tuple[str, str]:
+    """创建 agent 自售/出租房源：property + customer_group (listing)。返回 (group_id, property_id)"""
+    client = _get_supabase_client()
+    if not client:
+        raise HTTPException(status_code=500, detail="数据库未配置。请设置 SUPABASE_URL 和 SUPABASE_SERVICE_ROLE_KEY")
+    # intent: sale=出售, rent=出租
+    intent_val = "sale" if listing_type == "sale" else "rent"
+    name_val = (client_name or "").strip() or "待定"
+
+    # 检查是否已有同 URL 的 property，且已有关联的 listing
+    # 使用 limit(1) 替代 maybe_single，避免 postgrest-py 在 0 行时抛 204 APIError
+    try:
+        r = client.table("properties").select("id").eq("agent_id", agent_id).eq("source_url", url).limit(1).execute()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"数据库查询失败: {e!s}")
+    r_data = r.data[0] if r and r.data else None
+    if r_data:
+        prop_id = r_data["id"]
+        try:
+            exists = (
+                client.table("customer_groups")
+                .select("id")
+                .eq("agent_id", agent_id)
+                .eq("property_id", prop_id)
+                .eq("group_type", "listing")
+                .limit(1)
+                .execute()
+            )
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"数据库查询失败: {e!s}")
+        if exists and exists.data:
+            raise HTTPException(status_code=400, detail="该房源已添加为自售/出租房源")
+
+    # 创建 property（若不存在）
+    if r_data:
+        prop_id = r_data["id"]
+    else:
+        try:
+            ins = (
+                client.table("properties")
+                .insert({
+                    "agent_id": agent_id,
+                    "title": PLACEHOLDER_TITLE,
+                    "link": url,
+                    "source_url": url,
+                })
+                .execute()
+            )
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"创建房源失败: {e!s}")
+        ins_data = getattr(ins, "data", None) if ins else None
+        if not ins_data:
+            raise HTTPException(status_code=500, detail="创建房源失败")
+        prop_id = ins_data[0]["id"]
+
+    # 创建 customer_group (listing)
+    try:
+        grp = (
+            client.table("customer_groups")
+            .insert({
+                "agent_id": agent_id,
+                "name": name_val,
+                "group_type": "listing",
+                "intent": intent_val,
+                "property_id": prop_id,
+            })
+            .execute()
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"创建 listing 失败: {e!s}")
+    grp_data = getattr(grp, "data", None) if grp else None
+    if not grp_data:
+        raise HTTPException(status_code=500, detail="创建 listing 失败")
+    group_id = grp_data[0]["id"]
+
+    return group_id, prop_id
+
+
+@app.post("/api/add-agent-listing")
+async def add_agent_listing(req: AddAgentListingRequest, request: Request, background_tasks: BackgroundTasks):
+    """添加 agent 自售/出租房源：创建 property + customer_group (listing)，后台抓取"""
+    from fastapi.responses import JSONResponse
+
+    if not _check_rate_limit(_get_client_ip(request), 3):
+        raise HTTPException(status_code=429, detail="请求过于频繁，请稍后再试")
+    if not req.agent_id:
+        raise HTTPException(status_code=400, detail="缺少 agent_id")
+    if req.listing_type not in ("sale", "rent"):
+        raise HTTPException(status_code=400, detail="listing_type 须为 sale 或 rent")
+
+    url = req.url.strip()
+    if not url:
+        raise HTTPException(status_code=400, detail="请提供房源链接")
+
+    try:
+        normalized = _normalize_propertyguru_url(url)
+        _validate_scrape_url(normalized)
+    except HTTPException:
+        raise
+
+    try:
+        group_id, prop_id = _create_agent_listing(normalized, req.agent_id, req.client_name, req.listing_type)
+    except HTTPException:
+        raise
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).exception("添加 agent listing 失败: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+    # 抓取异步执行，不阻塞响应
+    background_tasks.add_task(_background_scrape_and_update, prop_id, normalized)
+    return JSONResponse(
+        status_code=200,
+        content={"added": 1, "group_id": group_id, "property_id": prop_id, "message": "添加成功，房源详情将在后台自动抓取"},
+    )
 
 
 def _get_supabase_client():
@@ -1010,11 +1140,12 @@ def _is_property_scraped_recently(property_id: str) -> bool:
     if not client:
         return False
     try:
-        r = client.table("properties").select("last_scraped_at").eq("id", property_id).maybe_single().execute()
-        if not r.data or not r.data.get("last_scraped_at"):
+        r = client.table("properties").select("last_scraped_at").eq("id", property_id).limit(1).execute()
+        row = r.data[0] if r and r.data else None
+        if not row or not row.get("last_scraped_at"):
             return False
         from datetime import datetime, timezone
-        last = r.data["last_scraped_at"]
+        last = row["last_scraped_at"]
         if isinstance(last, str):
             last_ts = datetime.fromisoformat(last.replace("Z", "+00:00")).timestamp()
         else:

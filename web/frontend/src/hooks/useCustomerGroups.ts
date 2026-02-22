@@ -36,7 +36,7 @@ export function useCustomerGroups() {
   })
 
   const update = useMutation({
-    mutationFn: async ({ id, name, intent, is_active }: { id: string; name?: string; intent?: 'buy' | 'rent'; is_active?: boolean }) => {
+    mutationFn: async ({ id, name, intent, is_active }: { id: string; name?: string; intent?: 'buy' | 'rent' | 'sale'; is_active?: boolean }) => {
       const payload: Record<string, unknown> = { updated_at: new Date().toISOString() }
       if (name !== undefined) payload.name = name
       if (intent !== undefined) payload.intent = intent

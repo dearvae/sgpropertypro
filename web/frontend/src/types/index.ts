@@ -3,10 +3,12 @@ export type CustomerGroup = {
   agent_id: string
   name: string
   description: string | null
-  intent: 'buy' | 'rent' | null  // 买房 | 租房，必选
+  intent: 'buy' | 'rent' | 'sale' | null  // 买房/租房(client)；出售/出租(listing)
   share_token: string
   share_token_edit?: string  // 可编辑链接专用 token，与 share_token 独立
   is_active?: boolean  // 是否活跃；false 表示已成交等，从各 filter 排除。默认 true
+  group_type?: 'client' | 'listing'  // client=买家/租客，listing=出售/出租房源
+  property_id?: string | null  // 仅 listing 时设置，指向 agent 的房源
   created_at: string
   updated_at: string
 }
@@ -129,7 +131,7 @@ export type Profile = {
 }
 
 /** 右上角等处展示：family_name + given_name，兼容旧 full_name */
-export function getDisplayName(profile: { family_name?: string | null; given_name?: string | null; full_name?: string | null } | null): string {
+export function getDisplayName(profile: { family_name?: string | null; given_name?: string | null; full_name?: string | null } | null | undefined): string {
   if (!profile) return ''
   const fn = profile.family_name?.trim()
   const gn = profile.given_name?.trim()
@@ -138,7 +140,7 @@ export function getDisplayName(profile: { family_name?: string | null; given_nam
 }
 
 /** 模板 my_name 仅使用 given_name */
-export function getGivenName(profile: { given_name?: string | null; full_name?: string | null } | null): string {
+export function getGivenName(profile: { given_name?: string | null; full_name?: string | null } | null | undefined): string {
   if (!profile) return ''
   const gn = profile.given_name?.trim()
   if (gn) return gn

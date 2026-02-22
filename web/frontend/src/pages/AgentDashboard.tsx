@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { message, Popconfirm } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { UserMenu } from '@/components/UserMenu'
@@ -11,6 +11,8 @@ import { usePendingAppointments } from '@/hooks/usePendingAppointments'
 import { useRealtimeAppointments } from '@/hooks/useRealtimeAppointments'
 import { checkAppointmentConflict } from '@/lib/conflictCheck'
 import { scrapeProperty, triggerScrapeAsync, batchScrapeProperties } from '@/lib/scrapeApi'
+import { CreateClientModal } from '@/components/CreateClientModal'
+import { AddListingModal } from '@/components/AddListingModal'
 import { getWhatsAppChatUrl, getTelUrl } from '@/lib/whatsapp'
 import {
   applyTemplate,
@@ -217,54 +219,60 @@ function CustomerGroupsSection({
   t: ReturnType<typeof useTranslation>['t']
 }) {
   const { user } = useAuth()
-  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [createClientIntent, setCreateClientIntent] = useState<'buy' | 'rent' | null>(null)
+  const [createListingType, setCreateListingType] = useState<'sale' | 'rent' | null>(null)
   const [addPendingForGroupId, setAddPendingForGroupId] = useState<string | null>(null)
   const [addPendingLink, setAddPendingLink] = useState('')
   const [addPendingNotes, setAddPendingNotes] = useState('')
   const [addPendingLoading, setAddPendingLoading] = useState(false)
   const [addPendingError, setAddPendingError] = useState<string | null>(null)
-  const [newName, setNewName] = useState('')
-  const [newDescription, setNewDescription] = useState('')
-  const [newIntent, setNewIntent] = useState<'buy' | 'rent'>('buy')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
   const [editIntent, setEditIntent] = useState<'buy' | 'rent'>('buy')
   const [confirmInactiveId, setConfirmInactiveId] = useState<string | null>(null)
   const [confirmResetTokenId, setConfirmResetTokenId] = useState<string | null>(null)
   const [menuOpenGroupId, setMenuOpenGroupId] = useState<string | null>(null)
+  const [showAddDropdown, setShowAddDropdown] = useState(false)
+  const addDropdownRef = useRef<HTMLDivElement>(null)
 
-  const handleOpenCreateModal = () => {
-    setNewName('')
-    setNewDescription('')
-    setNewIntent('buy')
-    setShowCreateModal(true)
+  useEffect(() => {
+    const fn = (e: MouseEvent) => {
+      if (addDropdownRef.current && !addDropdownRef.current.contains(e.target as Node)) {
+        setShowAddDropdown(false)
+      }
+    }
+    if (showAddDropdown) {
+      document.addEventListener('click', fn)
+      return () => document.removeEventListener('click', fn)
+    }
+  }, [showAddDropdown])
+
+  const handleCreateClient = async (name: string, description: string) => {
+    if (!createClientIntent) return
+    await groups.create.mutateAsync({ name, description: description || undefined, intent: createClientIntent })
   }
 
-  const handleCreate = async () => {
-    if (!newName.trim()) {
-      message.warning(t('dashboard.enterGroupName'))
-      return
-    }
-    try {
-      await groups.create.mutateAsync({ name: newName.trim(), description: newDescription.trim() || undefined, intent: newIntent })
-      setShowCreateModal(false)
-      setNewName('')
-      setNewDescription('')
-    } catch (e) {
-      message.error((e as Error).message)
-    }
+  const handleListingSuccess = () => {
+    groups.refetch()
+    properties.refetch()
+    message.success(t('dashboard.addListingSuccess'))
   }
 
-  const handleStartEdit = (g: { id: string; name: string; intent: 'buy' | 'rent' | null }) => {
+  const handleStartEdit = (g: { id: string; name: string; intent: 'buy' | 'rent' | 'sale' | null }) => {
     setEditingId(g.id)
     setEditName(g.name)
-    setEditIntent(g.intent || 'buy')
+    setEditIntent((g.intent === 'rent' || g.intent === 'buy' ? g.intent : 'buy') as 'buy' | 'rent')
   }
 
   const handleUpdate = async () => {
     if (!editingId || !editName.trim()) return
+    const g = groups.data?.find((x) => x.id === editingId)
     try {
-      await groups.update.mutateAsync({ id: editingId, name: editName.trim(), intent: editIntent })
+      if (g?.group_type === 'listing') {
+        await groups.update.mutateAsync({ id: editingId, name: editName.trim() })
+      } else {
+        await groups.update.mutateAsync({ id: editingId, name: editName.trim(), intent: editIntent })
+      }
       setEditingId(null)
     } catch (e) {
       message.error((e as Error).message)
@@ -353,73 +361,65 @@ function CustomerGroupsSection({
 
   return (
     <section>
-      <h2 className="text-sm font-medium text-[#2b5843]/90 mb-4">{t('dashboard.groupsTitle')}</h2>
-      <button
-        onClick={handleOpenCreateModal}
-        className="mb-6 text-sm border border-[#53868e]/35 rounded-xl px-4 py-2 hover:bg-[#53868e]/15"
-      >
-        {t('dashboard.create')}
-      </button>
-
-      {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowCreateModal(false)}>
-          <div
-            className="bg-[#f6f3f1] rounded-xl shadow-lg p-6 w-full max-w-md mx-4 border border-[#53868e]/25"
-            onClick={(e) => e.stopPropagation()}
+      <div className="mb-6 flex justify-end" ref={addDropdownRef}>
+        <div className="relative">
+          <button
+            onClick={() => setShowAddDropdown((v) => !v)}
+            className="text-sm border border-[#53868e]/35 rounded-xl px-4 py-2 hover:bg-[#53868e]/15"
           >
-            <h3 className="text-sm font-medium text-[#2b5843] mb-4">{t('dashboard.createGroupTitle')}</h3>
-            <div className="space-y-3">
-              <div>
-                <label className="text-xs text-[#2b5843]/80">{t('dashboard.groupName')}</label>
-                <input
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  placeholder={t('dashboard.groupNamePlaceholder')}
-                  className="w-full mt-1 px-3 py-2 border border-[#53868e]/25 rounded-xl text-sm"
-                  autoFocus
-                />
-              </div>
-              <div>
-                <label className="text-xs text-[#2b5843]/80">{t('dashboard.customerNeed')} <span className="text-[#53868e]">{t('dashboard.required')}</span></label>
-                <div className="flex gap-4 mt-2">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input type="radio" name="intent" value="buy" checked={newIntent === 'buy'} onChange={() => setNewIntent('buy')} className="text-emerald-600" />
-                    <span className="text-sm">{t('dashboard.buy')}</span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input type="radio" name="intent" value="rent" checked={newIntent === 'rent'} onChange={() => setNewIntent('rent')} className="text-emerald-600" />
-                    <span className="text-sm">{t('dashboard.rent')}</span>
-                  </label>
-                </div>
-              </div>
-              <div>
-                <label className="text-xs text-[#2b5843]/80">{t('dashboard.description')}</label>
-                <textarea
-                  value={newDescription}
-                  onChange={(e) => setNewDescription(e.target.value)}
-                  placeholder={t('dashboard.descriptionPlaceholder')}
-                  rows={3}
-                  className="w-full mt-1 px-3 py-2 border border-[#53868e]/25 rounded-xl text-sm resize-none"
-                />
-              </div>
-            </div>
-            <div className="flex gap-2 mt-6">
+            {t('dashboard.addNewClient')}
+          </button>
+          {showAddDropdown && (
+            <div className="absolute right-0 top-full mt-1 z-40 min-w-[180px] py-1 rounded-xl border border-[#53868e]/25 bg-[#f6f3f1] shadow-lg">
               <button
-                onClick={handleCreate}
-                disabled={groups.create.isPending}
-                className="px-4 py-2 text-sm border border-[#53868e]/35 rounded-xl hover:bg-[#53868e]/15"
+                onClick={() => { setShowAddDropdown(false); setCreateClientIntent('buy') }}
+                className="w-full px-4 py-2 text-left text-sm hover:bg-[#53868e]/15"
               >
-                {t('common.create')}
+                {t('dashboard.addBuyer')}
               </button>
               <button
-                onClick={() => setShowCreateModal(false)}
-                className="px-4 py-2 text-sm text-[#2b5843]/70 hover:text-[#2b5843]/90"
+                onClick={() => { setShowAddDropdown(false); setCreateClientIntent('rent') }}
+                className="w-full px-4 py-2 text-left text-sm hover:bg-[#53868e]/15"
               >
-                {t('common.cancel')}
+                {t('dashboard.addTenant')}
+              </button>
+              <button
+                onClick={() => { setShowAddDropdown(false); setCreateListingType('sale') }}
+                className="w-full px-4 py-2 text-left text-sm hover:bg-[#53868e]/15"
+              >
+                {t('dashboard.addPropertySale')}
+              </button>
+              <button
+                onClick={() => { setShowAddDropdown(false); setCreateListingType('rent') }}
+                className="w-full px-4 py-2 text-left text-sm hover:bg-[#53868e]/15"
+              >
+                {t('dashboard.addPropertyRent')}
               </button>
             </div>
-          </div>
+          )}
         </div>
+      </div>
+
+      {createClientIntent && (
+        <CreateClientModal
+          open
+          onClose={() => setCreateClientIntent(null)}
+          intent={createClientIntent}
+          onSubmit={async (name, description) => {
+            await handleCreateClient(name, description)
+          }}
+          isPending={groups.create.isPending}
+        />
+      )}
+
+      {createListingType && user?.id && (
+        <AddListingModal
+          open
+          onClose={() => setCreateListingType(null)}
+          listingType={createListingType}
+          agentId={user.id}
+          onSuccess={handleListingSuccess}
+        />
       )}
 
       {addPendingForGroupId && (
@@ -481,7 +481,7 @@ function CustomerGroupsSection({
       )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {groups.data?.map((g) => (
+        {(groups.data?.filter((g) => g.group_type !== 'listing') ?? []).map((g) => (
           <div
             key={g.id}
             className="border border-[#53868e]/25 rounded-lg bg-[#f6f3f1] p-4 flex flex-col gap-4 shadow-md hover:shadow-lg transition-shadow min-w-0"
@@ -616,6 +616,152 @@ function CustomerGroupsSection({
             )}
           </div>
         ))}
+        {(groups.data?.filter((g) => g.group_type === 'listing') ?? []).map((g) => {
+          const prop = g.property_id ? (properties.data ?? []).find((p) => p.id === g.property_id) : undefined
+          const displayImages = (p: Property | undefined): string[] => {
+            if (!p) return []
+            const urls = Array.isArray(p.image_urls) ? p.image_urls : []
+            if (urls.length >= 2) return urls.slice(0, 2)
+            if (urls.length === 1 && p.main_image_url && urls[0] !== p.main_image_url) return [urls[0], p.main_image_url]
+            if (urls.length === 1) return urls
+            if (p.main_image_url) return [p.main_image_url]
+            return []
+          }
+          const imgs = displayImages(prop)
+          const isSale = g.intent === 'sale'
+          return (
+            <div
+              key={g.id}
+              className="border border-[#53868e]/25 rounded-lg bg-[#f6f3f1] p-4 flex flex-col gap-4 shadow-md hover:shadow-lg transition-shadow min-w-0 overflow-hidden"
+            >
+              {editingId === g.id ? (
+                <div className="flex flex-col gap-3">
+                  <input
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    placeholder={t('dashboard.addListingClientNamePlaceholder')}
+                    className="w-full px-3 py-2 border border-[#53868e]/25 rounded-md text-sm"
+                  />
+                  <div className="flex gap-2">
+                    <button onClick={handleUpdate} className="text-sm text-[#2b5843]/80 px-3 py-1.5 border border-[#53868e]/25 rounded-md hover:bg-[#53868e]/10">{t('common.save')}</button>
+                    <button onClick={() => setEditingId(null)} className="text-sm text-[#2b5843]/60 hover:text-[#2b5843]/80">{t('common.cancel')}</button>
+                  </div>
+                </div>
+              ) : (
+              <div className="flex flex-col sm:flex-row gap-3 sm:gap-0">
+                <div className={`flex flex-col w-full sm:w-[120px] flex-shrink-0 gap-0.5 p-2 bg-[#53868e]/5 rounded-lg ${imgs.length <= 1 ? 'justify-center' : ''}`}>
+                  {imgs[0] ? (
+                    <img src={imgs[0]} alt={prop?.title ?? ''} className="w-full aspect-[4/3] object-cover rounded-lg" />
+                  ) : (
+                    <div className="w-full h-20 rounded-lg bg-[#53868e]/15 flex items-center justify-center text-[#2b5843]/60 text-xs">{t('common.noImage')}</div>
+                  )}
+                </div>
+                <div className="flex-1 min-w-0 flex flex-col gap-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2 flex-wrap min-w-0">
+                      <p className="font-medium text-[#2b5843] text-sm truncate">{prop?.title ?? g.name ?? '—'}</p>
+                      <span className={`flex-shrink-0 px-1.5 py-0.5 rounded text-xs font-medium ${isSale ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+                        {isSale ? t('clientView.sale') : t('clientView.rent')}
+                      </span>
+                      {g.is_active === false && (
+                        <span className="flex-shrink-0 px-1.5 py-0.5 rounded text-xs font-medium bg-[#53868e]/15 text-[#2b5843]/80">inactive</span>
+                      )}
+                    </div>
+                    <div className="relative flex-shrink-0">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setMenuOpenGroupId(menuOpenGroupId === g.id ? null : g.id) }}
+                        className="p-1 rounded hover:bg-[#53868e]/15 text-[#2b5843]/70"
+                        aria-label="更多选项"
+                      >
+                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                          <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
+                        </svg>
+                      </button>
+                      {menuOpenGroupId === g.id && (
+                        <>
+                          <div className="fixed inset-0 z-40" onClick={() => setMenuOpenGroupId(null)} />
+                          <div className="absolute right-0 top-full mt-0.5 py-1 bg-[#f6f3f1] rounded-md shadow-lg border border-[#53868e]/25 z-50 min-w-[160px]">
+                            {g.is_active !== false && (
+                              <button
+                                onClick={() => { setMenuOpenGroupId(null); handleStartEdit(g) }}
+                                className="block w-full text-left px-3 py-1.5 text-sm text-[#2b5843]/80 hover:bg-[#53868e]/10"
+                              >
+                                {t('common.edit')}
+                              </button>
+                            )}
+                            <button
+                              onClick={() => { setMenuOpenGroupId(null); navigator.clipboard.writeText(`${baseUrl}${g.share_token}`); message.success(t('dashboard.viewLinkCopied')) }}
+                              className="block w-full text-left px-3 py-1.5 text-sm text-[#2b5843]/80 hover:bg-[#53868e]/10"
+                            >
+                              {t('dashboard.copyViewLink')}
+                            </button>
+                            {g.is_active !== false ? (
+                              <button
+                                onClick={() => { setMenuOpenGroupId(null); setConfirmInactiveId(g.id) }}
+                                className="block w-full text-left px-3 py-1.5 text-sm text-[#2b5843]/80 hover:bg-[#53868e]/10"
+                              >
+                                {t('dashboard.setInactive')}
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => { setMenuOpenGroupId(null); handleSetActive(g.id) }}
+                                className="block w-full text-left px-3 py-1.5 text-sm text-emerald-600 hover:bg-[#53868e]/10"
+                              >
+                                {t('dashboard.setActive')}
+                              </button>
+                            )}
+                            <button
+                              onClick={() => { setMenuOpenGroupId(null); setConfirmResetTokenId(g.id) }}
+                              className="block w-full text-left px-3 py-1.5 text-sm text-[#53868e] hover:bg-[#53868e]/10"
+                            >
+                              {t('dashboard.resetToken')}
+                            </button>
+                            <Popconfirm
+                              title={t('dashboard.deleteListingConfirm')}
+                              onConfirm={() => { setMenuOpenGroupId(null); groups.remove.mutate(g.id) }}
+                              okText={t('common.confirm')}
+                              cancelText={t('common.cancel')}
+                              icon={null}
+                            >
+                              <button
+                                onClick={() => setMenuOpenGroupId(null)}
+                                className="block w-full text-left px-3 py-1.5 text-sm text-[#2b5843]/60 hover:text-red-600"
+                              >
+                                {t('common.delete')}
+                              </button>
+                            </Popconfirm>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  {formatPriceDisplay(prop!) && <span className="font-medium text-emerald-700 text-sm">{formatPriceDisplay(prop!)}</span>}
+                  {(prop?.bedrooms || prop?.bathrooms || prop?.size_sqft) && (
+                    <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-xs text-[#2b5843]/80">
+                      {prop?.bedrooms && <span>{prop.bedrooms}</span>}
+                      {prop?.bathrooms && <span>{prop.bathrooms}</span>}
+                      {prop?.size_sqft && <span>{prop.size_sqft}</span>}
+                    </div>
+                  )}
+                  {(prop?.floor_plan_url || prop?.site_plan_url || prop?.link) && (
+                    <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1 text-sm">
+                      {prop?.floor_plan_url && (
+                        <a href={prop.floor_plan_url} target="_blank" rel="noreferrer" className="text-emerald-600 hover:underline">{t('clientView.floorPlan')}</a>
+                      )}
+                      {prop?.site_plan_url && (
+                        <a href={prop.site_plan_url} target="_blank" rel="noreferrer" className="text-emerald-600 hover:underline">{t('clientView.viewSitePlan')}</a>
+                      )}
+                      {prop?.link && (
+                        <a href={prop.link} target="_blank" rel="noreferrer" className="text-emerald-600 hover:underline">{t('clientView.viewProperty')}</a>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+              )}
+            </div>
+          )
+        })}
       </div>
 
       {confirmInactiveId && (
@@ -1983,7 +2129,7 @@ function AppointmentsSection({
               </div>
               {editNeedsCustomerGroup && (
                 <div>
-                  <label className="text-xs text-[#2b5843]/80">客户分组</label>
+                  <label className="text-xs text-[#2b5843]/80">我的客户</label>
                   <select
                     value={editGroupId}
                     onChange={(e) => { setEditGroupId(e.target.value); setConflictError(null) }}

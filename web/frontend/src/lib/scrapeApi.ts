@@ -82,6 +82,48 @@ export async function batchScrapeProperties(p: {
   return res.json()
 }
 
+/** 添加 agent 自售/出租房源响应 */
+export type AddAgentListingResponse = {
+  added: number
+  group_id: string
+  property_id: string
+  message: string
+}
+
+/**
+ * 添加 agent 自售/出租房源：创建 property + customer_group (listing)，后台抓取。
+ * 必填：房源链接；选填：客户名称。
+ */
+export async function addAgentListing(p: {
+  url: string
+  agent_id: string
+  client_name?: string
+  listing_type: 'sale' | 'rent'
+}): Promise<AddAgentListingResponse> {
+  const url = p.url.trim()
+  if (!url) throw new Error('请提供房源链接')
+  if (!p.agent_id) throw new Error('缺少 agent_id')
+  const res = await fetch(`${SCRAPE_API_URL}/api/add-agent-listing`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      url,
+      agent_id: p.agent_id,
+      client_name: p.client_name?.trim() || null,
+      listing_type: p.listing_type,
+    }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    const msg = err.detail || '添加失败'
+    if (res.status === 429) {
+      throw new Error(msg.includes('频繁') ? RATE_LIMIT_MSG_GENERAL : msg)
+    }
+    throw new Error(msg)
+  }
+  return res.json()
+}
+
 /** 支持的抓取域名 */
 export const SUPPORTED_SCRAPE_DOMAINS = ['propertyguru.com', 'propertygroup.com']
 
