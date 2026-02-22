@@ -26,10 +26,20 @@
 
 两个环境都勾选（Production、Preview、Development）。
 
-## 4. 部署
+## 4. 部署前本地检查（可选）
+
+发布前在 `web/frontend` 目录执行：
+
+```bash
+npm run check:routes
+```
+
+会自动 build 并访问每个页面路径，检查是否有控制台错误或白屏。若失败会阻止继续。也可集成到 CI（如 GitHub Actions）。
+
+## 5. 部署
 
 点击 "Deploy"。完成后会得到 `xxx.vercel.app` 的访问地址。
 
-## 5. 自定义域名（可选）
+## 6. 自定义域名（可选）
 
 在 Vercel 项目 Settings → Domains 中添加你的域名，按提示配置 DNS。

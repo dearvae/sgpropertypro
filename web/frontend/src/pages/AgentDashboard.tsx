@@ -62,6 +62,7 @@ export default function AgentDashboard({ clientMode = false }: { clientMode?: bo
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null)
   const [showAddAppointment, setShowAddAppointment] = useState(false)
+  const [initialAddAppointment, setInitialAddAppointment] = useState<{ propId: string; partyRole: 'seller' | 'landlord' } | null>(null)
 
   const agentGroups = useCustomerGroups()
   const clientGroups = useClientSelfGroup()
@@ -173,6 +174,11 @@ export default function AgentDashboard({ clientMode = false }: { clientMode?: bo
             properties={properties}
             pendingAppointments={pendingAppointments}
             t={t}
+            onQuickAddAppointment={(propId, partyRole) => {
+              setInitialAddAppointment({ propId, partyRole })
+              setActiveTab('appointments')
+              setShowAddAppointment(true)
+            }}
           />
         )}
         {activeTab === 'appointments' && (
@@ -185,6 +191,8 @@ export default function AgentDashboard({ clientMode = false }: { clientMode?: bo
             setSelectedGroupId={clientMode ? () => {} : setSelectedGroupId}
             showAddAppointment={showAddAppointment}
             setShowAddAppointment={setShowAddAppointment}
+            initialAddAppointment={initialAddAppointment}
+            onConsumeInitialAddAppointment={() => setInitialAddAppointment(null)}
             clientMode={clientMode}
           />
         )}
@@ -211,12 +219,14 @@ function CustomerGroupsSection({
   properties,
   pendingAppointments,
   t,
+  onQuickAddAppointment,
 }: {
   groups: ReturnType<typeof useCustomerGroups>
   baseUrl: string
   properties: ReturnType<typeof useProperties>
   pendingAppointments: ReturnType<typeof usePendingAppointments>
   t: ReturnType<typeof useTranslation>['t']
+  onQuickAddAppointment?: (propId: string, partyRole: 'seller' | 'landlord') => void
 }) {
   const { user } = useAuth()
   const [createClientIntent, setCreateClientIntent] = useState<'buy' | 'rent' | null>(null)
@@ -233,7 +243,24 @@ function CustomerGroupsSection({
   const [confirmResetTokenId, setConfirmResetTokenId] = useState<string | null>(null)
   const [menuOpenGroupId, setMenuOpenGroupId] = useState<string | null>(null)
   const [showAddDropdown, setShowAddDropdown] = useState(false)
+  const [groupFilter, setGroupFilter] = useState<'all' | 'buy' | 'rent' | 'sale' | 'rent_out'>('all')
   const addDropdownRef = useRef<HTMLDivElement>(null)
+
+  const filteredClientGroups = useMemo(() => {
+    const list = groups.data?.filter((g) => g.group_type !== 'listing') ?? []
+    if (groupFilter === 'all') return list
+    if (groupFilter === 'buy') return list.filter((g) => g.intent === 'buy')
+    if (groupFilter === 'rent') return list.filter((g) => g.intent === 'rent')
+    return list
+  }, [groups.data, groupFilter])
+
+  const filteredListingGroups = useMemo(() => {
+    const list = groups.data?.filter((g) => g.group_type === 'listing') ?? []
+    if (groupFilter === 'all') return list
+    if (groupFilter === 'sale') return list.filter((g) => g.intent === 'sale')
+    if (groupFilter === 'rent_out') return list.filter((g) => g.intent === 'rent')
+    return []
+  }, [groups.data, groupFilter])
 
   useEffect(() => {
     const fn = (e: MouseEvent) => {
@@ -422,6 +449,27 @@ function CustomerGroupsSection({
         />
       )}
 
+      <div className="flex flex-wrap gap-1.5 mb-4 pb-2 border-b border-[#53868e]/15">
+        {(['all', 'buy', 'rent', 'sale', 'rent_out'] as const).map((f) => (
+          <button
+            key={f}
+            type="button"
+            onClick={() => setGroupFilter(f)}
+            className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
+              groupFilter === f
+                ? 'bg-[#53868e] text-white'
+                : 'border border-[#53868e]/25 text-[#2b5843]/80 hover:bg-[#53868e]/10 hover:text-[#2b5843]'
+            }`}
+          >
+            {f === 'all' && t('dashboard.filterAll')}
+            {f === 'buy' && t('dashboard.filterBuy')}
+            {f === 'rent' && t('dashboard.filterRent')}
+            {f === 'sale' && t('dashboard.filterSale')}
+            {f === 'rent_out' && t('dashboard.filterRentOut')}
+          </button>
+        ))}
+      </div>
+
       {addPendingForGroupId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => { setAddPendingForGroupId(null); setAddPendingError(null) }}>
           <div
@@ -481,7 +529,7 @@ function CustomerGroupsSection({
       )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {(groups.data?.filter((g) => g.group_type !== 'listing') ?? []).map((g) => (
+        {filteredClientGroups.map((g) => (
           <div
             key={g.id}
             className="border border-[#53868e]/25 rounded-lg bg-[#f6f3f1] p-4 flex flex-col gap-4 shadow-md hover:shadow-lg transition-shadow min-w-0"
@@ -616,16 +664,14 @@ function CustomerGroupsSection({
             )}
           </div>
         ))}
-        {(groups.data?.filter((g) => g.group_type === 'listing') ?? []).map((g) => {
+        {filteredListingGroups.map((g) => {
           const prop = g.property_id ? (properties.data ?? []).find((p) => p.id === g.property_id) : undefined
           const displayImages = (p: Property | undefined): string[] => {
             if (!p) return []
             const urls = Array.isArray(p.image_urls) ? p.image_urls : []
-            if (urls.length >= 2) return urls.slice(0, 2)
-            if (urls.length === 1 && p.main_image_url && urls[0] !== p.main_image_url) return [urls[0], p.main_image_url]
-            if (urls.length === 1) return urls
-            if (p.main_image_url) return [p.main_image_url]
-            return []
+            let base: string[] = urls.length >= 2 ? urls.slice(0, 2) : urls.length === 1 && p.main_image_url && urls[0] !== p.main_image_url ? [urls[0], p.main_image_url] : urls.length === 1 ? urls : p.main_image_url ? [p.main_image_url] : []
+            if (p.floor_plan_url && !base.includes(p.floor_plan_url)) base = [...base, p.floor_plan_url].slice(0, 3)
+            return base
           }
           const imgs = displayImages(prop)
           const isSale = g.intent === 'sale'
@@ -655,6 +701,8 @@ function CustomerGroupsSection({
                   ) : (
                     <div className="w-full h-20 rounded-lg bg-[#53868e]/15 flex items-center justify-center text-[#2b5843]/60 text-xs">{t('common.noImage')}</div>
                   )}
+                  {imgs[1] && <img src={imgs[1]} alt={t('clientView.floorPlan')} className="w-full aspect-[4/3] object-contain rounded-lg mt-0.5" />}
+                  {imgs[2] && <img src={imgs[2]} alt={t('clientView.floorPlan')} className="w-full aspect-[4/3] object-contain rounded-lg mt-0.5" />}
                 </div>
                 <div className="flex-1 min-w-0 flex flex-col gap-2">
                   <div className="flex items-start justify-between gap-2">
@@ -743,11 +791,8 @@ function CustomerGroupsSection({
                       {prop?.size_sqft && <span>{prop.size_sqft}</span>}
                     </div>
                   )}
-                  {(prop?.floor_plan_url || prop?.site_plan_url || prop?.link) && (
+                  {(prop?.site_plan_url || prop?.link) && (
                     <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1 text-sm">
-                      {prop?.floor_plan_url && (
-                        <a href={prop.floor_plan_url} target="_blank" rel="noreferrer" className="text-emerald-600 hover:underline">{t('clientView.floorPlan')}</a>
-                      )}
                       {prop?.site_plan_url && (
                         <a href={prop.site_plan_url} target="_blank" rel="noreferrer" className="text-emerald-600 hover:underline">{t('clientView.viewSitePlan')}</a>
                       )}
@@ -756,6 +801,28 @@ function CustomerGroupsSection({
                       )}
                     </div>
                   )}
+                  <div className="flex flex-col gap-1.5 border-t border-[#53868e]/15 pt-3 mt-1">
+                    {g.property_id && onQuickAddAppointment && g.is_active !== false && (
+                      <button
+                        onClick={() => onQuickAddAppointment(g.property_id!, isSale ? 'seller' : 'landlord')}
+                        className="text-left text-sm text-[#53868e] hover:text-[#2b5843] py-1 flex items-center gap-1.5"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 shrink-0">
+                          <path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" />
+                        </svg>
+                        {t('dashboard.quickAddAppointment')}
+                      </button>
+                    )}
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(`${baseUrl}${g.share_token_edit ?? g.share_token}`)
+                        message.success(t('dashboard.editLinkCopied'))
+                      }}
+                      className="text-left text-sm text-[#53868e] hover:text-[#2b5843] py-1"
+                    >
+                      {t('dashboard.copyEditLink')}
+                    </button>
+                  </div>
                 </div>
               </div>
               )}
@@ -1445,6 +1512,8 @@ function AppointmentsSection({
   setSelectedGroupId,
   showAddAppointment,
   setShowAddAppointment,
+  initialAddAppointment,
+  onConsumeInitialAddAppointment,
   clientMode = false,
 }: {
   groups: ReturnType<typeof useCustomerGroups>
@@ -1455,6 +1524,8 @@ function AppointmentsSection({
   setSelectedGroupId: (id: string | null) => void
   showAddAppointment: boolean
   setShowAddAppointment: (v: boolean) => void
+  initialAddAppointment: { propId: string; partyRole: 'seller' | 'landlord' } | null
+  onConsumeInitialAddAppointment: () => void
   clientMode?: boolean
 }) {
   const { t, i18n } = useTranslation()
@@ -1467,11 +1538,9 @@ function AppointmentsSection({
   const [startTime, setStartTime] = useState('')
   const [notes, setNotes] = useState('')
   const [conflictError, setConflictError] = useState<string | null>(null)
-  const [propertyInputMode, setPropertyInputMode] = useState<'select' | 'byLink'>('select')
+  const [propertyInputMode, setPropertyInputMode] = useState<'select' | 'byLink'>('byLink')
   const [propertyLinkInput, setPropertyLinkInput] = useState('')
-  const [scrapeLoading, setScrapeLoading] = useState(false)
-  const [scrapeError, setScrapeError] = useState<string | null>(null)
-  const [scrapeSuccess, setScrapeSuccess] = useState(false)
+  const [isCreatingAppointment, setIsCreatingAppointment] = useState(false)
   const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null)
   const [editStartTime, setEditStartTime] = useState('')
   const [editNotes, setEditNotes] = useState('')
@@ -1505,6 +1574,16 @@ function AppointmentsSection({
     document.body.style.overflow = lightboxImage ? 'hidden' : ''
     return () => { document.body.style.overflow = '' }
   }, [lightboxImage])
+
+  // 从出售/出租卡片快捷进入时，预填房源和角色
+  useEffect(() => {
+    if (showAddAppointment && initialAddAppointment) {
+      setPropId(initialAddAppointment.propId)
+      setPartyRole(initialAddAppointment.partyRole)
+      setPropertyInputMode('select')
+      onConsumeInitialAddAppointment()
+    }
+  }, [showAddAppointment, initialAddAppointment, onConsumeInitialAddAppointment])
 
   const handleRefreshProperty = async (prop: Property) => {
     const url = prop.source_url || prop.link
@@ -1544,56 +1623,15 @@ function AppointmentsSection({
     }
   }
 
-  const handleScrapeAndAdd = async () => {
-    setScrapeError(null)
-    setScrapeSuccess(false)
-    if (!propertyLinkInput.trim()) {
-      setScrapeError(t('appointmentsSection.enterPropertyLink'))
-      return
-    }
-    const sourceUrl = normalizeSourceUrl(propertyLinkInput)
-    if (!isSupportedScrapeUrl(sourceUrl)) {
-      setScrapeError(t('appointmentsSection.propertyLinkOnly'))
-      return
-    }
-    setScrapeLoading(true)
-    try {
-      const existing = await properties.findBySourceUrl(sourceUrl)
-      if (existing) {
-        // 已有记录：直接使用，并异步触发刷新
-        setPropId(existing.id)
-        triggerScrapeAsync(existing.id, sourceUrl).catch(() => {
-          // 触发失败不阻塞，用户可手动点刷新
-        })
-      } else {
-        // 新建：先存库（链接 + 占位标题），再异步触发抓取
-        const created = await properties.create.mutateAsync({
-          title: t('appointmentsSection.scraping'),
-          link: sourceUrl,
-          source_url: sourceUrl,
-        })
-        setPropId(created.id)
-        triggerScrapeAsync(created.id, sourceUrl).catch(() => {
-          // 触发失败不阻塞，用户可手动点刷新
-        })
-      }
-      setScrapeSuccess(true)
-      // 提示用户数据已保存，抓取在后台进行
-      setTimeout(() => {
-        setPropertyInputMode('select')
-        setPropertyLinkInput('')
-        setScrapeSuccess(false)
-      }, 1500)
-    } catch (e) {
-      setScrapeError((e as Error).message)
-    } finally {
-      setScrapeLoading(false)
-    }
-  }
-
   const needsCustomerGroup = partyRole === 'buyer' || partyRole === 'tenant'
   const isSellerOrLandlord = partyRole === 'seller' || partyRole === 'landlord'
   const buyerOrTenantLabel = partyRole === 'seller' ? t('partyRole.buyer') : t('partyRole.tenant')
+
+  // 代表房东/卖家→只能选已有房源；代表买家/租客→只能通过链接添加
+  useEffect(() => {
+    if (partyRole === 'seller' || partyRole === 'landlord') setPropertyInputMode('select')
+    else setPropertyInputMode('byLink')
+  }, [partyRole])
 
   // 实时计算新增预约是否有时间冲突（用于红色标签展示）
   const createConflictInfo = useMemo(() => {
@@ -1601,7 +1639,7 @@ function AppointmentsSection({
     const effGroup = clientMode && needsCustomerGroup ? selectedGroupId : groupId
     if (needsCustomerGroup && !effGroup) return null
     const startDate = new Date(startTime)
-    const endDate = new Date(startDate.getTime() + 15 * 60 * 1000)
+    const endDate = new Date(startDate.getTime() + 5 * 60 * 1000)
     const startIso = startDate.toISOString()
     const endIso = endDate.toISOString()
     const existing = (allAppointments.data ?? []).map((a) => ({
@@ -1619,7 +1657,7 @@ function AppointmentsSection({
 
   const handleCreate = async () => {
     setConflictError(null)
-    if (!propId || !startTime) {
+    if (!startTime) {
       message.warning(t('appointmentsSection.fillComplete'))
       return
     }
@@ -1628,13 +1666,49 @@ function AppointmentsSection({
       message.warning(t('appointmentsSection.selectGroupRequired'))
       return
     }
+
+    let propertyId: string
+    if (propertyInputMode === 'byLink' && propertyLinkInput.trim()) {
+      const sourceUrl = normalizeSourceUrl(propertyLinkInput)
+      if (!isSupportedScrapeUrl(sourceUrl)) {
+        message.warning(t('appointmentsSection.propertyLinkOnly'))
+        return
+      }
+      setIsCreatingAppointment(true)
+      try {
+        const existing = await properties.findBySourceUrl(sourceUrl)
+        if (existing) {
+          propertyId = existing.id
+          triggerScrapeAsync(existing.id, sourceUrl).catch(() => {})
+        } else {
+          const created = await properties.create.mutateAsync({
+            title: t('appointmentsSection.scraping'),
+            link: sourceUrl,
+            source_url: sourceUrl,
+          })
+          propertyId = created.id
+          triggerScrapeAsync(created.id, sourceUrl).catch(() => {})
+        }
+      } catch (e) {
+        message.error((e as Error).message || t('appointmentsSection.createFailed'))
+        setIsCreatingAppointment(false)
+        return
+      }
+    } else if (propId) {
+      propertyId = propId
+    } else {
+      message.warning(t('appointmentsSection.fillComplete'))
+      return
+    }
+
     const startDate = new Date(startTime)
-    const endDate = new Date(startDate.getTime() + 15 * 60 * 1000)
+    const endDate = new Date(startDate.getTime() + 5 * 60 * 1000)
     const startIso = startDate.toISOString()
     const endIso = endDate.toISOString()
     try {
+      setIsCreatingAppointment(true)
       await appointments.create.mutateAsync({
-        property_id: propId,
+        property_id: propertyId,
         party_role: partyRole,
         customer_group_id: needsCustomerGroup ? effectiveGroupId : null,
         customer_info: isSellerOrLandlord ? (customerInfo.trim() || null) : null,
@@ -1645,6 +1719,7 @@ function AppointmentsSection({
       })
       setShowAddAppointment(false)
       setPropId('')
+      setPropertyLinkInput('')
       setGroupId('')
       setPartyRole('buyer')
       setCustomerInfo('')
@@ -1659,6 +1734,8 @@ function AppointmentsSection({
       } else {
         message.error(err?.message || t('appointmentsSection.createFailed'))
       }
+    } finally {
+      setIsCreatingAppointment(false)
     }
   }
 
@@ -1684,7 +1761,7 @@ function AppointmentsSection({
   const editConflictInfo = useMemo(() => {
     if (!editingAppointment || !editStartTime) return null
     const startDate = new Date(editStartTime)
-    const endDate = new Date(startDate.getTime() + 15 * 60 * 1000)
+    const endDate = new Date(startDate.getTime() + 5 * 60 * 1000)
     const startIso = startDate.toISOString()
     const endIso = endDate.toISOString()
     const existing = (allAppointments.data ?? []).map((a) => ({
@@ -1724,7 +1801,7 @@ function AppointmentsSection({
       return
     }
     const startDate = new Date(editStartTime)
-    const endDate = new Date(startDate.getTime() + 15 * 60 * 1000)
+    const endDate = new Date(startDate.getTime() + 5 * 60 * 1000)
     const startIso = startDate.toISOString()
     const endIso = endDate.toISOString()
     try {
@@ -1753,6 +1830,43 @@ function AppointmentsSection({
 
   const activeGroups = groups.data?.filter((g) => g.is_active !== false) ?? []
   const activeGroupIds = new Set(activeGroups.map((g) => g.id))
+  // 代表选择关联客户分组：买家→买房客户，租客→租房客户
+  const groupsForPartyRole = useMemo(() => {
+    if (partyRole === 'buyer') return activeGroups.filter((g) => g.intent === 'buy')
+    if (partyRole === 'tenant') return activeGroups.filter((g) => g.intent === 'rent')
+    return []
+  }, [activeGroups, partyRole])
+  const groupsForEditPartyRole = useMemo(() => {
+    if (editPartyRole === 'buyer') return activeGroups.filter((g) => g.intent === 'buy')
+    if (editPartyRole === 'tenant') return activeGroups.filter((g) => g.intent === 'rent')
+    return []
+  }, [activeGroups, editPartyRole])
+  // 代表房东/卖家时，房源 dropdown 只显示「我的客户」里的房源（listing 分组关联的 property）
+  const listingGroups = useMemo(() => activeGroups.filter((g) => g.group_type === 'listing'), [activeGroups])
+  const propertiesForPartyRole = useMemo(() => {
+    const allProps = properties.data ?? []
+    if (partyRole === 'landlord') {
+      const ids = new Set(listingGroups.filter((g) => g.intent === 'rent' && g.property_id).map((g) => g.property_id!))
+      return allProps.filter((p) => ids.has(p.id))
+    }
+    if (partyRole === 'seller') {
+      const ids = new Set(listingGroups.filter((g) => g.intent === 'sale' && g.property_id).map((g) => g.property_id!))
+      return allProps.filter((p) => ids.has(p.id))
+    }
+    return allProps
+  }, [properties.data, partyRole, listingGroups])
+  const propertiesForEditPartyRole = useMemo(() => {
+    const allProps = properties.data ?? []
+    if (editPartyRole === 'landlord') {
+      const ids = new Set(listingGroups.filter((g) => g.intent === 'rent' && g.property_id).map((g) => g.property_id!))
+      return allProps.filter((p) => ids.has(p.id))
+    }
+    if (editPartyRole === 'seller') {
+      const ids = new Set(listingGroups.filter((g) => g.intent === 'sale' && g.property_id).map((g) => g.property_id!))
+      return allProps.filter((p) => ids.has(p.id))
+    }
+    return allProps
+  }, [properties.data, editPartyRole, listingGroups])
   useEffect(() => {
     if (selectedGroupId && !activeGroupIds.has(selectedGroupId)) {
       setSelectedGroupId(null)
@@ -1851,7 +1965,7 @@ function AppointmentsSection({
             </p>
           )}
           <div className="flex items-center justify-between gap-4">
-            <label className="text-xs text-[#2b5843]/80">{t('appointmentsSection.partyRole')}</label>
+            <label className="text-xs text-[#2b5843]/80">{t('appointmentsSection.representLabel')}</label>
             <div className="flex gap-1 flex-wrap justify-end">
               {(['buyer', 'seller', 'tenant', 'landlord'] as const).map((role) => (
                 <button
@@ -1859,8 +1973,19 @@ function AppointmentsSection({
                   type="button"
                   onClick={() => {
                     setPartyRole(role)
-                    if (role === 'seller' || role === 'landlord') setGroupId('')
-                    else { setCustomerInfo(''); setCustomerPhone('') }
+                    if (role === 'seller' || role === 'landlord') {
+                      setGroupId('')
+                      // 代表房东/卖家时房源只来自 listing 客户，若当前选中的房源不在其列则清空
+                      const listingIds = role === 'landlord'
+                        ? listingGroups.filter((g) => g.intent === 'rent' && g.property_id).map((g) => g.property_id!)
+                        : listingGroups.filter((g) => g.intent === 'sale' && g.property_id).map((g) => g.property_id!)
+                      if (propId && !listingIds.includes(propId)) setPropId('')
+                    } else {
+                      setCustomerInfo(''); setCustomerPhone('')
+                      setPropId(''); setPropertyLinkInput('')
+                      const nextIntent = role === 'buyer' ? 'buy' : 'rent'
+                      if (groupId && !activeGroups.find((g) => g.id === groupId && g.intent === nextIntent)) setGroupId('')
+                    }
                   }}
                   className={`px-2.5 py-1 text-xs rounded-xl border ${
                     partyRole === role
@@ -1875,81 +2000,27 @@ function AppointmentsSection({
           </div>
           <div>
             <label className="text-xs text-[#2b5843]/80">房源</label>
-            <div className="flex gap-2 mt-1 mb-1">
-              <button
-                type="button"
-                onClick={() => { setPropertyInputMode('select'); setScrapeError(null) }}
-                className={`text-xs px-2 py-1.5 border rounded-xl ${propertyInputMode === 'select' ? 'border-stone-600 bg-[#53868e]/10' : 'border-[#53868e]/25'}`}
-              >
-                {t('appointmentsSection.selectExisting')}
-              </button>
-              <button
-                type="button"
-                onClick={() => { setPropertyInputMode('byLink'); setScrapeError(null); setScrapeSuccess(false) }}
-                className={`text-xs px-2 py-1.5 border rounded-xl ${propertyInputMode === 'byLink' ? 'border-stone-600 bg-[#53868e]/10' : 'border-[#53868e]/25'}`}
-              >
-                {t('appointmentsSection.addByLink')}
-              </button>
-            </div>
-            {propertyInputMode === 'select' ? (
+            {isSellerOrLandlord ? (
               <select
                 value={propId}
                 onChange={(e) => { setPropId(e.target.value); setConflictError(null) }}
                 className="w-full mt-1 px-3 py-2 border border-[#53868e]/25 rounded-xl text-sm"
               >
                 <option value="">{t('appointmentsSection.selectProperty')}</option>
-                {properties.data?.map((p) => (
+                {propertiesForPartyRole.map((p) => (
                   <option key={p.id} value={p.id}>
                     [{p.listing_type === 'rent' ? t('clientView.rent') : p.listing_type === 'sale' ? t('clientView.sale') : t('appointmentsSection.unknown')}] {p.title}{formatPriceDisplay(p) ? ` - ${formatPriceDisplay(p)}` : ''}
                   </option>
                 ))}
               </select>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-2 mt-1">
                 <input
                   value={propertyLinkInput}
-                  onChange={(e) => { setPropertyLinkInput(e.target.value); setScrapeError(null) }}
+                  onChange={(e) => setPropertyLinkInput(e.target.value)}
                   placeholder={t('appointmentsSection.propertyLinkPlaceholder')}
                   className="w-full px-3 py-2 border border-[#53868e]/25 rounded-xl text-sm"
                 />
-                {scrapeError && (
-                  <p className="text-xs text-red-600">{scrapeError}</p>
-                )}
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={handleScrapeAndAdd}
-                    disabled={scrapeLoading}
-                    className="text-sm px-4 py-1.5 border border-[#53868e]/35 rounded-xl hover:bg-[#53868e]/15 disabled:opacity-50 flex items-center gap-2"
-                  >
-                    {scrapeLoading && (
-                      <svg className="animate-spin h-4 w-4 text-[#2b5843]/70" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                      </svg>
-                    )}
-                    {t('appointmentsSection.scrapeAndAdd')}
-                  </button>
-                  {scrapeSuccess && !scrapeLoading && (
-                    <span className="text-green-600" title={t('appointmentsSection.scrapeSuccessTitle')}>
-                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
-                        <path fillRule="evenodd" d="M19.916 4.626a.75.75 0 01.208 1.04l-9 13.5a.75.75 0 01-1.154.114l-6-6a.75.75 0 011.06-1.06l5.353 5.353 8.493-12.739a.75.75 0 011.04-.208z" clipRule="evenodd" />
-                      </svg>
-                    </span>
-                  )}
-                  {scrapeError && !scrapeLoading && (
-                    <button
-                      type="button"
-                      onClick={handleScrapeAndAdd}
-                      className="p-1 text-[#2b5843]/70 hover:text-[#2b5843]/90 hover:bg-[#53868e]/15 rounded"
-                      title={t('common.retry')}
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
-                        <path fillRule="evenodd" d="M4.755 10.059a7.5 7.5 0 0112.548-3.364l1.903 1.903h-3.183a.75.75 0 100 1.5h4.992a.75.75 0 00.75-.75V4.356a.75.75 0 00-1.5 0v3.18l-1.9-1.9A9 9 0 003.306 9.67a.75.75 0 011.45.388zm15.408 3.352a.75.75 0 00-.919.53 7.5 7.5 0 01-12.548 3.364l-1.902-1.903h3.183a.75.75 0 000-1.5H2.984a.75.75 0 00-.75.75v4.992a.75.75 0 001.5 0v-3.18l1.9 1.9a9 9 0 0015.059 4.035.75.75 0 00-.53-.918z" clipRule="evenodd" />
-                      </svg>
-                    </button>
-                  )}
-                </div>
               </div>
             )}
           </div>
@@ -1962,7 +2033,7 @@ function AppointmentsSection({
                 className="w-full mt-1 px-3 py-2 border border-[#53868e]/25 rounded-xl text-sm"
               >
                 <option value="">{t('appointmentsSection.selectGroup')}</option>
-                {activeGroups.map((g) => (
+                {groupsForPartyRole.map((g) => (
                   <option key={g.id} value={g.id}>{g.name}</option>
                 ))}
               </select>
@@ -2043,7 +2114,7 @@ function AppointmentsSection({
                 className="w-24 px-2 py-2 border border-[#53868e]/25 rounded-xl text-sm bg-[#f6f3f1]"
               >
                 <option value="">{t('scheduleSection.minuteSuffix') || ''}</option>
-                {[0, 15, 30, 45].map((m) => (
+                {Array.from({ length: 12 }, (_, i) => i * 5).map((m) => (
                   <option key={m} value={String(m).padStart(2, '0')}>
                     {m}{t('scheduleSection.minuteSuffix')}
                   </option>
@@ -2063,7 +2134,7 @@ function AppointmentsSection({
           </div>
           <button
             onClick={handleCreate}
-            disabled={appointments.create.isPending || (propertyInputMode === 'byLink' && scrapeLoading)}
+            disabled={appointments.create.isPending || isCreatingAppointment}
             className="text-sm px-4 py-2 border border-[#53868e]/35 rounded-xl hover:bg-[#53868e]/15 disabled:opacity-50"
           >
             {t('common.create')}
@@ -2090,7 +2161,7 @@ function AppointmentsSection({
             )}
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-4">
-                <label className="text-xs text-[#2b5843]/80">预约角色</label>
+                <label className="text-xs text-[#2b5843]/80">{t('appointmentsSection.representLabel')}</label>
                 <div className="flex gap-1 flex-wrap justify-end">
                   {(['buyer', 'seller', 'tenant', 'landlord'] as const).map((role) => (
                     <button
@@ -2098,8 +2169,17 @@ function AppointmentsSection({
                       type="button"
                       onClick={() => {
                         setEditPartyRole(role)
-                        if (role === 'seller' || role === 'landlord') setEditGroupId('')
-                        else { setEditCustomerInfo(''); setEditCustomerPhone('') }
+                        if (role === 'seller' || role === 'landlord') {
+                          setEditGroupId('')
+                          const listingIds = role === 'landlord'
+                            ? listingGroups.filter((g) => g.intent === 'rent' && g.property_id).map((g) => g.property_id!)
+                            : listingGroups.filter((g) => g.intent === 'sale' && g.property_id).map((g) => g.property_id!)
+                          if (editPropId && !listingIds.includes(editPropId)) setEditPropId('')
+                        } else {
+                          setEditCustomerInfo(''); setEditCustomerPhone('')
+                          const nextIntent = role === 'buyer' ? 'buy' : 'rent'
+                          if (editGroupId && !activeGroups.find((g) => g.id === editGroupId && g.intent === nextIntent)) setEditGroupId('')
+                        }
                       }}
                       className={`px-2.5 py-1 text-xs rounded-xl border ${
                         editPartyRole === role
@@ -2120,7 +2200,7 @@ function AppointmentsSection({
                   className="w-full mt-1 px-3 py-2 border border-[#53868e]/25 rounded-xl text-sm"
                 >
                   <option value="">{t('appointmentsSection.selectProperty')}</option>
-                  {properties.data?.map((p) => (
+                  {propertiesForEditPartyRole.map((p) => (
                     <option key={p.id} value={p.id}>
                       [{p.listing_type === 'rent' ? t('clientView.rent') : p.listing_type === 'sale' ? t('clientView.sale') : t('appointmentsSection.unknown')}] {p.title}{formatPriceDisplay(p) ? ` - ${formatPriceDisplay(p)}` : ''}
                     </option>
@@ -2129,14 +2209,14 @@ function AppointmentsSection({
               </div>
               {editNeedsCustomerGroup && (
                 <div>
-                  <label className="text-xs text-[#2b5843]/80">我的客户</label>
+                  <label className="text-xs text-[#2b5843]/80">{t('appointmentsSection.selectGroup')}</label>
                   <select
                     value={editGroupId}
                     onChange={(e) => { setEditGroupId(e.target.value); setConflictError(null) }}
                     className="w-full mt-1 px-3 py-2 border border-[#53868e]/25 rounded-xl text-sm"
                   >
                     <option value="">{t('appointmentsSection.selectGroup')}</option>
-                    {activeGroups.map((g) => (
+                    {groupsForEditPartyRole.map((g) => (
                       <option key={g.id} value={g.id}>{g.name}</option>
                     ))}
                   </select>
@@ -2166,7 +2246,7 @@ function AppointmentsSection({
                 </>
               )}
               <div>
-                <label className="text-xs text-[#2b5843]/80">看房时间（每 15 分钟一个时段）</label>
+                <label className="text-xs text-[#2b5843]/80">{t('appointmentsSection.viewTime')}</label>
                 <div className="flex flex-wrap gap-2 mt-1">
                   <input
                     type="date"
@@ -2212,7 +2292,7 @@ function AppointmentsSection({
                     className="w-24 px-2 py-2 border border-[#53868e]/25 rounded-xl text-sm bg-[#f6f3f1]"
                   >
                     <option value="">{t('scheduleSection.minuteSuffix') || ''}</option>
-                    {[0, 15, 30, 45].map((min) => (
+                    {Array.from({ length: 12 }, (_, i) => i * 5).map((min) => (
                       <option key={min} value={String(min).padStart(2, '0')}>
                         {min}{t('scheduleSection.minuteSuffix')}
                       </option>

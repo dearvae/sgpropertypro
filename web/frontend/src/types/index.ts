@@ -45,7 +45,8 @@ export function formatPriceDisplay(p: {
   price_value?: string | null
   price_description?: string | null
   price?: string | null
-}): string {
+} | null | undefined): string {
+  if (p == null) return ''
   const val = p.price_value ?? p.price
   const desc = p.price_description
   if (!val) return ''
