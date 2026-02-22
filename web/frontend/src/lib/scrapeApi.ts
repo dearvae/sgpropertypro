@@ -45,6 +45,43 @@ export async function scrapeProperty(url: string): Promise<ScrapeResult> {
   return res.json()
 }
 
+/** 批量添加待预约响应：202 表示已接受，正在后台抓取 */
+export type BatchScrapeResponse = { added: number; message: string }
+
+/**
+ * 批量添加待预约：传入多个链接、agent_id、customer_group_id。
+ * 后端先创建 property+pending，立即返回（200/202）；抓取在后台异步执行。
+ */
+export async function batchScrapeProperties(p: {
+  urls: string[]
+  agent_id: string
+  customer_group_id: string
+  notes?: string | null
+}): Promise<BatchScrapeResponse> {
+  const trimmed = p.urls.map((u) => u.trim()).filter(Boolean)
+  if (trimmed.length === 0) throw new Error('请提供至少一个链接')
+  if (!p.agent_id || !p.customer_group_id) throw new Error('缺少 agent_id 或 customer_group_id')
+  const res = await fetch(`${SCRAPE_API_URL}/api/batch-scrape-properties`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      urls: trimmed,
+      agent_id: p.agent_id,
+      customer_group_id: p.customer_group_id,
+      notes: p.notes ?? null,
+    }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    const msg = err.detail || '批量添加失败'
+    if (res.status === 429) {
+      throw new Error(msg.includes('频繁') ? RATE_LIMIT_MSG_GENERAL : msg)
+    }
+    throw new Error(msg)
+  }
+  return res.json()
+}
+
 /** 支持的抓取域名 */
 export const SUPPORTED_SCRAPE_DOMAINS = ['propertyguru.com', 'propertygroup.com']
 

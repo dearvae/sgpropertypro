@@ -57,6 +57,7 @@
   },
   "common": {
     "you": "You",
+    "pleaseLogin": "Please log in first",
     "optional": "optional",
     "loading": "Loading...",
     "copy": "Copy",
@@ -70,6 +71,7 @@
     "refresh": "Refresh",
     "retry": "Retry",
     "confirm": "Confirm",
+    "success": "Success",
     "submit": "Submit",
     "anonymous": "Anonymous",
     "noImage": "No image"
@@ -214,6 +216,7 @@
   },
   "userMenu": {
     "avatar": "Avatar",
+    "adminBadge": "Admin",
     "noName": "No name set",
     "profile": "Profile",
     "inviteFriends": "Invite friends",
@@ -223,6 +226,7 @@
     "renderError": "Render error"
   },
   "dashboard": {
+    "menu": "Menu",
     "groups": "Customer Groups",
     "appointments": "Appointments",
     "pending": "Pending",
@@ -259,11 +263,13 @@
     "resetToken": "Reset tokens",
     "resetTokenTitle": "Reset view/edit links",
     "resetTokenDesc": "After reset, old links will stop working. The new view link will be copied to clipboard. Please share with your client.",
-    "resetTokenSuccess": "Tokens reset, new view link copied"
+    "resetTokenSuccess": "Tokens reset, new view link copied",
+    "deleteGroupConfirm": "Delete this customer group? Pending items and appointments will remain."
   },
   "pendingSection": {
     "title": "Pending",
     "noPending": "No pending items. Click \"Add pending\" next to a customer group to add.",
+    "notesPlaceholder": "e.g. Viewing only Sat AM",
     "itemsCount": "{{count}} items",
     "timeTbd": "Time TBD",
     "noRefreshSupport": "This property has no supported link (Property Guru / Property Group), cannot refresh",
@@ -273,17 +279,24 @@
     "batchAddTitle": "Batch add pending",
     "batchAddGroup": "Customer group",
     "batchAddLinks": "Property links",
-    "batchAddLinksPlaceholder": "Paste multiple Property Guru / Property Group links, separated by space or newline",
-    "batchAddSuccess": "Submitted {{count}} items, scraping in background",
+    "batchAddLinksPlaceholder": "Paste multiple links, space or newline separated. Returns immediately, scraping runs in background",
+    "batchAddSuccess": "Added {{count}} pending items",
     "selectGroupRequired": "Please select a customer group",
     "enterValidLinks": "Please enter at least one valid Property Guru / Property Group link",
     "scraping": "Scraping...",
     "editTemplate": "Edit WhatsApp template",
     "editTemplateTitle": "Edit WhatsApp message template",
-    "editTemplateHint": "Variables: {agent_name}, {my_name}, {my_company}, {buyer_or_tenant}, {listing_type}, {property_title}, {bedrooms}, {price}, {agent_line}, {link}",
+    "editTemplateHint": "Variables: {agent_name}, {my_name}, {my_company}, {listing_type}, {property_title}, {bedrooms}, {price}, {link}",
+    "templateSale": "Buying property template",
+    "templateRent": "Rental property template",
     "restoreDefault": "Restore default",
     "selectAll": "Select all",
     "deselectAll": "Deselect all",
+    "selectForBatch": "Select for batch operations",
+    "batchDelete": "Batch delete",
+    "batchDeleteConfirm": "Delete {{count}} selected pending item(s)?",
+    "batchDeleteSuccess": "Deleted {{count}} item(s)",
+    "deleteItemConfirm": "Delete this pending item?",
     "batchWhatsApp": "Batch send WhatsApp",
     "batchWhatsAppSuccess": "Opened {{count}} WhatsApp chats",
     "selectWithPhone": "Please select items with listing agent phone",
@@ -346,7 +359,8 @@
     "enterPropertyLink": "Please enter Property Guru link",
     "propertyLinkOnly": "Only Property Guru / Property Group links supported",
     "scraping": "Scraping...",
-    "scrapeSuccessTitle": "Saved. Scraping in background, will appear when ready."
+    "scrapeSuccessTitle": "Saved. Scraping in background, will appear when ready.",
+    "deleteAppointmentConfirm": "Delete this appointment?"
   },
   "scheduleSection": {
     "hourSuffix": " ",
@@ -374,7 +388,10 @@
     "noFeedback": "No suggestions or feedback yet",
     "enterFeedback": "Please enter suggestion or feedback content",
     "support": "Support +1",
-    "unsupport": "Unsupport"
+    "unsupport": "Unsupport",
+    "delete": "Delete",
+    "deleteConfirm": "Are you sure you want to delete this suggestion?",
+    "deleted": "Deleted"
   },
   "lightbox": {
     "title": "View image",

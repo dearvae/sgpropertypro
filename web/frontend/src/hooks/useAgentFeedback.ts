@@ -2,7 +2,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from './useAuth'
 import type { AgentFeedback } from '@/types'
-import { getDisplayName } from '@/types'
 
 export type FeedbackSort = 'recent' | 'top'
 
@@ -57,25 +56,12 @@ export function useAgentFeedback(sort: FeedbackSort) {
       isAnonymous: boolean
       visibility: 'all' | 'developer_only'
     }) => {
-      let authorDisplay: string | null = null
-      if (!isAnonymous) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('family_name, given_name, full_name')
-          .eq('id', user!.id)
-          .maybeSingle()
-        authorDisplay = (getDisplayName(profile as { family_name?: string; given_name?: string; full_name?: string } | null) || user!.email) ?? null
-      }
-      const { data, error } = await supabase
-        .from('agent_feedback')
-        .insert({
-          author_id: isAnonymous ? null : user!.id,
-          author_display: authorDisplay,
-          content,
-          visibility: visibility || 'all',
-        })
-        .select()
-        .single()
+      // 使用 RPC 插入，绕过 RLS（解决 "new row violates row-level security policy"）
+      const { data, error } = await supabase.rpc('insert_agent_feedback', {
+        p_content: content.trim(),
+        p_is_anonymous: isAnonymous,
+        p_visibility: visibility || 'all',
+      })
       if (error) throw error
       return data as AgentFeedback
     },
@@ -112,5 +98,15 @@ export function useAgentFeedback(sort: FeedbackSort) {
     },
   })
 
-  return { ...query, create, toggleVote }
+  const deleteFeedback = useMutation({
+    mutationFn: async (feedbackId: string) => {
+      const { error } = await supabase.from('agent_feedback').delete().eq('id', feedbackId)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['agent-feedback'] })
+    },
+  })
+
+  return { ...query, create, toggleVote, deleteFeedback }
 }

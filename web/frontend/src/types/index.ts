@@ -20,8 +20,8 @@ export type Property = {
   source_url: string | null
   price: string | null
   last_scraped_at?: string | null
-  price_value: string | null  // 价格数值，如 S$1,500,000
-  price_description: string | null  // 价格描述，如 negotiable、Starting from
+  price_value: string | null  // 价格纯数字，如 1888000
+  price_description: string | null  // 价格描述，如 Negotiable、Starting from
   size_sqft: string | null
   bedrooms: string | null
   bathrooms: string | null
@@ -38,7 +38,7 @@ export type Property = {
   updated_at: string
 }
 
-/** 格式化价格展示：price_value + 空格 + price_description，兼容旧的 price */
+/** 格式化价格展示：price_value 格式化为 S$ 1,888,000 + price_description，兼容旧的 price */
 export function formatPriceDisplay(p: {
   price_value?: string | null
   price_description?: string | null
@@ -47,8 +47,11 @@ export function formatPriceDisplay(p: {
   const val = p.price_value ?? p.price
   const desc = p.price_description
   if (!val) return ''
-  if (!desc) return val
-  return `${val} ${desc}`
+  // price_value 为纯数字时，格式化为 S$ 1,888,000
+  const num = /^\d+$/.test(val) ? Number(val).toLocaleString('en-SG') : val
+  const display = num.includes('$') ? num : `S$ ${num}`
+  if (!desc) return display
+  return `${display} ${desc}`
 }
 
 /** 预约角色：买家 | 卖家 | 租客 | 房东 */
@@ -112,6 +115,10 @@ export type Profile = {
   company: string | null
   whatsapp_template_agent: string | null
   whatsapp_template_client: string | null
+  whatsapp_template_agent_sale?: string | null
+  whatsapp_template_agent_rent?: string | null
+  whatsapp_template_client_sale?: string | null
+  whatsapp_template_client_rent?: string | null
   invite_code: string | null
   invited_by_id: string | null
   verification_status: string

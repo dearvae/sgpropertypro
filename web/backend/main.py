@@ -2,11 +2,13 @@
 Property Guru 房源抓取 API
 POST /api/scrape-property 传入 URL，返回抓取到的房源信息（同步，用于刷新按钮）
 POST /api/trigger-scrape 传入 property_id + url，立即返回 202，后台异步抓取并写入数据库
+POST /api/batch-scrape-properties 传入多个 URL，后端顺序抓取（带时间间隔防封），返回全部结果
 
 限流规则：
 - 同一 URL/property 正在抓取时，返回 429「点得太快了」
 - 同一 property_id 1 小时内已抓取过，返回 202 但不实际执行（静默跳过）
 """
+import asyncio
 import os
 import re
 import time
@@ -47,6 +49,14 @@ class TriggerScrapeRequest(BaseModel):
     url: str
 
 
+class BatchScrapeRequest(BaseModel):
+    """批量添加待预约：传入多个 URL、agent_id、customer_group_id。先创建 property+pending 后立即返回，抓取在后台异步执行"""
+    urls: list[str]
+    agent_id: str
+    customer_group_id: str
+    notes: Optional[str] = None
+
+
 class SitePlanRequest(BaseModel):
     apartment_name: str
 
@@ -59,8 +69,8 @@ class ScrapeResponse(BaseModel):
     title: str
     link: str
     price: Optional[str] = None
-    price_value: Optional[str] = None  # 价格数值部分，如 S$1,500,000
-    price_description: Optional[str] = None  # 价格描述，如 negotiable、Starting from
+    price_value: Optional[str] = None  # 价格纯数字，如 1888000
+    price_description: Optional[str] = None  # 价格描述，如 Negotiable、Starting from
     size_sqft: Optional[str] = None
     bedrooms: Optional[str] = None
     bathrooms: Optional[str] = None
@@ -76,39 +86,82 @@ class ScrapeResponse(BaseModel):
     site_plan_url: Optional[str] = None  # 公寓小区平面图，从 99.co 抓取
 
 
+def _extract_numeric_value(price_str: str) -> Optional[str]:
+    """从价格字符串提取纯数字，如 'S$ 1,888,000' -> '1888000'，'1.5M' -> '1500000'"""
+    if not price_str or not price_str.strip():
+        return None
+    s = price_str.strip()
+    # 移除货币符号、空格
+    s = re.sub(r"[S\$€£¥\s]+", "", s, flags=re.I)
+    # 移除逗号
+    s = s.replace(",", "")
+    # 处理 M/million、K/thousand 等
+    for pattern, multiplier in [
+        (r"([\d.]+)\s*m(?:illion)?", 1_000_000),
+        (r"([\d.]+)\s*k(?: thousand)?", 1_000),
+    ]:
+        m = re.search(pattern, s, re.I)
+        if m:
+            try:
+                num = float(m.group(1)) * multiplier
+                return str(int(num))
+            except (ValueError, IndexError):
+                pass
+    # 提取纯数字（支持如 1,888,000 或 1888000）
+    m = re.search(r"[\d.]+", s)
+    if m:
+        raw = m.group(0)
+        try:
+            val = float(raw)
+            return str(int(val)) if val == int(val) else str(int(val))
+        except ValueError:
+            return None
+    return None
+
+
 def _parse_price_into_value_and_description(price_text: str) -> tuple[Optional[str], Optional[str]]:
-    """将完整价格文本拆分为数值和描述，如 'S$1.5M negotiable' -> ('S$1.5M', 'negotiable')"""
+    """将完整价格文本拆分为纯数字和描述，如 'S$ 1,888,000Negotiable' -> ('1888000', 'Negotiable')"""
     if not price_text or not price_text.strip():
         return None, None
     text = price_text.strip()
     text_lower = text.lower()
-    # 描述词在后面的：negotiable, POA, price on request 等
-    for pattern, desc_name in [(r"\bnegotiable\b", "negotiable"), (r"\bpoa\b", "POA")]:
+    value_raw: Optional[str] = None
+    desc_name: Optional[str] = None
+    # 描述词在后面的：negotiable, POA（支持紧挨数字如 000Negotiable）
+    for pattern, d in [(r"\s*negotiable\b", "Negotiable"), (r"\s*poa\b", "POA")]:
         m = re.search(pattern, text_lower, re.I)
         if m:
-            value = re.sub(pattern, " ", text, flags=re.I)
-            value = " ".join(value.split()).strip()
-            return value or None, desc_name
-    for pattern, desc_name in [
-        (r"\bprice on request\b", "Price on request"),
-        (r"\bcall for price\b", "Call for price"),
-        (r"\bcontact for price\b", "Contact for price"),
-    ]:
-        m = re.search(pattern, text_lower, re.I)
-        if m:
-            value = re.sub(pattern, " ", text, flags=re.I)
-            value = " ".join(value.split()).strip()
-            return value or None, desc_name
+            value_raw = re.sub(pattern, "", text, flags=re.I).strip()
+            desc_name = d
+            break
+    if not desc_name:
+        for pattern, d in [
+            (r"\bprice on request\b", "Price on request"),
+            (r"\bcall for price\b", "Call for price"),
+            (r"\bcontact for price\b", "Contact for price"),
+        ]:
+            m = re.search(pattern, text_lower, re.I)
+            if m:
+                value_raw = re.sub(pattern, " ", text, flags=re.I)
+                value_raw = " ".join(value_raw.split()).strip()
+                desc_name = d
+                break
     # 描述词在前面的：Starting from, From
-    for pattern, desc_name in [
-        (r"^\s*starting\s+from\s+", "Starting from"),
-        (r"^\s*from\s+", "From"),
-    ]:
-        m = re.search(pattern, text_lower, re.I)
-        if m:
-            value = re.sub(pattern, "", text, flags=re.I).strip()
-            return value or None, desc_name
-    return text, None
+    if not desc_name:
+        for pattern, d in [
+            (r"^\s*starting\s+from\s+", "Starting from"),
+            (r"^\s*from\s+", "From"),
+        ]:
+            m = re.search(pattern, text_lower, re.I)
+            if m:
+                value_raw = re.sub(pattern, "", text, flags=re.I).strip()
+                desc_name = d
+                break
+    if value_raw is None and desc_name is None:
+        value_raw = text
+    # 将 value_raw 转为纯数字
+    price_value = _extract_numeric_value(value_raw) if value_raw else None
+    return price_value, desc_name
 
 
 def _normalize_propertyguru_url(url: str) -> str:
@@ -331,13 +384,13 @@ async def _run_property_scraper(url: str) -> ScrapeResponse:
                 if size_match:
                     size_sqft = f"{size_match.group(1)} sqft"
 
-            # Bedrooms & Bathrooms: 常见格式 2 Bedrooms, 3 Bathrooms 或 2Bedroom 2Bathroom
+            # Bedrooms & Bathrooms: 常见格式 2 Bedrooms, 3 Bathrooms。预约模板消息始终用英文
             bed_match = re.search(r"(\d+)\s*bed(?:room)?s?", body, re.I)
             if bed_match:
-                bedrooms = bed_match.group(1) + " 房"
+                bedrooms = bed_match.group(1) + " bedrooms"
             bath_match = re.search(r"(\d+)\s*bath(?:room)?s?", body, re.I)
             if bath_match:
-                bathrooms = bath_match.group(1) + " 卫"
+                bathrooms = bath_match.group(1) + " bathrooms"
             price_value, price_description = _parse_price_into_value_and_description(price) if price else (None, None)
             if price:
                 basic_info_parts.append(price)
@@ -755,13 +808,127 @@ async def scrape_property(req: ScrapeRequest, request: Request):
         _clear_in_progress(f"url:{url}")
 
 
+# 批量抓取配置：每个链接间隔秒数、单次最多链接数
+BATCH_SCRAPE_DELAY_SEC = 3
+BATCH_SCRAPE_MAX_URLS = 25
+PLACEHOLDER_TITLE = "抓取中"  # 新建 property 时的占位标题
+
+
+def _batch_create_properties_and_pending(
+    urls: list[str],
+    agent_id: str,
+    customer_group_id: str,
+    notes: Optional[str] = None,
+) -> list[tuple[str, str]]:
+    """创建 property 和 pending_appointment，返回 [(property_id, url), ...]"""
+    client = _get_supabase_client()
+    if not client:
+        raise HTTPException(status_code=500, detail="数据库未配置")
+    todo: list[tuple[str, str]] = []
+    pending_payload: dict = {
+        "customer_group_id": customer_group_id,
+        "status": "not_scheduled",
+    }
+    if notes is not None and notes.strip():
+        pending_payload["notes"] = notes.strip()
+    for url in urls:
+        r = client.table("properties").select("id").eq("agent_id", agent_id).eq("source_url", url).maybe_single().execute()
+        if r.data:
+            prop_id = r.data["id"]
+            exists = (
+                client.table("pending_appointments")
+                .select("id")
+                .eq("property_id", prop_id)
+                .eq("customer_group_id", customer_group_id)
+                .maybe_single()
+                .execute()
+            )
+            if exists.data:
+                continue
+        else:
+            ins = (
+                client.table("properties")
+                .insert({
+                    "agent_id": agent_id,
+                    "title": PLACEHOLDER_TITLE,
+                    "link": url,
+                    "source_url": url,
+                })
+                .select("id")
+                .execute()
+            )
+            if not ins.data:
+                continue
+            prop_id = ins.data[0]["id"]
+        payload = {**pending_payload, "property_id": prop_id}
+        client.table("pending_appointments").insert(payload).execute()
+        todo.append((prop_id, url))
+    return todo
+
+
+async def _background_batch_scrape(todo: list[tuple[str, str]]) -> None:
+    """后台顺序抓取并更新 properties，每个之间间隔 BATCH_SCRAPE_DELAY_SEC"""
+    for i, (property_id, url) in enumerate(todo):
+        if i > 0:
+            await asyncio.sleep(BATCH_SCRAPE_DELAY_SEC)
+        await _background_scrape_and_update(property_id, url)
+
+
+@app.post("/api/batch-scrape-properties")
+async def batch_scrape_properties(req: BatchScrapeRequest, request: Request, background_tasks: BackgroundTasks):
+    """批量添加待预约：先创建 property+pending，立即返回 202；抓取在后台顺序执行（带时间间隔防封）"""
+    from fastapi.responses import JSONResponse
+
+    if not _check_rate_limit(_get_client_ip(request), 3):
+        raise HTTPException(status_code=429, detail="批量请求过于频繁，请稍后再试")
+    if not req.agent_id or not req.customer_group_id:
+        raise HTTPException(status_code=400, detail="缺少 agent_id 或 customer_group_id")
+    raw_urls = [u.strip() for u in req.urls if u and u.strip()]
+    urls = []
+    seen = set()
+    for u in raw_urls:
+        try:
+            normalized = _normalize_propertyguru_url(u)
+            _validate_scrape_url(normalized)
+            if normalized not in seen:
+                seen.add(normalized)
+                urls.append(normalized)
+        except HTTPException:
+            pass
+    if len(urls) > BATCH_SCRAPE_MAX_URLS:
+        raise HTTPException(status_code=400, detail=f"单次最多支持 {BATCH_SCRAPE_MAX_URLS} 个链接")
+    if not urls:
+        raise HTTPException(status_code=400, detail="请提供有效的 Property Guru / Property Group 链接")
+
+    try:
+        todo = _batch_create_properties_and_pending(urls, req.agent_id, req.customer_group_id, req.notes)
+    except HTTPException:
+        raise
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).exception("批量创建失败: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+    if not todo:
+        return JSONResponse(status_code=200, content={"added": 0, "message": "无新增（可能已存在）"})
+    background_tasks.add_task(_background_batch_scrape, todo)
+    return JSONResponse(status_code=202, content={"added": len(todo), "message": "已添加，抓取进行中"})
+
+
 def _get_supabase_client():
     """获取 Supabase 客户端（service role，用于后台更新）"""
     try:
         from supabase import create_client
     except ImportError:
         return None
-    url = os.environ.get("SUPABASE_URL") or os.environ.get("VITE_SUPABASE_URL")
+    url = (
+        os.environ.get("SUPABASE_URL")
+        or os.environ.get("VITE_SUPABASE_URL")
+        or (
+            f"https://{os.environ.get('SUPABASE_PROJECT_REF')}.supabase.co"
+            if os.environ.get("SUPABASE_PROJECT_REF")
+            else None
+        )
+    )
     key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
     if not url or not key:
         return None

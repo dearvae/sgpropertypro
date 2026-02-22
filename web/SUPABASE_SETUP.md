@@ -25,14 +25,14 @@
 10. `supabase/migrations/020_customer_group_is_active.sql`（客户 inactive 打标，已成交客户可从筛选排除）
 11. `supabase/migrations/024_property_last_scraped_at.sql`（房源抓取 1 小时冷却限流）
 12. `supabase/migrations/025_reset_customer_group_tokens.sql`（客户分组链接重置 RPC）
-13. `supabase/migrations/026_agent_feedback_visibility.sql`（反馈可见性：所有人 / 仅开发者）
+13. `supabase/migrations/026_agent_feedback_visibility.sql`（反馈可见性：所有人 / 仅开发者可见）
 14. `supabase/migrations/028_invite_system_verification.sql`（邀请码、验证状态、is_admin）
 15. `supabase/migrations/029_is_super_admin.sql`（超级管理员 is_super_admin）
+16. `supabase/migrations/036_agent_feedback_admin_visibility_delete.sql`（仅开发者可见→仅管理员可见，管理员可删除建议）
+17. `supabase/migrations/032_property_top_year.sql`（房源 TOP 年份/入伙年份）
+18. `supabase/migrations/033_client_view_top_year.sql`（get_client_view 返回 top_year）
 
-**开发者权限**：需查看「仅开发者可见」反馈时，在 SQL Editor 中执行：
-```sql
-update public.profiles set is_developer = true where id = '你的用户UUID';
-```
+**「仅开发者可见」反馈**：仅管理员和超级管理员可见，并可删除任意建议。授予管理员权限见下方。
 
 **超级管理员权限**：授予某邮箱超级管理员权限（可访问 /admin，未来可管理其他管理员）：
 ```bash
@@ -66,6 +66,8 @@ cd web && python3 run-fix-columns.py
 **若出现 "Could not find the 'last_scraped_at' column of 'properties'"**：说明 024 迁移未执行。在 SQL Editor 中执行 `supabase/migrations/024_property_last_scraped_at.sql` 即可修复。
 
 **若出现 "Could not find the 'price_description' column of 'properties'"**：说明 022 迁移未执行。在 SQL Editor 中执行 `supabase/migrations/022_price_value_description.sql` 即可修复。
+
+**若出现 "Could not find the 'top_year' column of 'properties' in the schema cache"**：说明 032/033 迁移未执行，或 PostgREST schema cache 未刷新。运行 `cd propertyassistance/web && python3 run-migration-032-033.py`（需在 .env 中配置 SUPABASE_PROJECT_REF、SUPABASE_DB_PASSWORD）；或手动在 SQL Editor 依次执行 `032_property_top_year.sql`、`033_client_view_top_year.sql`，再执行 `NOTIFY pgrst, 'reload schema';` 刷新 schema 缓存。
 
 **若出现 "Could not find the table in the schema cache"**：说明数据库表尚未创建。
 

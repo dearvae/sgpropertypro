@@ -222,17 +222,8 @@ export default function HomePage() {
           <span className="text-sm text-[#f6f3f1]/70">
             © SG PropertyPro. {t('landing.rights')}
           </span>
-          <div className="flex items-center gap-6">
+          <div>
             <LanguageSwitcher dark />
-            <a href="#" className="text-sm text-[#f6f3f1]/80 hover:text-[#f6f3f1] transition-colors">
-              {t('landing.privacy')}
-            </a>
-            <a href="#" className="text-sm text-[#f6f3f1]/80 hover:text-[#f6f3f1] transition-colors">
-              {t('landing.terms')}
-            </a>
-            <a href="#" className="text-sm text-[#f6f3f1]/80 hover:text-[#f6f3f1] transition-colors">
-              {t('landing.contact')}
-            </a>
           </div>
         </div>
       </footer>

@@ -4,8 +4,9 @@ import { useTranslation } from 'react-i18next'
 import { useAuth } from '@/hooks/useAuth'
 import { LanguageSwitcher } from '@/components/LanguageSwitcher'
 import { checkPhoneAvailable } from '@/lib/checkAvailability'
+import { CompanySelect } from '@/components/CompanySelect'
 
-const COMPANY_OPTIONS = ['POP', 'Next Huttons', 'ERA', 'others'] as const
+const COMPANY_OPTIONS = ['Propnex', 'Huttons', 'ERA', 'others'] as const
 
 function normalizeAuthError(err: Error): string {
   const msg = err.message ?? ''
@@ -28,7 +29,7 @@ export default function Register() {
   const [familyName, setFamilyName] = useState('')
   const [givenName, setGivenName] = useState('')
   const [agentNumber, setAgentNumber] = useState('')
-  const [company, setCompany] = useState<(typeof COMPANY_OPTIONS)[number]>('POP')
+  const [company, setCompany] = useState<(typeof COMPANY_OPTIONS)[number]>('Propnex')
   const [companyOthers, setCompanyOthers] = useState('')
   const [phoneDigits, setPhoneDigits] = useState('')
   const [inviteCode, setInviteCode] = useState(inviteFromUrl)
@@ -135,7 +136,7 @@ export default function Register() {
                 <option value="client">{t('register.client')}</option>
               </select>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label htmlFor="familyName" className={labelClass}>{t('register.familyName')}</label>
                 <input
@@ -174,29 +175,17 @@ export default function Register() {
                     placeholder={t('login.agentNumberPlaceholder')}
                   />
                 </div>
-                <div>
-                  <label className={labelClass}>{t('login.company')}</label>
-                  <select
-                    value={company}
-                    onChange={(e) => setCompany(e.target.value as (typeof COMPANY_OPTIONS)[number])}
-                    className={inputClass}
-                  >
-                    <option value="POP">POP</option>
-                    <option value="Next Huttons">Next Huttons</option>
-                    <option value="ERA">ERA</option>
-                    <option value="others">{t('register.companyOthers')}</option>
-                  </select>
-                  {company === 'others' && (
-                    <input
-                      type="text"
-                      value={companyOthers}
-                      onChange={(e) => setCompanyOthers(e.target.value)}
-                      required
-                      className={`mt-2 ${inputClass}`}
-                      placeholder={t('register.companyOthersPlaceholder')}
-                    />
-                  )}
-                </div>
+                <CompanySelect
+                  value={company}
+                  onChange={(v) => setCompany(v as (typeof COMPANY_OPTIONS)[number])}
+                  companyOthers={companyOthers}
+                  onCompanyOthersChange={setCompanyOthers}
+                  labelKey="login.company"
+                  othersRequired
+                  labelClassName={labelClass}
+                  selectClassName={inputClass}
+                  inputClassName={`mt-2 ${inputClass}`}
+                />
               </>
             )}
             <div>

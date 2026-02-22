@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { message } from 'antd'
+import { message, Modal } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { useAgentFeedback, type FeedbackSort } from '@/hooks/useAgentFeedback'
+import { useProfile } from '@/hooks/useProfile'
 import type { AgentFeedback } from '@/types'
 
 export function AgentFeedbackSection() {
@@ -10,6 +11,8 @@ export function AgentFeedbackSection() {
   const [isAnonymous, setIsAnonymous] = useState(false)
   const [visibility, setVisibility] = useState<'all' | 'developer_only'>('all')
   const feedback = useAgentFeedback(sort)
+  const { data: profile } = useProfile()
+  const isAdmin = profile?.is_admin === true || profile?.is_super_admin === true
   const { t, i18n } = useTranslation()
 
   const handleSubmit = async () => {
@@ -31,6 +34,23 @@ export function AgentFeedbackSection() {
     feedback.toggleVote.mutate({
       feedbackId: item.id,
       hasVoted: !!item.has_voted,
+    })
+  }
+
+  const handleDelete = (item: AgentFeedback) => {
+    Modal.confirm({
+      title: t('feedback.deleteConfirm'),
+      okText: t('feedback.delete'),
+      okType: 'danger',
+      cancelText: t('common.cancel'),
+      onOk: async () => {
+        try {
+          await feedback.deleteFeedback.mutateAsync(item.id)
+          message.success(t('feedback.deleted') || t('common.success'))
+        } catch (e) {
+          message.error((e as Error).message)
+        }
+      },
     })
   }
 
@@ -132,37 +152,61 @@ export function AgentFeedbackSection() {
             >
               <div className="flex-1 min-w-0">
                 <p className="text-sm text-[#2b5843] whitespace-pre-wrap">{item.content}</p>
-                <p className="text-xs text-[#2b5843]/70 mt-2">
-                  {item.author_display ? item.author_display : t('common.anonymous')} ·{' '}
-                  {new Date(item.created_at).toLocaleString(i18n.language === 'zh' ? 'zh-CN' : 'en-US', {
-                    month: 'short',
-                    day: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}
+                <p className="text-xs text-[#2b5843]/70 mt-2 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                  <span>
+                    {item.author_display ? item.author_display : t('common.anonymous')} ·{' '}
+                    {new Date(item.created_at).toLocaleString(i18n.language === 'zh' ? 'zh-CN' : 'en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </span>
+                  {item.visibility === 'developer_only' && (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-[#53868e]/20 text-[#2b5843]/80">
+                      {t('feedback.visibilityDeveloper')}
+                    </span>
+                  )}
                 </p>
               </div>
-              <button
-                onClick={() => handleVote(item)}
-                disabled={feedback.toggleVote.isPending}
-                className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm border transition-colors ${
-                  item.has_voted
-                    ? 'border-[#53868e] text-[#2b5843]'
-                    : 'border-[#53868e]/25 hover:bg-[#53868e]/10 text-[#2b5843]/80'
-                } disabled:opacity-50`}
-                style={item.has_voted ? { background: 'rgba(83,134,142,0.2)' } : undefined}
-                title={item.has_voted ? t('feedback.unsupport') : t('feedback.support')}
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
-                  className={`w-4 h-4 ${item.has_voted ? 'text-[#53868e]' : ''}`}
+              <div className="shrink-0 flex items-center gap-2">
+                <button
+                  onClick={() => handleVote(item)}
+                  disabled={feedback.toggleVote.isPending}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm border transition-colors ${
+                    item.has_voted
+                      ? 'border-[#53868e] text-[#2b5843]'
+                      : 'border-[#53868e]/25 hover:bg-[#53868e]/10 text-[#2b5843]/80'
+                  } disabled:opacity-50`}
+                  style={item.has_voted ? { background: 'rgba(83,134,142,0.2)' } : undefined}
+                  title={item.has_voted ? t('feedback.unsupport') : t('feedback.support')}
                 >
-                  <path d="M7.493 18.75c-.425 0-.82-.236-.975-.632A7.48 7.48 0 016 15.125c0-1.75.599-3.358 1.602-4.634.151-.192.373-.309.6-.397.473-.183.89-.514 1.212-.924a9.042 9.042 0 012.861-2.4c.723-.384 1.35-.956 1.653-1.715a4.498 4.498 0 00.322-1.672V3a.75.75 0 01.75-.75 2.25 2.25 0 012.25 2.25c0 1.152-.26 2.243-.723 3.218-.266.558.107 1.282.725 1.282h3.126c1.026 0 1.945.694 2.054 1.715.045.422.068.85.068 1.285a11.95 11.95 0 01-2.649 7.521c-.388.482-.987.729-1.605.729H14.23c-.483 0-.964-.078-1.423-.23l-3.114-1.04a4.501 4.501 0 00-1.423-.23h-.777zM12.378 13.5a.75.75 0 01.75-.75h.008a.75.75 0 01.75.75v.008a.75.75 0 01-.75.75h-.008a.75.75 0 01-.75-.75V13.5z" />
-                </svg>
-                <span>{item.vote_count ?? 0}</span>
-              </button>
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                    className={`w-4 h-4 ${item.has_voted ? 'text-[#53868e]' : ''}`}
+                  >
+                    <path d="M7.493 18.75c-.425 0-.82-.236-.975-.632A7.48 7.48 0 016 15.125c0-1.75.599-3.358 1.602-4.634.151-.192.373-.309.6-.397.473-.183.89-.514 1.212-.924a9.042 9.042 0 012.861-2.4c.723-.384 1.35-.956 1.653-1.715a4.498 4.498 0 00.322-1.672V3a.75.75 0 01.75-.75 2.25 2.25 0 012.25 2.25c0 1.152-.26 2.243-.723 3.218-.266.558.107 1.282.725 1.282h3.126c1.026 0 1.945.694 2.054 1.715.045.422.068.85.068 1.285a11.95 11.95 0 01-2.649 7.521c-.388.482-.987.729-1.605.729H14.23c-.483 0-.964-.078-1.423-.23l-3.114-1.04a4.501 4.501 0 00-1.423-.23h-.777zM12.378 13.5a.75.75 0 01.75-.75h.008a.75.75 0 01.75.75v.008a.75.75 0 01-.75.75h-.008a.75.75 0 01-.75-.75V13.5z" />
+                  </svg>
+                  <span>{item.vote_count ?? 0}</span>
+                </button>
+                {isAdmin && (
+                  <button
+                    onClick={() => handleDelete(item)}
+                    disabled={feedback.deleteFeedback.isPending}
+                    className="p-1.5 rounded-full text-[#2b5843]/60 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
+                    title={t('feedback.delete')}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+                      <polyline points="3 6 5 6 21 6" />
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                      <line x1="10" y1="11" x2="10" y2="17" />
+                      <line x1="14" y1="11" x2="14" y2="17" />
+                    </svg>
+                  </button>
+                )}
+              </div>
             </div>
           ))
         )}

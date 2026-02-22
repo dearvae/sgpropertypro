@@ -59,9 +59,13 @@ export function useProfile() {
       company?: string
       whatsapp_template_agent?: string | null
       whatsapp_template_client?: string | null
+      whatsapp_template_agent_sale?: string | null
+      whatsapp_template_agent_rent?: string | null
+      whatsapp_template_client_sale?: string | null
+      whatsapp_template_client_rent?: string | null
       updateNameChangedAt?: boolean
     }) => {
-      const { full_name, family_name, given_name, agent_number, phone, avatar_url, company, whatsapp_template_agent, whatsapp_template_client, updateNameChangedAt } = updates
+      const { full_name, family_name, given_name, agent_number, phone, avatar_url, company, whatsapp_template_agent, whatsapp_template_client, whatsapp_template_agent_sale, whatsapp_template_agent_rent, whatsapp_template_client_sale, whatsapp_template_client_rent, updateNameChangedAt } = updates
       const payload: Record<string, unknown> = { updated_at: new Date().toISOString() }
       if (full_name !== undefined) payload.full_name = full_name || null
       if (family_name !== undefined) payload.family_name = family_name || null
@@ -72,6 +76,10 @@ export function useProfile() {
       if (company !== undefined) payload.company = company || null
       if (whatsapp_template_agent !== undefined) payload.whatsapp_template_agent = whatsapp_template_agent || null
       if (whatsapp_template_client !== undefined) payload.whatsapp_template_client = whatsapp_template_client || null
+      if (whatsapp_template_agent_sale !== undefined) payload.whatsapp_template_agent_sale = whatsapp_template_agent_sale || null
+      if (whatsapp_template_agent_rent !== undefined) payload.whatsapp_template_agent_rent = whatsapp_template_agent_rent || null
+      if (whatsapp_template_client_sale !== undefined) payload.whatsapp_template_client_sale = whatsapp_template_client_sale || null
+      if (whatsapp_template_client_rent !== undefined) payload.whatsapp_template_client_rent = whatsapp_template_client_rent || null
       if (updateNameChangedAt) payload.name_changed_at = new Date().toISOString()
 
       const { data, error } = await supabase

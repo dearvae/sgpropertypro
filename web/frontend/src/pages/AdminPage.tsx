@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
+import { getTelUrl } from '@/lib/whatsapp'
 import { useAuth } from '@/hooks/useAuth'
 import { useProfile } from '@/hooks/useProfile'
 
@@ -109,7 +110,15 @@ export default function AdminPage() {
                   <tr key={r.id} className="border-b border-[#53868e]/10 hover:bg-[#53868e]/5">
                     <td className="p-3">{r.display_name || '-'}</td>
                     <td className="p-3">{r.email || '-'}</td>
-                    <td className="p-3">{r.phone || '-'}</td>
+                    <td className="p-3">
+                      {r.phone ? (
+                        <a href={getTelUrl(r.phone)} className="text-[#53868e] hover:text-[#2b5843] hover:underline">
+                          {r.phone}
+                        </a>
+                      ) : (
+                        '-'
+                      )}
+                    </td>
                     <td className="p-3 font-mono">{r.invite_code || '-'}</td>
                     <td className="p-3">
                       {r.inviter_display_name || r.inviter_email ? (

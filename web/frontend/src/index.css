@@ -19,3 +19,50 @@ body {
   color: var(--text);
   -webkit-font-smoothing: antialiased;
 }
+
+/* 移动端友好：防止文字竖排，确保正常换行 */
+html, body {
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+/* Popconfirm 与整体 UI 风格统一 */
+.ant-popover-inner {
+  background: var(--zen-cream) !important;
+  border: 1px solid rgba(83, 134, 142, 0.25) !important;
+  box-shadow: 0 4px 12px rgba(43, 88, 67, 0.08) !important;
+  padding: 12px 14px !important;
+}
+.ant-popover-arrow::before {
+  background: var(--zen-cream) !important;
+  border: 1px solid rgba(83, 134, 142, 0.25) !important;
+}
+.ant-popconfirm-message {
+  margin-inline-start: 0 !important;
+}
+.ant-popconfirm-message-title {
+  color: var(--zen-green) !important;
+  font-size: 13px !important;
+}
+.ant-popconfirm-buttons .ant-btn {
+  border-radius: 12px !important;
+  font-size: 13px !important;
+  border-color: rgba(83, 134, 142, 0.35) !important;
+}
+.ant-popconfirm-buttons .ant-btn-default {
+  background: transparent !important;
+  color: var(--zen-green) !important;
+}
+.ant-popconfirm-buttons .ant-btn-default:hover {
+  background: rgba(83, 134, 142, 0.1) !important;
+  border-color: rgba(83, 134, 142, 0.4) !important;
+}
+.ant-popconfirm-buttons .ant-btn-primary {
+  background: transparent !important;
+  color: var(--zen-green) !important;
+  border: 1px solid rgba(83, 134, 142, 0.35) !important;
+}
+.ant-popconfirm-buttons .ant-btn-primary:hover {
+  background: rgba(83, 134, 142, 0.15) !important;
+  border-color: rgba(83, 134, 142, 0.5) !important;
+}

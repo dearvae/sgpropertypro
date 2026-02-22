@@ -37,9 +37,23 @@ function ProtectedClientRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
+const zenTheme = {
+  token: {
+    colorPrimary: '#53868e',
+    borderRadius: 12,
+    colorText: '#2b5843',
+  },
+  components: {
+    Popover: {
+      colorBgElevated: '#f6f3f1',
+      colorBorderSecondary: 'rgba(83, 134, 142, 0.25)',
+    },
+  },
+}
+
 function App() {
   return (
-    <ConfigProvider>
+    <ConfigProvider theme={zenTheme}>
       <AuthProvider>
         <BrowserRouter>
           <Routes>

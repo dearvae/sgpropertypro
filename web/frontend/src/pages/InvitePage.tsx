@@ -49,12 +49,12 @@ export default function InvitePage() {
           <div className="space-y-6">
             <div>
               <label className="block text-sm text-[#2b5843]/90 mb-1">{t('invite.inviteLink')}</label>
-              <div className="flex gap-2">
+              <div className="flex flex-col sm:flex-row gap-2">
                 <input
                   type="text"
                   readOnly
                   value={inviteLink}
-                  className="flex-1 px-3 py-2.5 border border-[#53868e]/30 rounded-xl bg-[#f6f3f1] text-[#2b5843] text-sm"
+                  className="flex-1 min-w-0 px-3 py-2.5 border border-[#53868e]/30 rounded-xl bg-[#f6f3f1] text-[#2b5843] text-sm"
                 />
                 <button
                   type="button"
@@ -68,12 +68,12 @@ export default function InvitePage() {
             </div>
             <div>
               <label className="block text-sm text-[#2b5843]/90 mb-1">{t('invite.inviteCode')}</label>
-              <div className="flex gap-2">
+              <div className="flex flex-col sm:flex-row gap-2">
                 <input
                   type="text"
                   readOnly
                   value={inviteCode}
-                  className="flex-1 px-3 py-2.5 border border-[#53868e]/30 rounded-xl bg-[#f6f3f1] text-[#2b5843] text-sm font-mono text-lg tracking-wider"
+                  className="flex-1 min-w-0 px-3 py-2.5 border border-[#53868e]/30 rounded-xl bg-[#f6f3f1] text-[#2b5843] text-sm font-mono text-lg tracking-wider"
                 />
                 <button
                   type="button"

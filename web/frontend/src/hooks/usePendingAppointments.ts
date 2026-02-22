@@ -74,5 +74,14 @@ export function usePendingAppointments() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['pending_appointments', user?.id] }),
   })
 
-  return { ...query, create, update, remove }
+  const removeMany = useMutation({
+    mutationFn: async (ids: string[]) => {
+      if (ids.length === 0) return
+      const { error } = await supabase.from('pending_appointments').delete().in('id', ids)
+      if (error) throw error
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['pending_appointments', user?.id] }),
+  })
+
+  return { ...query, create, update, remove, removeMany }
 }

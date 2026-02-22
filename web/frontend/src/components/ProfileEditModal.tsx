@@ -4,8 +4,9 @@ import { useProfile } from '@/hooks/useProfile'
 import { useAuth } from '@/hooks/useAuth'
 import { getDisplayName } from '@/types'
 import { checkPhoneAvailableForUpdate } from '@/lib/checkAvailability'
+import { CompanySelect } from '@/components/CompanySelect'
 
-const COMPANY_OPTIONS = ['POP', 'Next Huttons', 'ERA', 'others'] as const
+const COMPANY_OPTIONS = ['Propnex', 'Huttons', 'ERA', 'others'] as const
 
 function parsePhone(phone: string | null): string {
   if (!phone) return ''
@@ -19,7 +20,7 @@ export function ProfileEditModal({ onClose }: { onClose: () => void }) {
   const [familyName, setFamilyName] = useState('')
   const [givenName, setGivenName] = useState('')
   const [agentNumber, setAgentNumber] = useState('')
-  const [company, setCompany] = useState<string>('POP')
+  const [company, setCompany] = useState<string>('Propnex')
   const [companyOthers, setCompanyOthers] = useState('')
   const [phoneDigits, setPhoneDigits] = useState('')
   const [avatarUrl, setAvatarUrl] = useState('')
@@ -107,7 +108,7 @@ export function ProfileEditModal({ onClose }: { onClose: () => void }) {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-xs text-[#2b5843]/80 mb-1">{t('profile.avatarUrl')}</label>
-            <div className="flex gap-3 items-center">
+            <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
               <div className="w-14 h-14 rounded-full shrink-0 overflow-hidden border border-[#53868e]/25" style={{ background: 'rgba(83,134,142,0.15)' }}>
                 {avatarUrl ? (
                   <img src={avatarUrl} alt={t('profile.avatar')} className="w-full h-full object-cover" />
@@ -126,7 +127,7 @@ export function ProfileEditModal({ onClose }: { onClose: () => void }) {
               />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs text-stone-600 mb-1">
                 {t('profile.familyName')}
@@ -164,28 +165,12 @@ export function ProfileEditModal({ onClose }: { onClose: () => void }) {
             />
           </div>
           {profile.role === 'agent' && (
-            <div>
-              <label className="block text-xs text-[#2b5843]/80 mb-1">{t('profile.company')}</label>
-              <select
-                value={company}
-                onChange={(e) => setCompany(e.target.value)}
-                className="w-full px-3 py-2 border border-[#53868e]/25 rounded-xl text-sm text-[#2b5843] focus:outline-none focus:border-[#53868e]"
-              >
-                <option value="POP">POP</option>
-                <option value="Next Huttons">Next Huttons</option>
-                <option value="ERA">ERA</option>
-                <option value="others">{t('register.companyOthers')}</option>
-              </select>
-              {company === 'others' && (
-                <input
-                  type="text"
-                  value={companyOthers}
-                  onChange={(e) => setCompanyOthers(e.target.value)}
-                  className="mt-2 w-full px-3 py-2 border border-[#53868e]/25 rounded-xl text-sm text-[#2b5843]"
-                  placeholder={t('register.companyOthersPlaceholder')}
-                />
-              )}
-            </div>
+            <CompanySelect
+              value={company}
+              onChange={setCompany}
+              companyOthers={companyOthers}
+              onCompanyOthersChange={setCompanyOthers}
+            />
           )}
           <div>
             <label className="block text-xs text-[#2b5843]/80 mb-1">{t('profile.phone')}</label>

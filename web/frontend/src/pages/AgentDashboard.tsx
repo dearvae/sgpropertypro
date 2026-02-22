@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
-import { message } from 'antd'
+import { message, Popconfirm } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { UserMenu } from '@/components/UserMenu'
 import { LanguageSwitcher } from '@/components/LanguageSwitcher'
@@ -10,14 +10,14 @@ import { useAppointments } from '@/hooks/useAppointments'
 import { usePendingAppointments } from '@/hooks/usePendingAppointments'
 import { useRealtimeAppointments } from '@/hooks/useRealtimeAppointments'
 import { checkAppointmentConflict } from '@/lib/conflictCheck'
-import { scrapeProperty, triggerScrapeAsync } from '@/lib/scrapeApi'
-import { getWhatsAppChatUrl } from '@/lib/whatsapp'
+import { scrapeProperty, triggerScrapeAsync, batchScrapeProperties } from '@/lib/scrapeApi'
+import { getWhatsAppChatUrl, getTelUrl } from '@/lib/whatsapp'
 import {
   applyTemplate,
   buildTemplateVars,
-  DEFAULT_WHATSAPP_TEMPLATE_AGENT,
-  DEFAULT_WHATSAPP_TEMPLATE_CLIENT,
+  getDefaultWhatsAppTemplate,
 } from '@/lib/whatsappTemplate'
+import { useAuth } from '@/hooks/useAuth'
 import { useProfile } from '@/hooks/useProfile'
 import { AgentFeedbackSection } from '@/pages/AgentFeedback'
 import type { CustomerGroup, PartyRole, Property, Appointment, PendingAppointment, PendingAppointmentStatus } from '@/types'
@@ -45,10 +45,19 @@ function usePendingStatusOptions() {
 
 type DashboardTab = 'groups' | 'appointments' | 'pending' | 'schedule' | 'feedback'
 
+function HamburgerIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+    </svg>
+  )
+}
+
 export default function AgentDashboard({ clientMode = false }: { clientMode?: boolean }) {
   const { t } = useTranslation()
   const defaultTab: DashboardTab = clientMode ? 'appointments' : 'groups'
   const [activeTab, setActiveTab] = useState<DashboardTab>(defaultTab)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null)
   const [showAddAppointment, setShowAddAppointment] = useState(false)
 
@@ -75,14 +84,26 @@ export default function AgentDashboard({ clientMode = false }: { clientMode?: bo
   return (
     <div className="min-h-screen" style={{ background: 'linear-gradient(180deg, #f6f3f1 0%, #e8ebe8 100%)' }}>
       <header className="border-b border-[#53868e]/20 rounded-b-2xl mx-4 mt-2 sm:mx-6" style={{ background: 'linear-gradient(135deg, #f6f3f1 0%, #ebece8 100%)' }}>
-        <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
-          <h1 className="text-lg font-medium text-[#2b5843]">{pageTitle}</h1>
-          <div className="flex items-center gap-2">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen(true)}
+              className="sm:hidden p-2 -ml-2 rounded-lg text-[#2b5843] hover:bg-[#53868e]/10 transition-colors"
+              aria-label={t('dashboard.menu')}
+            >
+              <HamburgerIcon className="w-6 h-6" />
+            </button>
+            <h1 className="text-lg font-medium text-[#2b5843] truncate">{pageTitle}</h1>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
             <LanguageSwitcher zen />
             <UserMenu />
           </div>
         </div>
-        <div className="max-w-5xl mx-auto px-6 flex gap-1 border-t border-[#53868e]/10">
+        {/* 桌面端：横向 tab */}
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 overflow-x-auto -mx-4 sm:mx-0 sm:overflow-visible hidden sm:block">
+          <div className="flex gap-1 border-t border-[#53868e]/10 min-w-max sm:min-w-0 px-4 sm:px-0">
           {tabList.map((tab) => (
             <button
               key={tab}
@@ -100,10 +121,49 @@ export default function AgentDashboard({ clientMode = false }: { clientMode?: bo
               {tab === 'feedback' && t('dashboard.feedback')}
             </button>
           ))}
+          </div>
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-6 py-8">
+      {/* 手机端：汉堡菜单展开的垂直选项 */}
+      {mobileMenuOpen && (
+        <>
+          <div
+            className="fixed inset-0 z-40 bg-black/30 sm:hidden"
+            onClick={() => setMobileMenuOpen(false)}
+            aria-hidden
+          />
+          <div
+            className="fixed top-0 left-4 right-4 z-50 sm:hidden pt-14 pb-6 px-4 rounded-b-2xl shadow-xl"
+            style={{ background: 'linear-gradient(180deg, #f6f3f1 0%, #ebece8 100%)' }}
+          >
+            <div className="flex flex-col gap-0 border-t border-[#53868e]/10">
+              {tabList.map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => {
+                    setActiveTab(tab)
+                    setMobileMenuOpen(false)
+                  }}
+                  className={`px-4 py-4 text-left text-base border-b border-[#53868e]/10 last:border-b-0 transition-colors ${
+                    activeTab === tab
+                      ? 'text-[#2b5843] font-medium bg-[#53868e]/10'
+                      : 'text-[#2b5843]/80 hover:bg-[#53868e]/5'
+                  }`}
+                >
+                  {tab === 'groups' && t('dashboard.groups')}
+                  {tab === 'appointments' && t('dashboard.appointments')}
+                  {tab === 'pending' && t('dashboard.pending')}
+                  {tab === 'schedule' && t('dashboard.schedule')}
+                  {tab === 'feedback' && t('dashboard.feedback')}
+                </button>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         {activeTab === 'groups' && (
           <CustomerGroupsSection
             groups={groups}
@@ -156,6 +216,7 @@ function CustomerGroupsSection({
   pendingAppointments: ReturnType<typeof usePendingAppointments>
   t: ReturnType<typeof useTranslation>['t']
 }) {
+  const { user } = useAuth()
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [addPendingForGroupId, setAddPendingForGroupId] = useState<string | null>(null)
   const [addPendingLink, setAddPendingLink] = useState('')
@@ -248,6 +309,10 @@ function CustomerGroupsSection({
       setAddPendingError(t('dashboard.enterPropertyLink'))
       return
     }
+    if (!user?.id) {
+      setAddPendingError(t('common.pleaseLogin') || '请先登录')
+      return
+    }
     const urls = parsePropertyLinks(addPendingLink)
     if (urls.length === 0) {
       setAddPendingError(t('dashboard.propertyLinkOnly'))
@@ -255,45 +320,27 @@ function CustomerGroupsSection({
     }
     setAddPendingError(null)
     setAddPendingLoading(true)
-    const notes = addPendingNotes.trim() || null
     const groupId = addPendingForGroupId
-    let added = 0
     const existingPending = new Set(
       (pendingAppointments.data ?? [])
         .filter((p) => p.customer_group_id === groupId)
         .map((p) => (p.properties as Property)?.source_url || (p.properties as Property)?.link)
     )
+    const urlsToAdd = urls.filter((u) => !existingPending.has(u))
+    if (urlsToAdd.length === 0) {
+      setAddPendingLoading(false)
+      return
+    }
     try {
-      for (const url of urls) {
-        const src = normalizeSourceUrl(url)
-        if (existingPending.has(src)) continue
-        const existing = await properties.findBySourceUrl(src)
-        let propId: string
-        if (existing) {
-          propId = existing.id
-          const alreadyPending = (pendingAppointments.data ?? []).some(
-            (p) => p.property_id === existing.id && p.customer_group_id === groupId
-          )
-          if (alreadyPending) continue
-        } else {
-          const created = await properties.create.mutateAsync({
-            title: t('pendingSection.scraping'),
-            link: src,
-            source_url: src,
-          })
-          propId = created.id
-          triggerScrapeAsync(propId, src).catch(() => {})
-        }
-        await pendingAppointments.create.mutateAsync({
-          property_id: propId,
-          customer_group_id: groupId,
-          status: 'not_scheduled',
-          notes,
-        })
-        existingPending.add(src)
-        added += 1
-      }
-      if (added > 0) message.success(t('pendingSection.batchAddSuccess', { count: added }))
+      const res = await batchScrapeProperties({
+        urls: urlsToAdd,
+        agent_id: user.id,
+        customer_group_id: groupId,
+        notes: addPendingNotes.trim() || undefined,
+      })
+      pendingAppointments.refetch()
+      properties.refetch()
+      if (res.added > 0) message.success(t('pendingSection.batchAddSuccess', { count: res.added }))
       setAddPendingForGroupId(null)
       setAddPendingLink('')
       setAddPendingNotes('')
@@ -525,12 +572,20 @@ function CustomerGroupsSection({
                             >
                               {t('dashboard.resetToken')}
                             </button>
-                            <button
-                              onClick={() => { setMenuOpenGroupId(null); groups.remove.mutate(g.id) }}
-                              className="block w-full text-left px-3 py-1.5 text-sm text-[#2b5843]/60 hover:text-red-600"
+                            <Popconfirm
+                              title={t('dashboard.deleteGroupConfirm')}
+                              onConfirm={() => { setMenuOpenGroupId(null); groups.remove.mutate(g.id) }}
+                              okText={t('common.confirm')}
+                              cancelText={t('common.cancel')}
+                              icon={null}
                             >
-                              {t('common.delete')}
-                            </button>
+                              <button
+                                onClick={() => setMenuOpenGroupId(null)}
+                                className="block w-full text-left px-3 py-1.5 text-sm text-[#2b5843]/60 hover:text-red-600"
+                              >
+                                {t('common.delete')}
+                              </button>
+                            </Popconfirm>
                           </div>
                         </>
                       )}
@@ -646,6 +701,7 @@ function PendingAppointmentsSection({
   clientMode?: boolean
 }) {
   const { t } = useTranslation()
+  const { user } = useAuth()
   const { data: profile, update: profileUpdate } = useProfile()
   const PENDING_STATUS_OPTIONS = usePendingStatusOptions()
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
@@ -653,7 +709,8 @@ function PendingAppointmentsSection({
   const [lightboxImage, setLightboxImage] = useState<string | null>(null)
   const [selectedPendingIds, setSelectedPendingIds] = useState<Set<string>>(new Set())
   const [showTemplateModal, setShowTemplateModal] = useState(false)
-  const [templateEdit, setTemplateEdit] = useState('')
+  const [templateEditSale, setTemplateEditSale] = useState('')
+  const [templateEditRent, setTemplateEditRent] = useState('')
 
   const displayImages = (p: Property | undefined): string[] => {
     if (!p) return []
@@ -759,6 +816,10 @@ function PendingAppointmentsSection({
       setBatchAddError(t('pendingSection.selectGroupRequired'))
       return
     }
+    if (!user?.id) {
+      setBatchAddError(t('common.pleaseLogin') || '请先登录')
+      return
+    }
     const urls = [...new Set(parsePropertyLinks(batchAddLinks))]
     if (urls.length === 0) {
       setBatchAddError(t('pendingSection.enterValidLinks'))
@@ -766,42 +827,28 @@ function PendingAppointmentsSection({
     }
     setBatchAddError(null)
     setBatchAddLoading(true)
-    let added = 0
     const existingPending = new Set(
       (pendingAppointments.data ?? [])
         .filter((p) => p.customer_group_id === batchAddGroupId)
         .map((p) => (p.properties as Property)?.source_url || (p.properties as Property)?.link)
     )
+    const urlsToAdd = urls.filter((u) => !existingPending.has(u))
+    if (urlsToAdd.length === 0) {
+      setBatchAddLoading(false)
+      setShowBatchAddModal(false)
+      setBatchAddGroupId('')
+      setBatchAddLinks('')
+      return
+    }
     try {
-      for (const url of urls) {
-        const src = normalizeSourceUrl(url)
-        if (existingPending.has(src)) continue
-        const existing = await properties.findBySourceUrl(src)
-        let propId: string
-        if (existing) {
-          propId = existing.id
-          const alreadyPending = (pendingAppointments.data ?? []).some(
-            (p) => p.property_id === existing.id && p.customer_group_id === batchAddGroupId
-          )
-          if (alreadyPending) continue
-        } else {
-          const created = await properties.create.mutateAsync({
-            title: t('pendingSection.scraping'),
-            link: src,
-            source_url: src,
-          })
-          propId = created.id
-        }
-        await pendingAppointments.create.mutateAsync({
-          property_id: propId,
-          customer_group_id: batchAddGroupId,
-          status: 'not_scheduled',
-        })
-        existingPending.add(src)
-        added += 1
-        triggerScrapeAsync(propId, src).catch(() => {})
-      }
-      message.success(t('pendingSection.batchAddSuccess', { count: added }))
+      const res = await batchScrapeProperties({
+        urls: urlsToAdd,
+        agent_id: user.id,
+        customer_group_id: batchAddGroupId,
+      })
+      pendingAppointments.refetch()
+      properties.refetch()
+      if (res.added > 0) message.success(t('pendingSection.batchAddSuccess', { count: res.added }))
       setShowBatchAddModal(false)
       setBatchAddGroupId('')
       setBatchAddLinks('')
@@ -829,8 +876,14 @@ function PendingAppointmentsSection({
             onClick={() => {
               setShowTemplateModal(true)
               const isAgent = profile?.role === 'agent'
-              const custom = isAgent ? profile?.whatsapp_template_agent : profile?.whatsapp_template_client
-              setTemplateEdit(custom ?? (isAgent ? DEFAULT_WHATSAPP_TEMPLATE_AGENT : DEFAULT_WHATSAPP_TEMPLATE_CLIENT))
+              setTemplateEditSale(
+                (isAgent ? profile?.whatsapp_template_agent_sale : profile?.whatsapp_template_client_sale) ??
+                getDefaultWhatsAppTemplate(!!isAgent, 'sale')
+              )
+              setTemplateEditRent(
+                (isAgent ? profile?.whatsapp_template_agent_rent : profile?.whatsapp_template_client_rent) ??
+                getDefaultWhatsAppTemplate(!!isAgent, 'rent')
+              )
             }}
             className="text-sm text-[#2b5843]/80 hover:text-[#2b5843]"
           >
@@ -865,6 +918,25 @@ function PendingAppointmentsSection({
               >
                 {t('pendingSection.deselectAll')}
               </button>
+              <Popconfirm
+                title={t('pendingSection.batchDeleteConfirm', { count: selectedPendingIds.size })}
+                onConfirm={() => {
+                  const ids = [...selectedPendingIds]
+                  pendingAppointments.removeMany.mutate(ids)
+                  setSelectedPendingIds(new Set())
+                  message.success(t('pendingSection.batchDeleteSuccess', { count: ids.length }))
+                }}
+                okText={t('common.confirm')}
+                cancelText={t('common.cancel')}
+                icon={null}
+              >
+                <button
+                  disabled={selectedPendingIds.size === 0 || pendingAppointments.removeMany.isPending}
+                  className="text-sm border border-red-400/50 text-red-600 rounded-xl px-3 py-1.5 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {t('pendingSection.batchDelete')}
+                </button>
+              </Popconfirm>
               <button
                 onClick={() => {
                   const selectedWithPhone = list.filter(
@@ -875,11 +947,13 @@ function PendingAppointmentsSection({
                     return
                   }
                   const isAgent = profile?.role === 'agent'
-                  const template =
-                    (isAgent ? profile?.whatsapp_template_agent : profile?.whatsapp_template_client) ??
-                    (isAgent ? DEFAULT_WHATSAPP_TEMPLATE_AGENT : DEFAULT_WHATSAPP_TEMPLATE_CLIENT)
                   selectedWithPhone.forEach((p, i) => {
                     const prop = p.properties as Property
+                    const lt = prop.listing_type ?? 'sale'
+                    const custom = isAgent
+                      ? (lt === 'sale' ? profile?.whatsapp_template_agent_sale : profile?.whatsapp_template_agent_rent)
+                      : (lt === 'sale' ? profile?.whatsapp_template_client_sale : profile?.whatsapp_template_client_rent)
+                    const template = custom ?? getDefaultWhatsAppTemplate(!!isAgent, lt)
                     const vars = buildTemplateVars(prop, profile ?? {}, !!isAgent)
                     const msg = applyTemplate(template, vars)
                     setTimeout(() => {
@@ -902,19 +976,40 @@ function PendingAppointmentsSection({
           <div className="bg-[#f6f3f1] rounded-xl shadow-lg p-6 w-full max-w-lg mx-4 border border-[#53868e]/25 max-h-[90vh] overflow-auto" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-sm font-medium text-[#2b5843] mb-2">{t('pendingSection.editTemplateTitle')}</h3>
             <p className="text-xs text-[#2b5843]/70 mb-3">{t('pendingSection.editTemplateHint')}</p>
-            <textarea
-              value={templateEdit}
-              onChange={(e) => setTemplateEdit(e.target.value)}
-              rows={12}
-              className="w-full px-3 py-2 border border-[#53868e]/25 rounded-xl text-sm font-mono resize-y"
-            />
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-[#2b5843]/90 mb-1">{t('pendingSection.templateSale')}</label>
+                <textarea
+                  value={templateEditSale}
+                  onChange={(e) => setTemplateEditSale(e.target.value)}
+                  rows={8}
+                  className="w-full px-3 py-2 border border-[#53868e]/25 rounded-xl text-sm font-mono resize-y"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-[#2b5843]/90 mb-1">{t('pendingSection.templateRent')}</label>
+                <textarea
+                  value={templateEditRent}
+                  onChange={(e) => setTemplateEditRent(e.target.value)}
+                  rows={8}
+                  className="w-full px-3 py-2 border border-[#53868e]/25 rounded-xl text-sm font-mono resize-y"
+                />
+              </div>
+            </div>
             <div className="flex gap-2 mt-4">
               <button
                 onClick={async () => {
+                  const isAgent = profile?.role === 'agent'
                   await profileUpdate.mutateAsync(
-                    profile?.role === 'agent'
-                      ? { whatsapp_template_agent: templateEdit.trim() || null }
-                      : { whatsapp_template_client: templateEdit.trim() || null }
+                    isAgent
+                      ? {
+                          whatsapp_template_agent_sale: templateEditSale.trim() || null,
+                          whatsapp_template_agent_rent: templateEditRent.trim() || null,
+                        }
+                      : {
+                          whatsapp_template_client_sale: templateEditSale.trim() || null,
+                          whatsapp_template_client_rent: templateEditRent.trim() || null,
+                        }
                   )
                   message.success(t('common.save'))
                   setShowTemplateModal(false)
@@ -925,7 +1020,11 @@ function PendingAppointmentsSection({
                 {t('common.save')}
               </button>
               <button
-                onClick={() => setTemplateEdit(profile?.role === 'agent' ? DEFAULT_WHATSAPP_TEMPLATE_AGENT : DEFAULT_WHATSAPP_TEMPLATE_CLIENT)}
+                onClick={() => {
+                  const isAgent = profile?.role === 'agent'
+                  setTemplateEditSale(getDefaultWhatsAppTemplate(!!isAgent, 'sale'))
+                  setTemplateEditRent(getDefaultWhatsAppTemplate(!!isAgent, 'rent'))
+                }}
                 className="px-4 py-2 text-sm text-[#2b5843]/70 hover:text-[#2b5843]/90"
               >
                 {t('pendingSection.restoreDefault')}
@@ -1024,45 +1123,47 @@ function PendingAppointmentsSection({
                       const whatsappUrl = agentPhone ? getWhatsAppChatUrl(agentPhone) : null
                       const imgs = displayImages(prop)
                       return (
-                        <div key={p.id} className="p-4 flex bg-[#f6f3f1] border-t border-[#53868e]/15 first:border-t-0">
-                          <div className="flex items-start pt-1 pr-2">
-                            <input
-                              type="checkbox"
-                              checked={selectedPendingIds.has(p.id)}
-                              onChange={(e) => {
-                                setSelectedPendingIds((prev) => {
-                                  const next = new Set(prev)
-                                  if (e.target.checked) next.add(p.id)
-                                  else next.delete(p.id)
-                                  return next
-                                })
-                              }}
-                              className="mt-1 rounded border-[#53868e]/35 text-emerald-600 focus:ring-emerald-500"
-                            />
+                        <div key={p.id} className="p-4 flex flex-col sm:flex-row gap-3 sm:gap-0 bg-[#f6f3f1] border-t border-[#53868e]/15 first:border-t-0">
+                          <div className="flex items-center sm:items-start pt-0 sm:pt-2 shrink-0 pr-0 sm:pr-3 order-first">
+                            <label className="flex items-center cursor-pointer select-none" title={t('pendingSection.selectForBatch')}>
+                              <input
+                                type="checkbox"
+                                checked={selectedPendingIds.has(p.id)}
+                                onChange={(e) => {
+                                  setSelectedPendingIds((prev) => {
+                                    const next = new Set(prev)
+                                    if (e.target.checked) next.add(p.id)
+                                    else next.delete(p.id)
+                                    return next
+                                  })
+                                }}
+                                className="w-5 h-5 rounded border-2 border-[#53868e]/50 text-[#2b5843] focus:ring-2 focus:ring-[#53868e]/30 focus:ring-offset-1 cursor-pointer accent-[#2b5843] shrink-0"
+                              />
+                            </label>
                           </div>
-                          <div className={`flex flex-col w-28 sm:w-32 flex-shrink-0 gap-0.5 p-2 bg-[#53868e]/5 rounded-lg mr-4 ${imgs.length <= 1 ? 'justify-center' : ''}`}>
+                          <div className={`flex flex-col w-full sm:w-[166px] flex-shrink-0 gap-0.5 p-2 bg-[#53868e]/5 rounded-lg sm:mr-4 order-1 sm:order-none ${imgs.length <= 1 ? 'justify-center' : ''}`}>
                             {imgs[0] ? (
                               <button
                                 type="button"
                                 onClick={() => setLightboxImage(imgs[0])}
-                                className={`block w-full rounded-lg overflow-hidden cursor-zoom-in hover:opacity-90 transition-opacity text-left ${imgs.length >= 2 ? 'h-20' : 'h-40'}`}
+                                className={`block w-full rounded-lg overflow-hidden cursor-zoom-in hover:opacity-90 transition-opacity text-left ${imgs.length >= 2 ? 'h-[160px] sm:h-auto sm:w-[150px] sm:aspect-[4/3]' : 'h-40 sm:h-auto sm:w-[150px] sm:aspect-[4/3]'}`}
                               >
-                                <img src={imgs[0]} alt={prop?.title ?? ''} className={`w-full object-cover ${imgs.length >= 2 ? 'h-20' : 'h-40'}`} />
+                                <img src={imgs[0]} alt={prop?.title ?? ''} className="w-full h-full object-cover" />
                               </button>
                             ) : (
                               <div className="w-full h-20 rounded-lg bg-[#53868e]/15 flex items-center justify-center text-[#2b5843]/60 text-xs">{t('common.noImage')}</div>
                             )}
                             {imgs[1] && (
-                              <button type="button" onClick={() => setLightboxImage(imgs[1])} className="block w-full h-20 rounded-lg overflow-hidden cursor-zoom-in hover:opacity-90 transition-opacity text-left">
-                                <img src={imgs[1]} alt={prop?.title ?? ''} className="w-full h-20 object-cover" />
+                              <button type="button" onClick={() => setLightboxImage(imgs[1])} className="block w-full h-[160px] sm:h-auto sm:w-[150px] sm:aspect-[4/3] rounded-lg overflow-hidden cursor-zoom-in hover:opacity-90 transition-opacity text-left">
+                                <img src={imgs[1]} alt={prop?.title ?? ''} className="w-full h-full object-cover" />
                               </button>
                             )}
                           </div>
-                          <div className="flex-1 min-w-0 flex flex-col justify-between">
+                          <div className="flex flex-1 min-w-0 flex-col justify-between order-2 sm:order-none">
                             <div>
                               <div className="flex items-start justify-between gap-2">
                                 <div className="flex items-center gap-2 flex-wrap min-w-0">
-                                  <p className="font-semibold text-base leading-tight text-[#2b5843]">{prop?.title ?? '—'}</p>
+                                  <p className="font-semibold text-base leading-tight text-[#2b5843] break-words">{prop?.title ?? '—'}</p>
                                   {prop?.listing_type && (
                                     <span className={`px-1.5 py-0.5 rounded text-xs font-medium shrink-0 ${prop.listing_type === 'rent' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>
                                       {prop.listing_type === 'rent' ? t('clientView.rent') : t('clientView.sale')}
@@ -1081,9 +1182,21 @@ function PendingAppointmentsSection({
                                 {prop?.top_year && <span className="text-[#2b5843]/70">{prop.top_year}</span>}
                               </div>
                               <p className="text-[#2b5843]/70 text-sm mt-1">{t('pendingSection.timeTbd')}</p>
-                              {p.notes && (
-                                <p className="text-[#2b5843]/80 text-sm mt-2 px-3 py-2 rounded-lg bg-[#53868e]/5 border border-[#53868e]/15">{t('clientView.noteLabel')}：{p.notes}</p>
-                              )}
+                              <div className="mt-2">
+                                <label className="block text-xs text-[#2b5843]/70 mb-1">{t('clientView.noteLabel')}</label>
+                                <textarea
+                                  defaultValue={p.notes ?? ''}
+                                  placeholder={t('pendingSection.notesPlaceholder')}
+                                onBlur={(e) => {
+                                  const v = e.target.value.trim()
+                                  if (v !== (p.notes ?? '').trim()) {
+                                    pendingAppointments.update.mutate({ id: p.id, notes: v || null })
+                                  }
+                                }}
+                                className="w-full px-3 py-2 rounded-lg bg-white/60 border border-[#53868e]/20 text-sm text-[#2b5843]/90 placeholder:text-[#2b5843]/50 focus:outline-none focus:ring-2 focus:ring-[#53868e]/30 focus:border-[#53868e]/40 resize-none min-h-[2.5rem]"
+                                rows={2}
+                              />
+                              </div>
                               <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-sm">
                                 {prop?.floor_plan_url && (
                                   <button type="button" onClick={() => setLightboxImage(prop.floor_plan_url!)} className="text-emerald-600 hover:underline font-medium">
@@ -1105,7 +1218,7 @@ function PendingAppointmentsSection({
                                     {t('clientView.listingAgent')}：{agentName && <span className="font-medium text-[#2b5843]/90">{agentName}</span>}
                                     {agentName && agentPhone && <span className="text-[#2b5843]/60 mx-1">·</span>}
                                     {agentPhone && (
-                                      <a href={`tel:${agentPhone}`} className="text-emerald-600 hover:text-emerald-700 font-medium hover:underline">{agentPhone}</a>
+                                      <a href={getTelUrl(agentPhone)} className="text-emerald-600 hover:text-emerald-700 font-medium hover:underline">{agentPhone}</a>
                                     )}
                                   </span>
                                   {whatsappUrl && (
@@ -1145,7 +1258,15 @@ function PendingAppointmentsSection({
                               >
                                 {PENDING_STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                               </select>
-                              <button onClick={() => pendingAppointments.remove.mutate(p.id)} className="text-xs text-[#2b5843]/60 hover:text-red-600">{t('common.delete')}</button>
+                              <Popconfirm
+                                title={t('pendingSection.deleteItemConfirm')}
+                                onConfirm={() => pendingAppointments.remove.mutate(p.id)}
+                                okText={t('common.confirm')}
+                                cancelText={t('common.cancel')}
+                                icon={null}
+                              >
+                                <button className="text-xs text-[#2b5843]/60 hover:text-red-600">{t('common.delete')}</button>
+                              </Popconfirm>
                             </div>
                           </div>
                         </div>
@@ -2016,31 +2137,31 @@ function AppointmentsSection({
                 return (
                   <div
                     key={a.id}
-                    className="border border-[#53868e]/25 rounded-xl overflow-hidden bg-[#f6f3f1] shadow-sm hover:shadow-md transition-shadow flex"
+                    className="border border-[#53868e]/25 rounded-xl overflow-hidden bg-[#f6f3f1] shadow-sm hover:shadow-md transition-shadow flex flex-col sm:flex-row"
                   >
-                    <div className={`flex flex-col w-28 sm:w-32 flex-shrink-0 gap-0.5 p-2 bg-[#53868e]/5 ${imgs.length <= 1 ? 'justify-center' : ''}`}>
+                    <div className={`flex flex-col w-full sm:w-[166px] flex-shrink-0 gap-0.5 p-2 bg-[#53868e]/5 order-1 sm:order-none ${imgs.length <= 1 ? 'justify-center' : ''}`}>
                       {imgs[0] ? (
                         <button
                           type="button"
                           onClick={() => setLightboxImage(imgs[0])}
-                          className={`block w-full rounded-lg overflow-hidden cursor-zoom-in hover:opacity-90 transition-opacity text-left ${imgs.length >= 2 ? 'h-20' : 'h-40'}`}
+                          className={`block w-full rounded-lg overflow-hidden cursor-zoom-in hover:opacity-90 transition-opacity text-left ${imgs.length >= 2 ? 'h-[160px] sm:h-auto sm:w-[150px] sm:aspect-[4/3]' : 'h-40 sm:h-auto sm:w-[150px] sm:aspect-[4/3]'}`}
                         >
-                          <img src={imgs[0]} alt={prop?.title ?? ''} className={`w-full object-cover ${imgs.length >= 2 ? 'h-20' : 'h-40'}`} />
+                          <img src={imgs[0]} alt={prop?.title ?? ''} className="w-full h-full object-cover" />
                         </button>
                       ) : (
                         <div className="w-full h-20 rounded-lg bg-[#53868e]/15 flex items-center justify-center text-[#2b5843]/60 text-xs">{t('common.noImage')}</div>
                       )}
                       {imgs[1] && (
-                        <button type="button" onClick={() => setLightboxImage(imgs[1])} className="block w-full h-20 rounded-lg overflow-hidden cursor-zoom-in hover:opacity-90 transition-opacity text-left">
-                          <img src={imgs[1]} alt={prop?.title ?? ''} className="w-full h-20 object-cover" />
+                        <button type="button" onClick={() => setLightboxImage(imgs[1])} className="block w-full h-[160px] sm:h-auto sm:w-[150px] sm:aspect-[4/3] rounded-lg overflow-hidden cursor-zoom-in hover:opacity-90 transition-opacity text-left">
+                          <img src={imgs[1]} alt={prop?.title ?? ''} className="w-full h-full object-cover" />
                         </button>
                       )}
                     </div>
-                    <div className="flex-1 min-w-0 p-4 flex flex-col justify-between">
+                    <div className="flex-1 min-w-0 p-4 flex flex-col justify-between order-2 sm:order-none">
                       <div>
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex items-center gap-2 flex-wrap min-w-0">
-                            <p className="font-semibold text-base leading-tight text-[#2b5843]">{prop?.title ?? '—'}</p>
+                            <p className="font-semibold text-base leading-tight text-[#2b5843] break-words">{prop?.title ?? '—'}</p>
                             {prop?.listing_type && (
                               <span className={`px-1.5 py-0.5 rounded text-xs font-medium shrink-0 ${prop.listing_type === 'rent' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>
                                 {prop.listing_type === 'rent' ? t('clientView.rent') : t('clientView.sale')}
@@ -2104,7 +2225,7 @@ function AppointmentsSection({
                               <>
                                 <span className="text-xs text-[#2b5843]/80">
                                   {t('appointmentsSection.potentialBuyer', { role: a.party_role === 'seller' ? t('partyRole.buyer') : t('partyRole.tenant') })}
-                                  <a href={`tel:${customerPhone}`} className="font-medium text-[#2b5843]/90 hover:underline ml-1">
+                                  <a href={getTelUrl(customerPhone)} className="font-medium text-[#2b5843]/90 hover:underline ml-1">
                                     {customerPhone}
                                   </a>
                                 </span>
@@ -2130,7 +2251,7 @@ function AppointmentsSection({
                                   {agentName && <span className="font-medium text-[#2b5843]/90">{agentName}</span>}
                                   {agentName && agentPhone && <span className="text-[#2b5843]/60 mx-1">·</span>}
                                   {agentPhone && (
-                                    <a href={`tel:${agentPhone}`} className="text-emerald-600 hover:text-emerald-700 font-medium hover:underline">
+                                    <a href={getTelUrl(agentPhone)} className="text-emerald-600 hover:text-emerald-700 font-medium hover:underline">
                                       {agentPhone}
                                     </a>
                                   )}
@@ -2180,12 +2301,17 @@ function AppointmentsSection({
                         >
                           {t('common.edit')}
                         </button>
-                        <button
-                          onClick={() => appointments.remove.mutate(a.id)}
-                          className="text-xs text-[#2b5843]/60 hover:text-red-600"
+                        <Popconfirm
+                          title={t('appointmentsSection.deleteAppointmentConfirm')}
+                          onConfirm={() => appointments.remove.mutate(a.id)}
+                          okText={t('common.confirm')}
+                          cancelText={t('common.cancel')}
+                          icon={null}
                         >
-                          {t('common.delete')}
-                        </button>
+                          <button className="text-xs text-[#2b5843]/60 hover:text-red-600">
+                            {t('common.delete')}
+                          </button>
+                        </Popconfirm>
                       </div>
                     </div>
                   </div>
@@ -2503,11 +2629,10 @@ function AgentScheduleSection({
                             return (
                               <span
                                 key={a.id}
-                                className="text-xs px-2 py-0.5 rounded bg-[#f6f3f1] border border-[#53868e]/25 text-[#2b5843]/80 truncate max-w-[120px]"
+                                className="text-xs px-2 py-0.5 rounded bg-[#f6f3f1] border border-[#53868e]/25 text-[#2b5843]/80 break-words max-w-full sm:max-w-[140px] line-clamp-2 sm:line-clamp-1"
                                 title={prop?.title}
                               >
-                                {prop?.title?.slice(0, 12) ?? '—'}
-                                {(prop?.title?.length ?? 0) > 12 ? '…' : ''}
+                                {prop?.title ?? '—'}
                               </span>
                             )
                           })}

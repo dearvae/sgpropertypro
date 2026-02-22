@@ -57,6 +57,7 @@
   },
   "common": {
     "you": "您",
+    "pleaseLogin": "请先登录",
     "optional": "选填",
     "loading": "加载中...",
     "copy": "复制",
@@ -70,6 +71,7 @@
     "refresh": "刷新",
     "retry": "重试",
     "confirm": "确认",
+    "success": "操作成功",
     "submit": "提交",
     "anonymous": "匿名",
     "noImage": "无图"
@@ -214,6 +216,7 @@
   },
   "userMenu": {
     "avatar": "头像",
+    "adminBadge": "管理员",
     "noName": "未设置姓名",
     "profile": "个人资料",
     "inviteFriends": "邀请好友",
@@ -223,6 +226,7 @@
     "renderError": "渲染出错"
   },
   "dashboard": {
+    "menu": "菜单",
     "groups": "客户分组",
     "appointments": "预约",
     "pending": "待预约",
@@ -259,31 +263,40 @@
     "resetToken": "重置链接",
     "resetTokenTitle": "重置查看/编辑链接",
     "resetTokenDesc": "重置后，旧的链接将失效，新链接将自动复制到剪贴板。请及时分享给客户。",
-    "resetTokenSuccess": "链接已重置，新展示链接已复制"
+    "resetTokenSuccess": "链接已重置，新展示链接已复制",
+    "deleteGroupConfirm": "确定删除此客户分组？其下的待预约和预约记录将保留。"
   },
   "pendingSection": {
     "title": "待预约",
     "noPending": "暂无待预约，在客户分组卡片旁点击「新增待预约」添加",
+    "notesPlaceholder": "如：该房源只能周六上午看",
     "itemsCount": "{{count}} 条",
     "timeTbd": "时间待定",
     "noRefreshSupport": "该房源无支持的链接（Property Guru / Property Group），无法刷新",
     "refreshFailed": "刷新失败",
     "refreshTitle": "重新抓取最新信息",
-    "batchAddButton": "一键开启预约",
-    "batchAddTitle": "一键开启预约",
+    "batchAddButton": "批量预约",
+    "batchAddTitle": "批量预约",
     "batchAddGroup": "客户分组",
     "batchAddLinks": "房源链接",
-    "batchAddLinksPlaceholder": "粘贴多个 Property Guru / Property Group 链接，用空格或换行分隔",
-    "batchAddSuccess": "已提交 {{count}} 条，正在后台抓取",
+    "batchAddLinksPlaceholder": "粘贴多个链接，用空格或换行分隔。添加后立即返回，抓取在后台进行",
+    "batchAddSuccess": "已添加 {{count}} 条待预约，抓取进行中",
     "selectGroupRequired": "请选择客户分组",
     "enterValidLinks": "请输入至少一个有效的 Property Guru / Property Group 链接",
     "scraping": "抓取中...",
     "editTemplate": "编辑 WhatsApp 模板",
     "editTemplateTitle": "编辑 WhatsApp 预填消息模板",
-    "editTemplateHint": "支持变量：{agent_name}、{my_name}、{my_company}、{buyer_or_tenant}、{listing_type}、{property_title}、{bedrooms}、{price}、{agent_line}、{link}",
+    "editTemplateHint": "支持变量：{agent_name}、{my_name}、{my_company}、{listing_type}、{property_title}、{bedrooms}、{price}、{link}",
+    "templateSale": "买房消息模板",
+    "templateRent": "租房消息模板",
     "restoreDefault": "恢复默认",
     "selectAll": "全选",
     "deselectAll": "取消全选",
+    "selectForBatch": "勾选以进行批量操作",
+    "batchDelete": "批量删除",
+    "batchDeleteConfirm": "确定删除选中的 {{count}} 条待预约？",
+    "batchDeleteSuccess": "已删除 {{count}} 条",
+    "deleteItemConfirm": "确定删除这条待预约？",
     "batchWhatsApp": "一键发出 WhatsApp",
     "batchWhatsAppSuccess": "已打开 {{count}} 个 WhatsApp 对话",
     "selectWithPhone": "请选择含卖家中介电话的记录",
@@ -346,7 +359,8 @@
     "enterPropertyLink": "请输入 Property Guru 链接",
     "propertyLinkOnly": "仅支持 Property Guru / Property Group 链接",
     "scraping": "抓取中...",
-    "scrapeSuccessTitle": "已保存，正在后台抓取房源信息，稍候刷新可见"
+    "scrapeSuccessTitle": "已保存，正在后台抓取房源信息，稍候刷新可见",
+    "deleteAppointmentConfirm": "确定删除此预约？"
   },
   "scheduleSection": {
     "hourSuffix": "时",
@@ -374,7 +388,10 @@
     "noFeedback": "暂无建议或反馈",
     "enterFeedback": "请输入建议或反馈内容",
     "support": "支持 +1",
-    "unsupport": "取消支持"
+    "unsupport": "取消支持",
+    "delete": "删除",
+    "deleteConfirm": "确定要删除这条建议吗？",
+    "deleted": "已删除"
   },
   "lightbox": {
     "title": "放大图片",

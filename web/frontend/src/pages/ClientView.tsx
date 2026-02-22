@@ -6,7 +6,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { useRealtimeClientView } from '@/hooks/useRealtimeAppointments'
 import { useAuth } from '@/hooks/useAuth'
-import { getWhatsAppChatUrl } from '@/lib/whatsapp'
+import { getWhatsAppChatUrl, getTelUrl } from '@/lib/whatsapp'
 import { getGoogleMapsSearchUrl } from '@/lib/mapUtils'
 import { MapViewModal } from '@/components/MapViewModal'
 import { triggerScrapeAsync, isSupportedScrapeUrl, normalizeSourceUrl } from '@/lib/scrapeApi'
@@ -242,29 +242,29 @@ export default function ClientView() {
         className={`overflow-hidden hover:shadow-md transition-shadow ${inHistory ? 'p-4' : 'rounded-xl shadow-sm border border-[#53868e]/20'}`}
         style={{ background: inHistory ? undefined : 'linear-gradient(145deg, #f6f3f1 0%, #ebece8 100%)' }}
       >
-        <div className="flex">
-          <div className={`flex flex-col w-28 sm:w-32 flex-shrink-0 gap-0.5 p-2 ${imgs.length <= 1 ? 'justify-center' : ''}`} style={{ background: 'rgba(83,134,142,0.08)' }}>
+        <div className="flex flex-col sm:flex-row">
+          <div className={`flex flex-col w-full sm:w-[166px] flex-shrink-0 gap-0.5 p-2 order-1 sm:order-none ${imgs.length <= 1 ? 'justify-center' : ''}`} style={{ background: 'rgba(83,134,142,0.08)' }}>
             {imgs[0] ? (
               <button
                 type="button"
                 onClick={() => setLightboxImage(imgs[0])}
-                className={`block w-full rounded-lg overflow-hidden cursor-zoom-in hover:opacity-90 transition-opacity text-left ${imgs.length >= 2 ? 'h-20' : 'h-40'}`}
+                className={`block w-full rounded-lg overflow-hidden cursor-zoom-in hover:opacity-90 transition-opacity text-left ${imgs.length >= 2 ? 'h-[160px] sm:h-auto sm:w-[150px] sm:aspect-[4/3]' : 'h-40 sm:h-auto sm:w-[150px] sm:aspect-[4/3]'}`}
               >
-                <img src={imgs[0]} alt={a.property.title} className={`w-full object-cover ${imgs.length >= 2 ? 'h-20' : 'h-40'}`} />
+                <img src={imgs[0]} alt={a.property.title} className="w-full h-full object-cover" />
               </button>
             ) : (
               <div className="w-full h-20 rounded-lg flex items-center justify-center text-[#2b5843]/50 text-xs" style={{ background: 'rgba(83,134,142,0.15)' }}>{t('common.noImage')}</div>
             )}
             {imgs[1] && (
-              <button type="button" onClick={() => setLightboxImage(imgs[1])} className="block w-full h-20 rounded-lg overflow-hidden cursor-zoom-in hover:opacity-90 transition-opacity text-left">
-                <img src={imgs[1]} alt={a.property.title} className="w-full h-20 object-cover" />
+              <button type="button" onClick={() => setLightboxImage(imgs[1])} className="block w-full h-[160px] sm:h-auto sm:w-[150px] sm:aspect-[4/3] rounded-lg overflow-hidden cursor-zoom-in hover:opacity-90 transition-opacity text-left">
+                <img src={imgs[1]} alt={a.property.title} className="w-full h-full object-cover" />
               </button>
             )}
           </div>
-          <div className="flex-1 min-w-0 p-4 flex flex-col justify-center">
+          <div className="flex-1 min-w-0 p-4 flex flex-col justify-center order-2 sm:order-none">
             <div className="flex items-start justify-between gap-2">
               <div className="flex items-center gap-2 flex-wrap min-w-0">
-                <p className={`font-semibold text-base leading-tight ${inHistory ? 'text-[#2b5843]/90' : 'text-[#2b5843]'}`}>{a.property.title}</p>
+                <p className={`font-semibold text-base leading-tight break-words ${inHistory ? 'text-[#2b5843]/90' : 'text-[#2b5843]'}`}>{a.property.title}</p>
                 {a.property.listing_type && (
                   <span className={`px-1.5 py-0.5 rounded text-xs font-medium shrink-0 ${a.property.listing_type === 'rent' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>
                     {a.property.listing_type === 'rent' ? t('clientView.rent') : t('clientView.sale')}
@@ -346,7 +346,7 @@ export default function ClientView() {
                     {p.listing_agent_name && <span className="text-sm font-medium text-[#2b5843]/90">{p.listing_agent_name}</span>}
                     {p.listing_agent_phone && (
                       <span className="inline-flex items-center gap-0.5">
-                        <a href={`tel:${p.listing_agent_phone}`} className="text-sm text-[#53868e] hover:text-[#2b5843]">
+                        <a href={getTelUrl(p.listing_agent_phone)} className="text-sm text-[#53868e] hover:text-[#2b5843]">
                           {p.listing_agent_phone}
                         </a>
                         <CopyIcon onClick={() => copyPhone(p.listing_agent_phone!)} title={t('clientView.copyNumber')} t={t} />
@@ -396,14 +396,14 @@ export default function ClientView() {
         <div className="absolute top-0 left-0 right-0 h-0.5 bg-emerald-500/80 animate-pulse z-10" title={t('clientView.updating')} />
       )}
       <header className="border-b border-[#53868e]/20 rounded-b-2xl mx-2 sm:mx-4 mt-2 shadow-sm" style={{ background: 'linear-gradient(135deg, #f6f3f1 0%, #ebece8 100%)' }}>
-        <div className="max-w-2xl mx-auto px-6 py-6">
-          <div className="flex items-start justify-between gap-4">
+        <div className="max-w-2xl mx-auto px-4 sm:px-6 py-4 sm:py-6">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
             <div className="flex-1 min-w-0">
               <h1 className="text-xl font-semibold text-[#2b5843]">{t('clientView.scheduleTitle')}</h1>
               {group && <p className="text-[#2b5843]/70 text-sm mt-1">{group.name}</p>}
             </div>
             {isAgent && (
-              <div className="flex items-center gap-3 shrink-0">
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3 shrink-0">
                 <button
                   type="button"
                   onClick={() => navigate('/home/agent')}
@@ -441,7 +441,7 @@ export default function ClientView() {
         </div>
       </header>
 
-      <main className="max-w-2xl mx-auto px-6 py-8 space-y-10">
+      <main className="max-w-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-10">
         <section>
           {mapProperties.length > 0 && (
             <div className="flex justify-end mb-3">
@@ -460,7 +460,7 @@ export default function ClientView() {
               </button>
             </div>
           )}
-          <div className="flex gap-1 border-b border-slate-200 mb-4">
+          <div className="flex gap-1 border-b border-slate-200 mb-4 overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
             <button
               type="button"
               onClick={() => setActiveTab('upcoming')}

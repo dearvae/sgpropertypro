@@ -45,7 +45,14 @@ export function UserMenu() {
       {showDropdown && (
         <div className="absolute right-0 top-full mt-1 py-1 min-w-[140px] rounded-xl border border-[#53868e]/25 shadow-lg z-50" style={{ background: 'linear-gradient(145deg, #f6f3f1 0%, #ebece8 100%)' }}>
           <div className="px-3 py-2 border-b border-[#53868e]/20">
-            <p className="text-sm text-[#2b5843] truncate">{getDisplayName(profile) || t('userMenu.noName')}</p>
+            <div className="flex items-center gap-1.5 min-w-0">
+              <p className="text-sm text-[#2b5843] truncate flex-1 min-w-0">{getDisplayName(profile) || t('userMenu.noName')}</p>
+              {(profile?.is_admin || profile?.is_super_admin) && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#53868e]/25 text-[#2b5843] font-medium shrink-0">
+                  {t('userMenu.adminBadge')}
+                </span>
+              )}
+            </div>
             <p className="text-xs text-[#2b5843]/70 truncate">{user?.email}</p>
           </div>
           <button

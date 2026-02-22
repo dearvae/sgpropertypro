@@ -10,6 +10,18 @@ export function normalizePhoneForWhatsApp(phone: string): string {
   return digits || phone
 }
 
+/**
+ * 将电话号码标准化为 tel: 协议格式
+ * 用于点击拨号：移动端会打开拨号界面并自动填充号码
+ */
+export function getTelUrl(phone: string): string {
+  const digits = phone.replace(/\D/g, '')
+  if (!digits) return `tel:${phone}`
+  if (digits.startsWith('65') && digits.length >= 10) return `tel:+${digits}`
+  if (digits.length === 8 && !digits.startsWith('65')) return `tel:+65${digits}`
+  return `tel:+${digits}`
+}
+
 /** 生成与指定号码的 WhatsApp 对话链接 */
 export function getWhatsAppChatUrl(phone: string, prefillText?: string): string {
   const normalized = normalizePhoneForWhatsApp(phone)
