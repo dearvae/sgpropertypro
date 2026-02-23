@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react'
 import { User, Session } from '@supabase/supabase-js'
+import posthog from 'posthog-js'
 import { supabase } from '@/lib/supabase'
 
 type AuthContextType = {
@@ -44,6 +45,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return () => subscription.unsubscribe()
   }, [])
+
+  useEffect(() => {
+    if (!import.meta.env.VITE_POSTHOG_KEY) return
+    if (!user) {
+      posthog.reset()
+    } else {
+      posthog.identify(user.id, {
+        email: user.email,
+        role: user.user_metadata?.role,
+      })
+    }
+  }, [user])
 
   const signIn = useCallback(async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password })

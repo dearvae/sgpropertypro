@@ -41,12 +41,15 @@ app.add_middleware(
 
 class ScrapeRequest(BaseModel):
     url: str
+    property_id: Optional[str] = None  # 可选，用于记录到 scrape_runs
+    operator_id: Optional[str] = None  # 可选，操作人
 
 
 class TriggerScrapeRequest(BaseModel):
     """异步触发抓取：立即返回，后台抓取完成后写入数据库"""
     property_id: str
     url: str
+    operator_id: Optional[str] = None  # 操作人 user id，用于记录到 scrape_runs
 
 
 class BatchScrapeRequest(BaseModel):
@@ -810,8 +813,30 @@ async def scrape_property(req: ScrapeRequest, request: Request):
     _validate_scrape_url(url)
     if not _check_and_mark_in_progress(f"url:{url}"):
         raise HTTPException(status_code=429, detail="你点得太快了，请稍后再点")
+    started_at = time.time()
     try:
-        return await _run_property_scraper(url)
+        result = await _run_property_scraper(url)
+        _record_scrape_run(
+            property_id=req.property_id,
+            url=url,
+            scrape_type="sync",
+            started_at=started_at,
+            result="success",
+            operator_id=req.operator_id,
+            property_title=result.title,
+        )
+        return result
+    except Exception as e:
+        _record_scrape_run(
+            property_id=req.property_id,
+            url=url,
+            scrape_type="sync",
+            started_at=started_at,
+            result="failure",
+            error_message=str(e),
+            operator_id=req.operator_id,
+        )
+        raise
     finally:
         _clear_in_progress(f"url:{url}")
 
@@ -874,12 +899,16 @@ def _batch_create_properties_and_pending(
     return todo
 
 
-async def _background_batch_scrape(todo: list[tuple[str, str]]) -> None:
+async def _background_batch_scrape(
+    todo: list[tuple[str, str]], operator_id: Optional[str] = None
+) -> None:
     """后台顺序抓取并更新 properties，每个之间间隔 BATCH_SCRAPE_DELAY_SEC"""
     for i, (property_id, url) in enumerate(todo):
         if i > 0:
             await asyncio.sleep(BATCH_SCRAPE_DELAY_SEC)
-        await _background_scrape_and_update(property_id, url)
+        await _background_scrape_and_update(
+            property_id, url, operator_id=operator_id, scrape_type="batch"
+        )
 
 
 @app.post("/api/batch-scrape-properties")
@@ -918,7 +947,7 @@ async def batch_scrape_properties(req: BatchScrapeRequest, request: Request, bac
         raise HTTPException(status_code=500, detail=str(e))
     if not todo:
         return JSONResponse(status_code=200, content={"added": 0, "message": "无新增（可能已存在）"})
-    background_tasks.add_task(_background_batch_scrape, todo)
+    background_tasks.add_task(_background_batch_scrape, todo, req.agent_id)
     return JSONResponse(status_code=202, content={"added": len(todo), "message": "已添加，抓取进行中"})
 
 
@@ -934,15 +963,23 @@ def _create_agent_listing(
         raise HTTPException(status_code=500, detail="数据库未配置。请设置 SUPABASE_URL 和 SUPABASE_SERVICE_ROLE_KEY")
     # intent: sale=出售, rent=出租
     intent_val = "sale" if listing_type == "sale" else "rent"
-    name_val = (client_name or "").strip() or "待定"
 
     # 检查是否已有同 URL 的 property，且已有关联的 listing
     # 使用 limit(1) 替代 maybe_single，避免 postgrest-py 在 0 行时抛 204 APIError
     try:
-        r = client.table("properties").select("id").eq("agent_id", agent_id).eq("source_url", url).limit(1).execute()
+        r = client.table("properties").select("id, title").eq("agent_id", agent_id).eq("source_url", url).limit(1).execute()
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"数据库查询失败: {e!s}")
     r_data = r.data[0] if r and r.data else None
+    # 出售/出租房源：无客户名称时用房源名称（小区名称），不用「待定」
+    _client_name = (client_name or "").strip()
+    if _client_name:
+        name_val = _client_name
+    elif r_data and r_data.get("title") and r_data["title"] != PLACEHOLDER_TITLE:
+        name_val = r_data["title"]
+    else:
+        name_val = PLACEHOLDER_TITLE  # 新建房源时先用占位，抓取完成后会更新
+
     if r_data:
         prop_id = r_data["id"]
         try:
@@ -1027,8 +1064,11 @@ async def add_agent_listing(req: AddAgentListingRequest, request: Request, backg
     except HTTPException:
         raise
 
+    # 在线程池中执行 DB 操作，避免同步 Supabase 调用阻塞事件循环
     try:
-        group_id, prop_id = _create_agent_listing(normalized, req.agent_id, req.client_name, req.listing_type)
+        group_id, prop_id = await asyncio.to_thread(
+            _create_agent_listing, normalized, req.agent_id, req.client_name, req.listing_type
+        )
     except HTTPException:
         raise
     except Exception as e:
@@ -1036,11 +1076,17 @@ async def add_agent_listing(req: AddAgentListingRequest, request: Request, backg
         logging.getLogger(__name__).exception("添加 agent listing 失败: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
-    # 抓取异步执行，不阻塞响应
-    background_tasks.add_task(_background_scrape_and_update, prop_id, normalized)
+    # 抓取异步执行：立即返回 202，爬虫在后台运行，不阻塞响应
+    background_tasks.add_task(
+        _background_scrape_and_update,
+        prop_id,
+        normalized,
+        operator_id=req.agent_id,
+        scrape_type="add_listing",
+    )
     return JSONResponse(
-        status_code=200,
-        content={"added": 1, "group_id": group_id, "property_id": prop_id, "message": "添加成功，房源详情将在后台自动抓取"},
+        status_code=202,
+        content={"added": 1, "group_id": group_id, "property_id": prop_id, "message": "已添加，房源详情将在后台自动抓取"},
     )
 
 
@@ -1065,6 +1111,40 @@ def _get_supabase_client():
     return create_client(url, key)
 
 
+def _record_scrape_run(
+    property_id: str,
+    url: str,
+    scrape_type: str,
+    started_at: float,
+    result: str,
+    error_message: Optional[str] = None,
+    operator_id: Optional[str] = None,
+    property_title: Optional[str] = None,
+) -> None:
+    """记录抓取运行到 scrape_runs 表"""
+    client = _get_supabase_client()
+    if not client:
+        return
+    from datetime import datetime, timezone
+    duration_ms = int((time.time() - started_at) * 1000)
+    started_dt = datetime.fromtimestamp(started_at, tz=timezone.utc).isoformat()
+    try:
+        client.table("scrape_runs").insert({
+            "property_id": property_id,
+            "source_url": url,
+            "property_title": property_title,
+            "scrape_type": scrape_type,
+            "operator_id": operator_id,
+            "started_at": started_dt,
+            "duration_ms": duration_ms,
+            "result": result,
+            "error_message": error_message,
+        }).execute()
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception("写入 scrape_runs 失败")
+
+
 def _record_scrape_failure(property_id: str, url: str, error: Exception) -> None:
     """将抓取失败记录写入 scrape_failures 表，供管理员查看"""
     client = _get_supabase_client()
@@ -1085,14 +1165,38 @@ def _record_scrape_failure(property_id: str, url: str, error: Exception) -> None
         logging.getLogger(__name__).exception("写入 scrape_failures 失败")
 
 
-async def _background_scrape_and_update(property_id: str, url: str) -> None:
-    """后台执行抓取，成功后更新 Supabase properties 表；失败时写入 scrape_failures"""
+async def _background_scrape_and_update(
+    property_id: str,
+    url: str,
+    operator_id: Optional[str] = None,
+    scrape_type: str = "trigger",
+) -> None:
+    """后台执行抓取，成功后更新 Supabase properties 表；失败时写入 scrape_failures。同时记录到 scrape_runs"""
+    started_at = time.time()
     try:
         result = await _run_property_scraper(url)
+        _record_scrape_run(
+            property_id=property_id,
+            url=url,
+            scrape_type=scrape_type,
+            started_at=started_at,
+            result="success",
+            operator_id=operator_id,
+            property_title=result.title,
+        )
     except Exception as e:
         import logging
         logging.getLogger(__name__).exception("异步抓取失败: %s", e)
         _record_scrape_failure(property_id, url, e)
+        _record_scrape_run(
+            property_id=property_id,
+            url=url,
+            scrape_type=scrape_type,
+            started_at=started_at,
+            result="failure",
+            error_message=str(e),
+            operator_id=operator_id,
+        )
         return
     finally:
         _clear_in_progress(f"prop:{property_id}")
@@ -1133,6 +1237,24 @@ async def _background_scrape_and_update(property_id: str, url: str) -> None:
         import logging
         logging.getLogger(__name__).exception("更新数据库失败: %s", e)
 
+    # 出售/出租房源：若关联的 listing 名称为「待定」或「抓取中」，更新为房源标题
+    if result.title:
+        try:
+            listing_rows = (
+                client.table("customer_groups")
+                .select("id, name")
+                .eq("property_id", property_id)
+                .eq("group_type", "listing")
+                .in_("name", ["待定", PLACEHOLDER_TITLE])
+                .execute()
+            )
+            if listing_rows and listing_rows.data:
+                for row in listing_rows.data:
+                    client.table("customer_groups").update({"name": result.title}).eq("id", row["id"]).execute()
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).exception("更新 listing 名称失败: %s", e)
+
 
 def _is_property_scraped_recently(property_id: str) -> bool:
     """检查该房源是否在 1 小时内已抓取过"""
@@ -1171,7 +1293,13 @@ async def trigger_scrape(req: TriggerScrapeRequest, request: Request, background
     if _is_property_scraped_recently(req.property_id):
         _clear_in_progress(prop_key)
         return Response(status_code=202, content=b"", media_type="text/plain")
-    background_tasks.add_task(_background_scrape_and_update, req.property_id, url)
+    background_tasks.add_task(
+        _background_scrape_and_update,
+        req.property_id,
+        url,
+        operator_id=req.operator_id,
+        scrape_type="trigger",
+    )
     return Response(status_code=202, content=b"", media_type="text/plain")
 
 

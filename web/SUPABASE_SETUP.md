@@ -37,6 +37,7 @@
 22. `supabase/migrations/040_get_client_view_pending.sql`（**客户页待预约**：get_client_view 返回 pending_appointments）
 23. `supabase/migrations/041_realtime_pending_appointments.sql`（待预约 Realtime）
 24. `supabase/migrations/042_client_pending_notes.sql`（**待预约客户备注**：客户可查看中介备注、添加/编辑自己的备注）
+25. `supabase/migrations/045_client_favorites.sql`（**客户收藏**：客户可将待预约/已预约房源打标为收藏，再次点击取消收藏）
 
 **「仅开发者可见」反馈**：仅管理员和超级管理员可见，并可删除任意建议。授予管理员权限见下方。
 
@@ -76,6 +77,8 @@ cd web && python3 run-fix-columns.py
 **若出现 "Could not find the 'group_type' column of 'customer_groups'"**：说明 037 迁移未执行。在 SQL Editor 中执行 `supabase/migrations/037_agent_listings.sql`。该迁移添加自售/出租房源所需的 group_type、property_id 列。
 
 **若出现 "Could not find the 'top_year' column of 'properties' in the schema cache"**：说明 032/033 迁移未执行，或 PostgREST schema cache 未刷新。运行 `cd propertyassistance/web && python3 run-migration-032-033.py`（需在 .env 中配置 SUPABASE_PROJECT_REF、SUPABASE_DB_PASSWORD）；或手动在 SQL Editor 依次执行 `032_property_top_year.sql`、`033_client_view_top_year.sql`，再执行 `NOTIFY pgrst, 'reload schema';` 刷新 schema 缓存。
+
+**若出现 "Could not find the function public.save_client_favorite(...) in the schema cache"**：说明 045 迁移未执行。运行 `cd propertyassistance/web && python3 run-migration-045.py`（需在项目根 .env 中配置 SUPABASE_PROJECT_REF、SUPABASE_DB_PASSWORD）；或手动在 SQL Editor 执行 `supabase/migrations/045_client_favorites.sql`，再执行 `NOTIFY pgrst, 'reload schema';` 刷新 schema 缓存。
 
 **若出现 "Could not find the table in the schema cache"**：说明数据库表尚未创建。
 

@@ -28,11 +28,17 @@ export type ScrapeResult = {
 export const RATE_LIMIT_MSG = '你点得太快了，请稍后再点'
 export const RATE_LIMIT_MSG_GENERAL = '请求过于频繁，请稍后再试'
 
-export async function scrapeProperty(url: string): Promise<ScrapeResult> {
+export async function scrapeProperty(
+  url: string,
+  options?: { propertyId?: string; operatorId?: string }
+): Promise<ScrapeResult> {
+  const body: { url: string; property_id?: string; operator_id?: string } = { url: url.trim() }
+  if (options?.propertyId) body.property_id = options.propertyId
+  if (options?.operatorId) body.operator_id = options.operatorId
   const res = await fetch(`${SCRAPE_API_URL}/api/scrape-property`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ url: url.trim() }),
+    body: JSON.stringify(body),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))
@@ -91,7 +97,7 @@ export type AddAgentListingResponse = {
 }
 
 /**
- * 添加 agent 自售/出租房源：创建 property + customer_group (listing)，后台抓取。
+ * 添加 agent 自售/出租房源：创建 property + customer_group (listing)，立即返回 202，爬虫在后台异步执行。
  * 必填：房源链接；选填：客户名称。
  */
 export async function addAgentListing(p: {
@@ -146,12 +152,22 @@ export type TriggerScrapeResult = { ok: true; skipped?: boolean }
 /**
  * 异步触发抓取：立即返回 202，后台抓取完成后会更新数据库。
  * skipped=true 表示 1 小时内已抓过，未实际执行（仍返回成功）。
+ * operatorId 可选，用于记录操作人到 scrape_runs 供管理员查看。
  */
-export async function triggerScrapeAsync(propertyId: string, url: string): Promise<TriggerScrapeResult> {
+export async function triggerScrapeAsync(
+  propertyId: string,
+  url: string,
+  operatorId?: string | null
+): Promise<TriggerScrapeResult> {
+  const body: { property_id: string; url: string; operator_id?: string } = {
+    property_id: propertyId,
+    url: url.trim(),
+  }
+  if (operatorId) body.operator_id = operatorId
   const res = await fetch(`${SCRAPE_API_URL}/api/trigger-scrape`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ property_id: propertyId, url: url.trim() }),
+    body: JSON.stringify(body),
   })
   if (!res.ok && res.status !== 202) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))

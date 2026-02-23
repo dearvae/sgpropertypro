@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { message } from 'antd'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -59,6 +59,7 @@ type ClientViewData = {
   appointments: AppointmentItem[]
   pending_appointments?: PendingItem[]
   can_edit?: boolean
+  favorited_property_ids?: string[]
   error?: string
 }
 
@@ -89,9 +90,11 @@ export default function ClientView() {
   const qc = useQueryClient()
   useRealtimeClientView(token)
 
-  const [activeTab, setActiveTab] = useState<'pending' | 'upcoming' | 'history'>('pending')
+  const [activeTab, setActiveTab] = useState<'pending' | 'upcoming' | 'history' | 'favorites'>('upcoming')
+  const initialTabSet = useRef(false)
   const [archiveCollapsed, setArchiveCollapsed] = useState(true)
   const [collapsedDates, setCollapsedDates] = useState<Set<string>>(new Set())
+  const [pendingSortOrder, setPendingSortOrder] = useState<'default' | 'price_asc' | 'price_desc'>('default')
   const [lightboxImage, setLightboxImage] = useState<string | null>(null)
   const [noteModal, setNoteModal] = useState<{ appointmentId?: string; pendingId?: string; content: string } | null>(null)
   const [showMapModal, setShowMapModal] = useState(false)
@@ -135,6 +138,22 @@ export default function ClientView() {
     refetchOnWindowFocus: true, // 切回标签页时刷新
   })
 
+  // 页面初次加载时，优先展示已预约；无已预约则展示待预约
+  useEffect(() => {
+    if (initialTabSet.current || isLoading || error || !data) return
+    const appointments = Array.isArray(data.appointments) ? data.appointments : []
+    const pendingItems = Array.isArray(data.pending_appointments) ? data.pending_appointments : []
+    const pendingMain = pendingItems.filter((p: PendingItem) => p.client_feedback !== 'not_interested')
+    const now = new Date()
+    const upcoming = appointments.filter((a: AppointmentItem) => new Date(a.start_time) >= now)
+    if (upcoming.length > 0) {
+      setActiveTab('upcoming')
+    } else if (pendingMain.length > 0) {
+      setActiveTab('pending')
+    }
+    initialTabSet.current = true
+  }, [data, isLoading, error])
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4" style={{ background: 'linear-gradient(180deg, #f6f3f1 0%, #e8ebe8 100%)' }}>
@@ -157,14 +176,40 @@ export default function ClientView() {
     )
   }
 
-  const { group, appointments: rawAppointments, pending_appointments: rawPending = [], can_edit: canEdit = false } = data
+  const { group, appointments: rawAppointments, pending_appointments: rawPending = [], can_edit: canEdit = false, favorited_property_ids: rawFavorited = [] } = data
+  const favoritedIds = new Set(Array.isArray(rawFavorited) ? rawFavorited : [])
   const appointments = Array.isArray(rawAppointments) ? rawAppointments : []
   const pendingItems = Array.isArray(rawPending) ? rawPending : []
+  const getPriceNumber = (p: PropertyData): number => {
+    const val = p?.price_value ?? p?.price
+    if (!val) return Infinity
+    const num = parseFloat(String(val).replace(/[^0-9.]/g, ''))
+    return Number.isNaN(num) ? Infinity : num
+  }
+  const sortByPrice = <T extends { property: PropertyData }>(arr: T[], asc: boolean): T[] => {
+    return [...arr].sort((a, b) => {
+      const na = getPriceNumber(a.property)
+      const nb = getPriceNumber(b.property)
+      if (na !== nb) return asc ? na - nb : nb - na
+      return 0
+    })
+  }
   const pendingMain = pendingItems.filter((p) => p.client_feedback !== 'not_interested')
   const pendingArchive = pendingItems.filter((p) => p.client_feedback === 'not_interested')
+  const pendingMainSorted =
+    pendingSortOrder === 'default' ? pendingMain : sortByPrice(pendingMain, pendingSortOrder === 'price_asc')
+  const pendingArchiveSorted =
+    pendingSortOrder === 'default' ? pendingArchive : sortByPrice(pendingArchive, pendingSortOrder === 'price_asc')
   const now = new Date()
   const upcoming = appointments.filter((a) => new Date(a.start_time) >= now)
   const history = appointments.filter((a) => new Date(a.start_time) < now)
+
+  const favoritedItems = [...new Map([
+    ...pendingMain.filter((i) => favoritedIds.has(i.property.id)).map((i) => [i.property.id, { property: i.property }] as const),
+    ...pendingArchive.filter((i) => favoritedIds.has(i.property.id)).map((i) => [i.property.id, { property: i.property }] as const),
+    ...upcoming.filter((a) => favoritedIds.has(a.property.id)).map((a) => [a.property.id, { property: a.property }] as const),
+    ...history.filter((a) => favoritedIds.has(a.property.id)).map((a) => [a.property.id, { property: a.property }] as const),
+  ]).values()]
 
   const historyByDate = history.reduce<Record<string, typeof history>>((acc, a) => {
     const d = new Date(a.start_time).toDateString()
@@ -229,6 +274,22 @@ export default function ClientView() {
     navigator.clipboard.writeText(phone).then(() => message.success(t('clientView.copied')))
   }
 
+  const handleToggleFavorite = async (propertyId: string) => {
+    if (!token) return
+    const isFavorited = favoritedIds.has(propertyId)
+    try {
+      const { error: rpcError } = await supabase.rpc('save_client_favorite', {
+        p_share_token: token,
+        p_property_id: propertyId,
+        p_favorited: !isFavorited,
+      })
+      if (rpcError) throw rpcError
+      qc.invalidateQueries({ queryKey: ['client-view', token] })
+    } catch (e) {
+      message.error((e as Error).message)
+    }
+  }
+
   const handleSaveFeedback = async (pendingId: string, feedback: 'interested' | 'neutral' | 'not_interested') => {
     if (!token) return
     try {
@@ -252,8 +313,8 @@ export default function ClientView() {
     }
     setRefreshingPropertyId(p.id)
     try {
-      await triggerScrapeAsync(p.id, normalizeSourceUrl(url))
-      message.success(t('clientView.refreshStarted'))
+      await triggerScrapeAsync(p.id, normalizeSourceUrl(url), user?.id)
+      message.info(t('common.asyncScrapeHint'), 5)
       // 备份：20 秒后强制刷新一次（以防 Realtime 未配置 properties 表）
       if (token) {
         setTimeout(() => {
@@ -305,6 +366,17 @@ export default function ClientView() {
           <div className="flex-1 min-w-0 p-4 flex flex-col justify-center order-2 sm:order-none">
             <div className="flex items-start justify-between gap-2">
               <div className="flex items-center gap-2 flex-wrap min-w-0">
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); handleToggleFavorite(a.property.id) }}
+                  className="shrink-0 p-0.5 -ml-0.5 rounded hover:bg-[#53868e]/10 text-[#53868e]/70 hover:text-amber-500 transition-colors"
+                  title={favoritedIds.has(a.property.id) ? t('clientView.unfavorite') : t('clientView.favorite')}
+                  aria-label={favoritedIds.has(a.property.id) ? t('clientView.unfavorite') : t('clientView.favorite')}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill={favoritedIds.has(a.property.id) ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" className="w-5 h-5">
+                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                  </svg>
+                </button>
                 <p className={`font-semibold text-base leading-tight break-words ${inHistory ? 'text-[#2b5843]/90' : 'text-[#2b5843]'}`}>{a.property.title}</p>
                 {a.property.listing_type && (
                   <span className={`px-1.5 py-0.5 rounded text-xs font-medium shrink-0 ${a.property.listing_type === 'rent' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>
@@ -467,6 +539,17 @@ export default function ClientView() {
           <div className="flex-1 min-w-0 p-4 flex flex-col justify-center order-2 sm:order-none">
             <div className="flex items-start justify-between gap-2">
               <div className="flex items-center gap-2 flex-wrap min-w-0">
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); handleToggleFavorite(p.id) }}
+                  className="shrink-0 p-0.5 -ml-0.5 rounded hover:bg-[#53868e]/10 text-[#53868e]/70 hover:text-amber-500 transition-colors"
+                  title={favoritedIds.has(p.id) ? t('clientView.unfavorite') : t('clientView.favorite')}
+                  aria-label={favoritedIds.has(p.id) ? t('clientView.unfavorite') : t('clientView.favorite')}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill={favoritedIds.has(p.id) ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" className="w-5 h-5">
+                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                  </svg>
+                </button>
                 <p className="font-semibold text-base leading-tight break-words text-[#2b5843]">{p.title}</p>
                 {p.listing_type && (
                   <span className={`px-1.5 py-0.5 rounded text-xs font-medium shrink-0 ${p.listing_type === 'rent' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>
@@ -636,21 +719,21 @@ export default function ClientView() {
           <div className="flex gap-1 border-b border-slate-200 mb-4 overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
             <button
               type="button"
-              onClick={() => setActiveTab('pending')}
-              className={`px-4 py-2 text-sm font-medium -mb-px border-b-2 transition-colors ${
-                activeTab === 'pending' ? 'border-emerald-600 text-emerald-700' : 'border-transparent text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              {t('clientView.pendingTab')}{pendingItems.length > 0 && <span className="ml-1.5 text-slate-400 font-normal">({pendingItems.length})</span>}
-            </button>
-            <button
-              type="button"
               onClick={() => setActiveTab('upcoming')}
               className={`px-4 py-2 text-sm font-medium -mb-px border-b-2 transition-colors ${
                 activeTab === 'upcoming' ? 'border-emerald-600 text-emerald-700' : 'border-transparent text-slate-500 hover:text-slate-700'
               }`}
             >
               {t('clientView.upcoming')}{upcoming.length > 0 && <span className="ml-1.5 text-slate-400 font-normal">({upcoming.length})</span>}
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('pending')}
+              className={`px-4 py-2 text-sm font-medium -mb-px border-b-2 transition-colors ${
+                activeTab === 'pending' ? 'border-emerald-600 text-emerald-700' : 'border-transparent text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              {t('clientView.pendingTab')}{pendingItems.length > 0 && <span className="ml-1.5 text-slate-400 font-normal">({pendingItems.length})</span>}
             </button>
             <button
               type="button"
@@ -661,6 +744,15 @@ export default function ClientView() {
             >
               {t('clientView.history')}{history.length > 0 && <span className="ml-1.5 text-slate-400 font-normal">({history.length})</span>}
             </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('favorites')}
+              className={`px-4 py-2 text-sm font-medium -mb-px border-b-2 transition-colors ${
+                activeTab === 'favorites' ? 'border-emerald-600 text-emerald-700' : 'border-transparent text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              {t('clientView.favoritesTab')}{favoritedItems.length > 0 && <span className="ml-1.5 text-slate-400 font-normal">({favoritedItems.length})</span>}
+            </button>
           </div>
 
           {activeTab === 'pending' && (
@@ -669,9 +761,30 @@ export default function ClientView() {
                 <p className="text-slate-500 text-sm">{t('clientView.noPending')}</p>
               ) : (
                 <div className="space-y-6">
+                  {(pendingMain.length > 0 || pendingArchive.length > 0) && (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm text-[#2b5843]/70">{t('clientView.sortByPrice')}</span>
+                      <div className="flex rounded-lg border border-[#53868e]/25 overflow-hidden">
+                        {(['default', 'price_asc', 'price_desc'] as const).map((opt) => (
+                          <button
+                            key={opt}
+                            type="button"
+                            onClick={() => setPendingSortOrder(opt)}
+                            className={`px-3 py-1.5 text-sm transition-colors ${
+                              pendingSortOrder === opt
+                                ? 'bg-[#53868e]/15 text-[#2b5843] font-medium'
+                                : 'text-[#2b5843]/70 hover:bg-[#53868e]/5'
+                            }`}
+                          >
+                            {t(`clientView.sortByPrice_${opt}`)}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   {pendingMain.length > 0 && (
                     <div className="space-y-4">
-                      {pendingMain.map((item) => renderPendingCard(item))}
+                      {pendingMainSorted.map((item) => renderPendingCard(item))}
                     </div>
                   )}
                   {pendingArchive.length > 0 && (
@@ -687,7 +800,7 @@ export default function ClientView() {
                       </button>
                       {!archiveCollapsed && (
                         <div className="divide-y divide-slate-100 p-4 space-y-4">
-                          {pendingArchive.map((item) => renderPendingCard(item, true))}
+                          {pendingArchiveSorted.map((item) => renderPendingCard(item, true))}
                         </div>
                       )}
                     </div>
@@ -704,6 +817,88 @@ export default function ClientView() {
               ) : (
                 <div className="space-y-4">
                   {upcoming.map((a) => renderAppointmentCard(a))}
+                </div>
+              )}
+            </>
+          )}
+
+          {activeTab === 'favorites' && (
+            <>
+              {favoritedItems.length === 0 ? (
+                <p className="text-slate-500 text-sm">{t('clientView.noFavorites')}</p>
+              ) : (
+                <div className="space-y-4">
+                  {favoritedItems.map(({ property: p }) => {
+                    const imgs = displayImages(p)
+                    return (
+                    <div
+                      key={p.id}
+                      className="overflow-hidden rounded-xl shadow-sm border border-[#53868e]/20 hover:shadow-md transition-shadow"
+                      style={{ background: 'linear-gradient(145deg, #f6f3f1 0%, #ebece8 100%)' }}
+                    >
+                      <div className="flex flex-col sm:flex-row">
+                        <div className={`flex flex-col w-full sm:w-[166px] flex-shrink-0 gap-0.5 p-2 order-1 sm:order-none ${imgs.length <= 1 ? 'justify-center' : ''}`} style={{ background: 'rgba(83,134,142,0.08)' }}>
+                          {imgs[0] ? (
+                            <button type="button" onClick={() => setLightboxImage(imgs[0])} className="block w-full rounded-lg overflow-hidden cursor-zoom-in hover:opacity-90 transition-opacity text-left h-40 sm:h-auto sm:w-[150px] sm:aspect-[4/3]">
+                              <img src={imgs[0]} alt={p.title} className="w-full h-full object-cover" />
+                            </button>
+                          ) : (
+                            <div className="w-full h-20 rounded-lg flex items-center justify-center text-[#2b5843]/50 text-xs" style={{ background: 'rgba(83,134,142,0.15)' }}>{t('common.noImage')}</div>
+                          )}
+                          {imgs[1] && (
+                            <button type="button" onClick={() => setLightboxImage(imgs[1]!)} className="block w-full h-[100px] sm:h-auto sm:w-[150px] sm:aspect-[4/3] rounded-lg overflow-hidden cursor-zoom-in hover:opacity-90 transition-opacity text-left mt-0.5">
+                              <img src={imgs[1]!} alt={p.title} className="w-full h-full object-cover" />
+                            </button>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0 p-4 flex flex-col justify-center order-2 sm:order-none">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-center gap-2 flex-wrap min-w-0">
+                              <button
+                                type="button"
+                                onClick={() => handleToggleFavorite(p.id)}
+                                className="shrink-0 p-0.5 -ml-0.5 rounded hover:bg-[#53868e]/10 text-amber-500"
+                                title={t('clientView.unfavorite')}
+                                aria-label={t('clientView.unfavorite')}
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
+                                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                                </svg>
+                              </button>
+                              <p className="font-semibold text-base leading-tight break-words text-[#2b5843]">{p.title}</p>
+                              {p.listing_type && (
+                                <span className={`px-1.5 py-0.5 rounded text-xs font-medium shrink-0 ${p.listing_type === 'rent' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>
+                                  {p.listing_type === 'rent' ? t('clientView.rent') : t('clientView.sale')}
+                                </span>
+                              )}
+                            </div>
+                            {formatPriceDisplay(p) && <span className="font-medium text-emerald-700 shrink-0">{formatPriceDisplay(p)}</span>}
+                          </div>
+                          <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-1.5 text-sm text-[#2b5843]/80">
+                            {p.bedrooms && <span>{p.bedrooms}</span>}
+                            {p.bathrooms && <span>{p.bathrooms}</span>}
+                            {(p.size_sqft || p.basic_info) && <span>{(p.size_sqft || p.basic_info)}</span>}
+                            {p.listing_type === 'sale' && p.lease_tenure && <span className="text-[#2b5843]/70">{p.lease_tenure}</span>}
+                            {p.top_year && <span className="text-[#2b5843]/70">{p.top_year}</span>}
+                          </div>
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-sm">
+                            {p.site_plan_url && (
+                              <button type="button" onClick={() => setLightboxImage(p.site_plan_url!)} className="text-emerald-600 hover:underline font-medium">{t('clientView.sitePlan')}</button>
+                            )}
+                            {p.link && (
+                              <a href={p.link} target="_blank" rel="noreferrer" className="text-emerald-600 hover:underline font-medium">{t('clientView.viewProperty')}</a>
+                            )}
+                            <a href={getGoogleMapsSearchUrl(p.title)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-emerald-600 text-sm hover:underline font-medium">
+                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
+                                <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" /><circle cx="12" cy="10" r="3" />
+                              </svg>
+                              {t('clientView.mapNav')}
+                            </a>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )})}
                 </div>
               )}
             </>

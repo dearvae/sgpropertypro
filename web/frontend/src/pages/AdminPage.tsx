@@ -29,6 +29,20 @@ type ScrapeFailure = {
   created_at: string
 }
 
+type ScrapeRun = {
+  id: string
+  property_id: string | null
+  property_title: string
+  source_url: string
+  scrape_type: string
+  operator_id: string | null
+  operator_display_name: string | null
+  started_at: string
+  duration_ms: number | null
+  result: string
+  error_message: string | null
+}
+
 export default function AdminPage() {
   const { user, loading: authLoading } = useAuth()
   const { data: profile } = useProfile()
@@ -53,6 +67,16 @@ export default function AdminPage() {
       const { data, error: err } = await supabase.rpc('admin_get_scrape_failures')
       if (err) throw err
       return (data ?? []) as ScrapeFailure[]
+    },
+    enabled: !!user && isAdmin,
+  })
+
+  const { data: scrapeRuns, isLoading: scrapeRunsLoading } = useQuery({
+    queryKey: ['admin-scrape-runs', user?.id, isAdmin],
+    queryFn: async () => {
+      const { data, error: err } = await supabase.rpc('admin_get_scrape_runs')
+      if (err) throw err
+      return (data ?? []) as ScrapeRun[]
     },
     enabled: !!user && isAdmin,
   })
@@ -186,6 +210,70 @@ export default function AdminPage() {
 
         {scrapeFailures && scrapeFailures.length === 0 && !scrapeFailuresLoading && (
           <p className="text-[#2b5843]/70">{t('admin.noScrapeFailures')}</p>
+        )}
+
+        <h2 className="text-xl font-medium text-[#2b5843] mt-10 mb-3">{t('admin.scrapeRuns')}</h2>
+        <p className="text-sm text-[#2b5843]/70 mb-4">{t('admin.scrapeRunsDesc')}</p>
+
+        {scrapeRunsLoading && <p className="text-[#2b5843]/70">{t('common.loading')}</p>}
+
+        {scrapeRuns && scrapeRuns.length > 0 && (
+          <div className="overflow-x-auto border border-[#53868e]/25 rounded-2xl" style={{ background: 'linear-gradient(145deg, #f6f3f1 0%, #ebece8 100%)' }}>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-[#53868e]/20" style={{ background: 'rgba(83,134,142,0.08)' }}>
+                  <th className="text-left p-3 font-medium text-[#2b5843]">{t('admin.propertyTitle')}</th>
+                  <th className="text-left p-3 font-medium">{t('admin.link')}</th>
+                  <th className="text-left p-3 font-medium">{t('admin.scrapeType')}</th>
+                  <th className="text-left p-3 font-medium">{t('admin.operator')}</th>
+                  <th className="text-left p-3 font-medium">{t('admin.startedAt')}</th>
+                  <th className="text-left p-3 font-medium">{t('admin.duration')}</th>
+                  <th className="text-left p-3 font-medium">{t('admin.result')}</th>
+                  <th className="text-left p-3 font-medium">{t('admin.errorMessage')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {scrapeRuns.map((r) => (
+                  <tr key={r.id} className="border-b border-[#53868e]/10 hover:bg-[#53868e]/5">
+                    <td className="p-3 max-w-[180px] truncate" title={r.property_title}>{r.property_title || '-'}</td>
+                    <td className="p-3 max-w-[200px]">
+                      <a href={r.source_url} target="_blank" rel="noopener noreferrer" className="text-[#53868e] hover:underline truncate block" title={r.source_url}>
+                        {r.source_url.replace(/^https?:\/\//, '').length > 40
+                          ? r.source_url.replace(/^https?:\/\//, '').slice(0, 37) + '...'
+                          : r.source_url.replace(/^https?:\/\//, '')}
+                      </a>
+                    </td>
+                    <td className="p-3 whitespace-nowrap">
+                      {r.scrape_type === 'sync' ? t('admin.scrapeTypeSync')
+                        : r.scrape_type === 'trigger' ? t('admin.scrapeTypeTrigger')
+                        : r.scrape_type === 'batch' ? t('admin.scrapeTypeBatch')
+                        : r.scrape_type === 'add_listing' ? t('admin.scrapeTypeAddListing')
+                        : r.scrape_type}
+                    </td>
+                    <td className="p-3">{r.operator_display_name || '-'}</td>
+                    <td className="p-3 text-[#2b5843]/70 whitespace-nowrap">
+                      {r.started_at ? new Date(r.started_at).toLocaleString() : '-'}
+                    </td>
+                    <td className="p-3 whitespace-nowrap">
+                      {r.duration_ms != null ? `${(r.duration_ms / 1000).toFixed(1)} ${t('admin.durationUnit')}` : '-'}
+                    </td>
+                    <td className="p-3">
+                      <span className={r.result === 'success' ? 'text-green-600' : 'text-red-600'}>
+                        {r.result === 'success' ? t('admin.resultSuccess') : t('admin.resultFailure')}
+                      </span>
+                    </td>
+                    <td className="p-3 max-w-[220px] text-red-600/90 truncate" title={r.error_message || ''}>
+                      {r.error_message ? (r.error_message.length > 50 ? r.error_message.slice(0, 50) + '...' : r.error_message) : '-'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {scrapeRuns && scrapeRuns.length === 0 && !scrapeRunsLoading && (
+          <p className="text-[#2b5843]/70">{t('admin.noScrapeRuns')}</p>
         )}
       </div>
     </div>

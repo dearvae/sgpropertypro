@@ -1,8 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate, useLocation, Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '@/hooks/useAuth'
 import { LanguageSwitcher } from '@/components/LanguageSwitcher'
+import { supabase } from '@/lib/supabase'
+import { initGoogleOneTap } from '@/lib/googleOneTap'
 
 export default function Login() {
   const [email, setEmail] = useState('')
@@ -12,6 +14,19 @@ export default function Login() {
   const navigate = useNavigate()
   const location = useLocation()
   const { t } = useTranslation()
+
+  useEffect(() => {
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
+    if (!clientId) return
+    const from = (location.state as { from?: { pathname?: string } })?.from?.pathname
+    const goTo = from && (from.startsWith('/home/') || from.startsWith('/view/')) ? from : '/home/agent'
+    initGoogleOneTap({
+      supabase,
+      googleClientId: clientId,
+      onSuccess: () => navigate(goTo, { replace: true }),
+      onError: (err) => setError(err.message),
+    }).catch(() => {})
+  }, [navigate])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

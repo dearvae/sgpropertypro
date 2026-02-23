@@ -201,6 +201,7 @@ export default function AgentDashboard({ clientMode = false }: { clientMode?: bo
         {activeTab === 'pending' && (
           <PendingAppointmentsSection
             pendingAppointments={pendingAppointments}
+            appointments={appointments}
             properties={properties}
             groups={groups}
             baseUrl={baseUrl}
@@ -380,7 +381,10 @@ function CustomerGroupsSection({
       })
       pendingAppointments.refetch()
       properties.refetch()
-      if (res.added > 0) message.success(t('pendingSection.batchAddSuccess', { count: res.added }))
+      if (res.added > 0) {
+        message.success(t('pendingSection.batchAddSuccess', { count: res.added }))
+        message.info(t('common.asyncScrapeHint'), 5)
+      }
       setAddPendingForGroupId(null)
       setAddPendingLink('')
       setAddPendingNotes('')
@@ -909,6 +913,7 @@ function isSupportedScrapeUrl(url: string): boolean {
 
 function PendingAppointmentsSection({
   pendingAppointments,
+  appointments,
   properties,
   groups,
   baseUrl,
@@ -917,6 +922,7 @@ function PendingAppointmentsSection({
   clientMode = false,
 }: {
   pendingAppointments: ReturnType<typeof usePendingAppointments>
+  appointments: ReturnType<typeof useAppointments>
   properties: ReturnType<typeof useProperties>
   groups: ReturnType<typeof useCustomerGroups>
   baseUrl: string
@@ -932,6 +938,7 @@ function PendingAppointmentsSection({
   const [refreshingPropertyId, setRefreshingPropertyId] = useState<string | null>(null)
   const [lightboxImage, setLightboxImage] = useState<string | null>(null)
   const [selectedPendingIds, setSelectedPendingIds] = useState<Set<string>>(new Set())
+  const [showNotInterestedByGroup, setShowNotInterestedByGroup] = useState<Set<string>>(new Set())
   const [showTemplateModal, setShowTemplateModal] = useState(false)
   const [templateEditSale, setTemplateEditSale] = useState('')
   const [templateEditRent, setTemplateEditRent] = useState('')
@@ -965,7 +972,10 @@ function PendingAppointmentsSection({
     }
     setRefreshingPropertyId(prop.id)
     try {
-      const scraped = await scrapeProperty(normalizeSourceUrl(url))
+      const scraped = await scrapeProperty(normalizeSourceUrl(url), {
+        propertyId: prop.id,
+        operatorId: user?.id,
+      })
       await properties.update.mutateAsync({
         id: prop.id,
         title: scraped.title,
@@ -1022,6 +1032,8 @@ function PendingAppointmentsSection({
   const [batchAddLinks, setBatchAddLinks] = useState('')
   const [batchAddLoading, setBatchAddLoading] = useState(false)
   const [batchAddError, setBatchAddError] = useState<string | null>(null)
+  const [confirmAppointmentModal, setConfirmAppointmentModal] = useState<{ pending: PendingAppointment } | null>(null)
+  const [confirmStartTime, setConfirmStartTime] = useState('')
 
   const parsePropertyLinks = (text: string): string[] => {
     const raw = text.split(/[\s\n]+/).map((s) => s.trim()).filter(Boolean)
@@ -1067,7 +1079,10 @@ function PendingAppointmentsSection({
       })
       pendingAppointments.refetch()
       properties.refetch()
-      if (res.added > 0) message.success(t('pendingSection.batchAddSuccess', { count: res.added }))
+      if (res.added > 0) {
+        message.success(t('pendingSection.batchAddSuccess', { count: res.added }))
+        message.info(t('common.asyncScrapeHint'), 5)
+      }
       setShowBatchAddModal(false)
       setBatchAddGroupId('')
       setBatchAddLinks('')
@@ -1331,6 +1346,11 @@ function PendingAppointmentsSection({
         ) : (
           groupIds.map((gid: string) => {
             const items = byCustomer[gid] ?? []
+            const mainItems = items.filter((p) => (p.client_feedback as string) !== 'not_interested')
+            const notInterestedItems = items.filter((p) => (p.client_feedback as string) === 'not_interested')
+            const showNotInterested = showNotInterestedByGroup.has(gid)
+            const displayItems = showNotInterested ? [...mainItems, ...notInterestedItems] : mainItems
+            const displayCount = displayItems.length
             const groupName = (items[0]?.customer_groups as CustomerGroup)?.name ?? '—'
             const isExpanded = isGroupExpanded(gid)
             return (
@@ -1361,7 +1381,30 @@ function PendingAppointmentsSection({
                       {t('pendingSection.deselectAll')}
                     </button>
                   </div>
-                  <span className="text-[#2b5843]/70 text-xs shrink-0">{t('pendingSection.itemsCount', { count: items.length })}</span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {notInterestedItems.length > 0 && (
+                      <label
+                        onClick={(e) => e.stopPropagation()}
+                        className="flex items-center gap-1.5 cursor-pointer text-[#2b5843]/70 hover:text-[#2b5843]/90 text-xs"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={showNotInterested}
+                          onChange={(e) => {
+                            setShowNotInterestedByGroup((prev) => {
+                              const next = new Set(prev)
+                              if (e.target.checked) next.add(gid)
+                              else next.delete(gid)
+                              return next
+                            })
+                          }}
+                          className="w-4 h-4 rounded border-2 border-[#53868e]/50 text-[#2b5843] focus:ring-2 focus:ring-[#53868e]/30 cursor-pointer accent-[#2b5843]"
+                        />
+                        {t('pendingSection.showNotInterested', { count: notInterestedItems.length })}
+                      </label>
+                    )}
+                    <span className="text-[#2b5843]/70 text-xs">{t('pendingSection.itemsCount', { count: displayCount })}</span>
+                  </div>
                   <svg
                     className={`w-5 h-5 text-[#2b5843]/70 transition-transform shrink-0 ${isExpanded ? 'rotate-180' : ''}`}
                     xmlns="http://www.w3.org/2000/svg"
@@ -1373,7 +1416,7 @@ function PendingAppointmentsSection({
                 </div>
                 {isExpanded && (
                   <div className="border-t border-[#53868e]/15 divide-y divide-stone-100">
-                    {items.map((p: PendingAppointment) => {
+                    {displayItems.map((p: PendingAppointment) => {
                       const prop = p.properties as Property | undefined
                       const agentName = prop?.listing_agent_name
                       const agentPhone = prop?.listing_agent_phone
@@ -1534,6 +1577,22 @@ function PendingAppointmentsSection({
                                   {t('common.refresh')}
                                 </button>
                               )}
+                              {!clientMode && (
+                                <button
+                                  onClick={() => {
+                                    const d = new Date()
+                                    d.setDate(d.getDate() + 1)
+                                    d.setHours(9, 0, 0, 0)
+                                    const pad = (n: number) => String(n).padStart(2, '0')
+                                    const start = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+                                    setConfirmStartTime(start)
+                                    setConfirmAppointmentModal({ pending: p })
+                                  }}
+                                  className="text-xs px-2 py-1.5 border border-emerald-500/50 text-emerald-700 rounded-xl hover:bg-emerald-50"
+                                >
+                                  {t('pendingSection.confirmAppointment')}
+                                </button>
+                              )}
                               <select
                                 value={p.status}
                                 onChange={(e) => { const v = e.target.value as PendingAppointmentStatus; pendingAppointments.update.mutate({ id: p.id, status: v }) }}
@@ -1563,6 +1622,69 @@ function PendingAppointmentsSection({
         )}
       </div>
 
+      {confirmAppointmentModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setConfirmAppointmentModal(null)}>
+          <div
+            className="bg-[#f6f3f1] rounded-xl shadow-lg p-6 w-full max-w-md mx-4 border border-[#53868e]/25"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-sm font-medium text-[#2b5843] mb-3">{t('pendingSection.confirmAppointmentTitle')}</h3>
+            <p className="text-xs text-[#2b5843]/70 mb-3">{t('pendingSection.confirmAppointmentHint')}</p>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs text-[#2b5843]/80 mb-1">{t('pendingSection.appointmentTime')}</label>
+                <input
+                  type="datetime-local"
+                  value={confirmStartTime}
+                  onChange={(e) => setConfirmStartTime(e.target.value)}
+                  min={(() => {
+                    const d = new Date()
+                    const pad = (n: number) => String(n).padStart(2, '0')
+                    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+                  })()}
+                  className="w-full px-3 py-2 border border-[#53868e]/25 rounded-xl text-sm"
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 mt-4">
+              <button
+                onClick={async () => {
+                  const { pending } = confirmAppointmentModal
+                  if (!confirmStartTime || !pending) return
+                  const cg = pending.customer_groups as CustomerGroup | undefined
+                  const partyRole: PartyRole = cg?.intent === 'rent' ? 'tenant' : 'buyer'
+                  const startIso = new Date(confirmStartTime).toISOString()
+                  const endIso = new Date(new Date(confirmStartTime).getTime() + 30 * 60 * 1000).toISOString()
+                  try {
+                    await appointments.create.mutateAsync({
+                      property_id: pending.property_id,
+                      customer_group_id: pending.customer_group_id,
+                      party_role: partyRole,
+                      start_time: startIso,
+                      end_time: endIso,
+                    })
+                    await pendingAppointments.remove.mutateAsync(pending.id)
+                    message.success(t('pendingSection.confirmAppointmentSuccess'))
+                    setConfirmAppointmentModal(null)
+                  } catch (err) {
+                    message.error((err as Error).message)
+                  }
+                }}
+                disabled={!confirmStartTime || appointments.create.isPending || pendingAppointments.remove.isPending}
+                className="px-4 py-2 text-sm border border-[#53868e]/35 rounded-xl hover:bg-[#53868e]/15 disabled:opacity-50"
+              >
+                {t('common.confirm')}
+              </button>
+              <button
+                onClick={() => setConfirmAppointmentModal(null)}
+                className="px-4 py-2 text-sm text-[#2b5843]/70 hover:text-[#2b5843]/90"
+              >
+                {t('common.cancel')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {lightboxImage && (
         <div role="dialog" aria-modal="true" aria-label={t('lightbox.title')} className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={() => setLightboxImage(null)}>
           <button type="button" onClick={() => setLightboxImage(null)} className="absolute top-4 right-4 text-white/80 hover:text-white text-2xl leading-none" aria-label={t('common.close')}>✕</button>
@@ -1599,6 +1721,7 @@ function AppointmentsSection({
   clientMode?: boolean
 }) {
   const { t, i18n } = useTranslation()
+  const { user } = useAuth()
   const PARTY_ROLE_LABELS = usePartyRoleLabels()
   const [propId, setPropId] = useState('')
   const [groupId, setGroupId] = useState('')
@@ -1663,7 +1786,10 @@ function AppointmentsSection({
     }
     setRefreshingPropertyId(prop.id)
     try {
-      const scraped = await scrapeProperty(normalizeSourceUrl(url))
+      const scraped = await scrapeProperty(normalizeSourceUrl(url), {
+        propertyId: prop.id,
+        operatorId: user?.id,
+      })
       await properties.update.mutateAsync({
         id: prop.id,
         title: scraped.title,
@@ -1749,7 +1875,8 @@ function AppointmentsSection({
         const existing = await properties.findBySourceUrl(sourceUrl)
         if (existing) {
           propertyId = existing.id
-          triggerScrapeAsync(existing.id, sourceUrl).catch(() => {})
+          triggerScrapeAsync(existing.id, sourceUrl, user?.id).catch(() => {})
+          message.info(t('common.asyncScrapeHint'), 5)
         } else {
           const created = await properties.create.mutateAsync({
             title: t('appointmentsSection.scraping'),
@@ -1757,7 +1884,8 @@ function AppointmentsSection({
             source_url: sourceUrl,
           })
           propertyId = created.id
-          triggerScrapeAsync(created.id, sourceUrl).catch(() => {})
+          triggerScrapeAsync(created.id, sourceUrl, user?.id).catch(() => {})
+          message.info(t('common.asyncScrapeHint'), 5)
         }
       } catch (e) {
         message.error((e as Error).message || t('appointmentsSection.createFailed'))

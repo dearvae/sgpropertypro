@@ -71,6 +71,17 @@ export function UserMenu() {
           >
             {t('userMenu.inviteFriends')}
           </Link>
+          {profile?.role === 'agent' && profile?.invite_code && (
+            <a
+              href={`/agent/${profile.invite_code}`}
+              target="_blank"
+              rel="noreferrer"
+              onClick={() => setShowDropdown(false)}
+              className="block w-full text-left px-3 py-2 text-sm text-[#2b5843]/90 hover:bg-[#53868e]/10"
+            >
+              {t('userMenu.myProfilePage')}
+            </a>
+          )}
           <button
             onClick={() => {
               setShowDropdown(false)

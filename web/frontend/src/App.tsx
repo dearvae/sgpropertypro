@@ -11,6 +11,7 @@ import HomePage from './pages/HomePage'
 import AgentDashboard from './pages/AgentDashboard'
 import ClientDashboard from './pages/ClientDashboard'
 import ClientView from './pages/ClientView'
+import AgentPublicPage from './pages/AgentPublicPage'
 import Playground from './pages/Playground'
 
 function ProtectedRoute({ children, requireAgent }: { children: React.ReactNode; requireAgent?: boolean }) {
@@ -65,6 +66,7 @@ function App() {
             <Route path="/home/agent" element={<ProtectedRoute requireAgent><AgentDashboard /></ProtectedRoute>} />
             <Route path="/home/user" element={<ProtectedClientRoute><ClientDashboard /></ProtectedClientRoute>} />
             <Route path="/view/:token" element={<ErrorBoundary><ClientView /></ErrorBoundary>} />
+            <Route path="/agent/:inviteCode" element={<ErrorBoundary><AgentPublicPage /></ErrorBoundary>} />
             <Route path="/playground" element={<Playground />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

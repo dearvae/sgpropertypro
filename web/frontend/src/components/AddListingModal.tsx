@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { message } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { addAgentListing, isSupportedScrapeUrl, normalizeSourceUrl } from '@/lib/scrapeApi'
 
@@ -49,6 +50,7 @@ export function AddListingModal({ open, onClose, listingType, agentId, onSuccess
         client_name: clientName.trim() || undefined,
         listing_type: listingType,
       })
+      message.info(t('common.asyncScrapeHint'), 5)
       onSuccess()
       onClose()
     } catch (e) {
