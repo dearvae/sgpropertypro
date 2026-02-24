@@ -9,17 +9,23 @@ POST /api/batch-scrape-properties 传入多个 URL，后端顺序抓取（带时
 - 同一 property_id 1 小时内已抓取过，返回 202 但不实际执行（静默跳过）
 """
 import asyncio
+import logging
 import os
 import re
 import time
+import traceback
 from threading import Lock
 from typing import Optional
 
 from dotenv import load_dotenv
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from playwright.async_api import async_playwright
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 
 # 加载 .env（项目根或 backend 同目录）
 for d in [os.path.dirname(os.path.dirname(os.path.dirname(__file__))), os.path.dirname(__file__)]:
@@ -37,6 +43,17 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """捕获未处理的异常，记录到 stderr 并返回带详情的 500 响应，便于 debug"""
+    from fastapi import HTTPException
+    if isinstance(exc, HTTPException):
+        return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+    logger.exception("API 未处理异常 [%s %s]: %s", request.method, request.url.path, exc)
+    detail = str(exc) if str(exc) else repr(exc)
+    return JSONResponse(status_code=500, content={"detail": f"服务器错误: {detail}"})
 
 
 class ScrapeRequest(BaseModel):
@@ -283,8 +300,8 @@ async def _run_property_scraper(url: str) -> ScrapeResponse:
         page = await context.new_page()
 
         try:
-            # 使用 load 而非 networkidle：Property Guru 等网站有大量后台请求，networkidle 难以达成
-            await page.goto(url, wait_until="load", timeout=30000)
+            # 使用 domcontentloaded：load 会等所有资源（图片、广告等），Property Guru 页面过重易超时
+            await page.goto(url, wait_until="domcontentloaded", timeout=45000)
             await page.wait_for_timeout(2000)
             # 等待房源标题或主内容区域出现（SPA 可能异步渲染）
             try:
@@ -817,23 +834,25 @@ async def scrape_property(req: ScrapeRequest, request: Request):
     try:
         result = await _run_property_scraper(url)
         _record_scrape_run(
-            property_id=req.property_id,
             url=url,
             scrape_type="sync",
             started_at=started_at,
             result="success",
+            property_id=req.property_id,
             operator_id=req.operator_id,
             property_title=result.title,
         )
         return result
     except Exception as e:
+        err_log = traceback.format_exc()
         _record_scrape_run(
-            property_id=req.property_id,
             url=url,
             scrape_type="sync",
             started_at=started_at,
             result="failure",
+            property_id=req.property_id,
             error_message=str(e),
+            error_log=err_log,
             operator_id=req.operator_id,
         )
         raise
@@ -1112,12 +1131,13 @@ def _get_supabase_client():
 
 
 def _record_scrape_run(
-    property_id: str,
     url: str,
     scrape_type: str,
     started_at: float,
     result: str,
+    property_id: Optional[str] = None,
     error_message: Optional[str] = None,
+    error_log: Optional[str] = None,
     operator_id: Optional[str] = None,
     property_title: Optional[str] = None,
 ) -> None:
@@ -1128,24 +1148,29 @@ def _record_scrape_run(
     from datetime import datetime, timezone
     duration_ms = int((time.time() - started_at) * 1000)
     started_dt = datetime.fromtimestamp(started_at, tz=timezone.utc).isoformat()
+    payload: dict = {
+        "source_url": url,
+        "property_title": property_title,
+        "scrape_type": scrape_type,
+        "operator_id": operator_id,
+        "started_at": started_dt,
+        "duration_ms": duration_ms,
+        "result": result,
+        "error_message": error_message,
+        "error_log": error_log,
+    }
+    if property_id is not None:
+        payload["property_id"] = property_id
     try:
-        client.table("scrape_runs").insert({
-            "property_id": property_id,
-            "source_url": url,
-            "property_title": property_title,
-            "scrape_type": scrape_type,
-            "operator_id": operator_id,
-            "started_at": started_dt,
-            "duration_ms": duration_ms,
-            "result": result,
-            "error_message": error_message,
-        }).execute()
+        client.table("scrape_runs").insert(payload).execute()
     except Exception:
         import logging
         logging.getLogger(__name__).exception("写入 scrape_runs 失败")
 
 
-def _record_scrape_failure(property_id: str, url: str, error: Exception) -> None:
+def _record_scrape_failure(
+    property_id: str, url: str, error: Exception, error_log: Optional[str] = None
+) -> None:
     """将抓取失败记录写入 scrape_failures 表，供管理员查看"""
     client = _get_supabase_client()
     if not client:
@@ -1159,6 +1184,7 @@ def _record_scrape_failure(property_id: str, url: str, error: Exception) -> None
             "source_url": url,
             "error_message": str(error),
             "error_type": error_type,
+            "error_log": error_log,
         }).execute()
     except Exception:
         import logging
@@ -1176,25 +1202,27 @@ async def _background_scrape_and_update(
     try:
         result = await _run_property_scraper(url)
         _record_scrape_run(
-            property_id=property_id,
             url=url,
             scrape_type=scrape_type,
             started_at=started_at,
             result="success",
+            property_id=property_id,
             operator_id=operator_id,
             property_title=result.title,
         )
     except Exception as e:
         import logging
         logging.getLogger(__name__).exception("异步抓取失败: %s", e)
-        _record_scrape_failure(property_id, url, e)
+        err_log = traceback.format_exc()
+        _record_scrape_failure(property_id, url, e, error_log=err_log)
         _record_scrape_run(
-            property_id=property_id,
             url=url,
             scrape_type=scrape_type,
             started_at=started_at,
             result="failure",
+            property_id=property_id,
             error_message=str(e),
+            error_log=err_log,
             operator_id=operator_id,
         )
         return

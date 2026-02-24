@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
@@ -5,6 +6,42 @@ import { supabase } from '@/lib/supabase'
 import { getTelUrl } from '@/lib/whatsapp'
 import { useAuth } from '@/hooks/useAuth'
 import { useProfile } from '@/hooks/useProfile'
+
+function ErrorLogModal({ content, onClose }: { content: string; onClose: () => void }) {
+  const [copied, setCopied] = useState(false)
+  const copy = () => {
+    navigator.clipboard.writeText(content)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
+      <div
+        className="max-w-2xl max-h-[80vh] w-full mx-4 rounded-xl overflow-hidden flex flex-col"
+        style={{ background: 'linear-gradient(145deg, #f6f3f1 0%, #ebece8 100%)', border: '1px solid rgba(83,134,142,0.25)' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="p-3 flex items-center justify-between border-b border-[#53868e]/20">
+          <span className="text-sm font-medium text-[#2b5843]">完整错误 Log</span>
+          <div className="flex gap-2">
+            <button
+              onClick={copy}
+              className="px-3 py-1.5 text-xs rounded-lg border border-[#53868e]/40 hover:bg-[#53868e]/10 text-[#2b5843]"
+            >
+              {copied ? '已复制' : '复制'}
+            </button>
+            <button onClick={onClose} className="px-3 py-1.5 text-xs rounded-lg border border-[#53868e]/40 hover:bg-[#53868e]/10 text-[#2b5843]">
+              关闭
+            </button>
+          </div>
+        </div>
+        <pre className="p-4 overflow-auto text-xs text-slate-700 whitespace-pre-wrap font-mono flex-1 max-h-[60vh] bg-slate-50/80">
+          {content}
+        </pre>
+      </div>
+    </div>
+  )
+}
 
 type InviteRelation = {
   id: string
@@ -26,6 +63,7 @@ type ScrapeFailure = {
   source_url: string
   error_message: string
   error_type: string | null
+  error_log: string | null
   created_at: string
 }
 
@@ -41,6 +79,7 @@ type ScrapeRun = {
   duration_ms: number | null
   result: string
   error_message: string | null
+  error_log: string | null
 }
 
 export default function AdminPage() {
@@ -48,6 +87,7 @@ export default function AdminPage() {
   const { data: profile } = useProfile()
   const navigate = useNavigate()
   const { t } = useTranslation()
+  const [logModalContent, setLogModalContent] = useState<string | null>(null)
 
   const isAdmin = profile?.is_admin === true || profile?.is_super_admin === true
 
@@ -195,8 +235,19 @@ export default function AdminPage() {
                           : f.source_url.replace(/^https?:\/\//, '')}
                       </a>
                     </td>
-                    <td className="p-3 max-w-[300px] text-red-600/90" title={f.error_message}>
-                      {f.error_message.length > 80 ? f.error_message.slice(0, 80) + '...' : f.error_message}
+                    <td className="p-3 max-w-[300px] text-red-600/90">
+                      <span title={f.error_message}>
+                        {f.error_message.length > 80 ? f.error_message.slice(0, 80) + '...' : f.error_message}
+                      </span>
+                      {f.error_log && (
+                        <button
+                          type="button"
+                          onClick={() => setLogModalContent(f.error_log!)}
+                          className="ml-1.5 text-xs text-[#53868e] hover:underline"
+                        >
+                          查看 log
+                        </button>
+                      )}
                     </td>
                     <td className="p-3 text-[#2b5843]/70 whitespace-nowrap">
                       {f.created_at ? new Date(f.created_at).toLocaleString() : '-'}
@@ -262,8 +313,19 @@ export default function AdminPage() {
                         {r.result === 'success' ? t('admin.resultSuccess') : t('admin.resultFailure')}
                       </span>
                     </td>
-                    <td className="p-3 max-w-[220px] text-red-600/90 truncate" title={r.error_message || ''}>
-                      {r.error_message ? (r.error_message.length > 50 ? r.error_message.slice(0, 50) + '...' : r.error_message) : '-'}
+                    <td className="p-3 max-w-[220px] text-red-600/90">
+                      <span className="truncate block" title={r.error_message || ''}>
+                        {r.error_message ? (r.error_message.length > 50 ? r.error_message.slice(0, 50) + '...' : r.error_message) : '-'}
+                      </span>
+                      {r.error_log && (
+                        <button
+                          type="button"
+                          onClick={() => setLogModalContent(r.error_log!)}
+                          className="mt-0.5 text-xs text-[#53868e] hover:underline"
+                        >
+                          查看 log
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -274,6 +336,10 @@ export default function AdminPage() {
 
         {scrapeRuns && scrapeRuns.length === 0 && !scrapeRunsLoading && (
           <p className="text-[#2b5843]/70">{t('admin.noScrapeRuns')}</p>
+        )}
+
+        {logModalContent && (
+          <ErrorLogModal content={logModalContent} onClose={() => setLogModalContent(null)} />
         )}
       </div>
     </div>

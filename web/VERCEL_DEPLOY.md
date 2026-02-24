@@ -23,8 +23,11 @@
 | --- | --- |
 | `VITE_SUPABASE_URL` | 你的 Supabase Project URL |
 | `VITE_SUPABASE_ANON_KEY` | 你的 Supabase anon public key |
+| `VITE_SCRAPE_API_URL` | 抓取 API 地址（若后端已部署到 Render，填写 `https://xxx.onrender.com`） |
 
 两个环境都勾选（Production、Preview、Development）。
+
+> **注意**：若你使用「添加自售/出租房源」「批量添加」等功能，会调用抓取 API。该 API 部署在 Render 时，需在 **Render** 的环境变量中配置 `SUPABASE_URL` 和 `SUPABASE_SERVICE_ROLE_KEY`（见 `RENDER_DEPLOY.md`），与 Vercel 的前端变量是分开的。
 
 ## 4. 部署前本地检查（可选）
 

@@ -66,13 +66,17 @@ __pycache__
 
 > 若 Free 层经常超时或 OOM，建议升级到 Starter（$7/月）。
 
-### 步骤 5：环境变量（可选）
+### 步骤 5：环境变量（必填）
 
-当前后端 `main.py` 无需环境变量。若将来需要，在 **Environment** 中添加：
+后端需要 Supabase 凭证才能写入数据库（添加房源、批量抓取、抓取完成后更新等）。在 **Environment** 中添加：
 
 | Key | Value | 说明 |
 |-----|-------|------|
+| `SUPABASE_URL` | `https://你的项目ID.supabase.co` | Supabase Project URL（Dashboard → Settings → API） |
+| `SUPABASE_SERVICE_ROLE_KEY` | `eyJ...` | Service Role Key（Dashboard → Settings → API；**请勿用 anon key**） |
 | `PORT` | （由 Render 自动注入，无需手动填） | 服务监听端口 |
+
+> 若未配置，调用「添加自售/出租房源」「批量添加」等接口会返回「数据库未配置。请设置 SUPABASE_URL 和 SUPABASE_SERVICE_ROLE_KEY」。
 
 ### 步骤 6：高级设置（可选）
 
