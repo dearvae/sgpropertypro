@@ -8,6 +8,7 @@ import { getWhatsAppChatUrl, getTelUrl } from '@/lib/whatsapp'
 import { getGoogleMapsSearchUrl } from '@/lib/mapUtils'
 import { formatPriceDisplay, getDisplayName } from '@/types'
 import { LanguageSwitcher } from '@/components/LanguageSwitcher'
+import { ViewPageSkeleton } from '@/components/Skeleton'
 
 type AgentData = {
   id: string
@@ -76,14 +77,7 @@ export default function AgentPublicPage() {
   })
 
   if (isLoading) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4" style={{ background: 'linear-gradient(180deg, #f6f3f1 0%, #e8ebe8 100%)' }}>
-        <div className="relative">
-          <div className="w-10 h-10 rounded-full border-2 border-[#53868e]/30 border-t-[#53868e] animate-spin" />
-        </div>
-        <p className="text-[#2b5843]/70 text-sm">{t('common.loading')}</p>
-      </div>
-    )
+    return <ViewPageSkeleton message={t('common.loading')} />
   }
 
   if (error || !data || data.error === 'not_found') {
@@ -281,7 +275,7 @@ export default function AgentPublicPage() {
       {/* Lightbox */}
       {lightboxImage && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center glass-overlay-dark p-4"
           onClick={() => setLightboxImage(null)}
         >
           <img

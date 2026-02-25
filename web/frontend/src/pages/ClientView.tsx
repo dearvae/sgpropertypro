@@ -9,6 +9,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { getWhatsAppChatUrl, getTelUrl } from '@/lib/whatsapp'
 import { getGoogleMapsSearchUrl } from '@/lib/mapUtils'
 import { MapViewModal } from '@/components/MapViewModal'
+import { ViewPageSkeleton } from '@/components/Skeleton'
 import { triggerScrapeAsync, isSupportedScrapeUrl, normalizeSourceUrl } from '@/lib/scrapeApi'
 import { formatPriceDisplay } from '@/types'
 import { LanguageSwitcher } from '@/components/LanguageSwitcher'
@@ -155,14 +156,7 @@ export default function ClientView() {
   }, [data, isLoading, error])
 
   if (isLoading) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4" style={{ background: 'linear-gradient(180deg, #f6f3f1 0%, #e8ebe8 100%)' }}>
-        <div className="relative">
-          <div className="w-10 h-10 rounded-full border-2 border-[#53868e]/30 border-t-[#53868e] animate-spin" />
-        </div>
-        <p className="text-[#2b5843]/70 text-sm">{t('clientView.loadingSchedule')}</p>
-      </div>
-    )
+    return <ViewPageSkeleton message={t('clientView.loadingSchedule')} />
   }
 
   if (error || !data || data.error) {
@@ -986,7 +980,7 @@ export default function ClientView() {
           role="dialog"
           aria-modal="true"
           aria-label={t('lightbox.title')}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center glass-overlay-dark p-4"
           onClick={() => setLightboxImage(null)}
         >
           <button

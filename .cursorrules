@@ -103,12 +103,44 @@ If needed, you can further use the `web_scraper.py` file to scrape the web page 
 
 ## Cursor learned
 
+- **CORS**：`allow_credentials=True` 与 `allow_origins=["*"]` 不能同时使用，否则 preflight 会失败。抓取 API 不需 cookie 时用 `allow_credentials=False`；若需 credentials 则改为显式 origins 如 `["http://localhost:5173","https://xxx.vercel.app"]`
 - For search results, ensure proper handling of different character encodings (UTF-8) for international queries
 - Add debug information to stderr while keeping the main output clean in stdout for better pipeline integration
 - When using seaborn styles in matplotlib, use 'seaborn-v0_8' instead of 'seaborn' as the style name due to recent seaborn version changes
 - Use 'gpt-4o' as the model name for OpenAI's GPT-4 with vision capabilities
 
 # Scratchpad
+## 已完成：UI 风格升级 - Skeleton / Glassmorphism / Aurora / 微交互
+- [X] Skeleton Screen：PageSkeleton、FullPageSkeleton、ViewPageSkeleton；应用到 App 路由守卫、ClientView、AgentPublicPage、AdminPage、MapViewModal、AgentFeedback
+- [X] 浮窗 Glassmorphism：glass-overlay、glass-overlay-dark、glass-modal、glass-header；所有 Modal、Lightbox 使用
+- [X] 官网 Aurora Gradient 变体：Hero 使用 aurora-gradient 动画渐变
+- [X] Reveal on scroll（IntersectionObserver）：HomePage 各 section 和卡片
+- [X] Micro-interaction 微交互：micro-btn（点击 scale）、micro-hover（悬停抬升+阴影）、micro-scale（悬停放大）；应用到 CTA、卡片、Modal 按钮、Lightbox
+
+## 已完成：代表卖家/房东的合并预约卡片 + Playground
+- [X] 同一房源、同一日期、多组潜在买家且无穿插时合并为一个大卡片
+- [X] 多种时间表布局（表格/时间轴/紧凑行/分块卡片/极简）在 /playground 可选
+- [X] 选择后保存到 localStorage，AgentDashboard 预约列表生效
+- [X] 合并逻辑：lib/sellerMergedBlocks.ts；组件：SellerLandlordMergedCard.tsx
+
+## 已完成：代表卖家/房东的预约卡片优化
+- [X] 拆分两种卡片：代表买家/租客沿用完整卡片；代表卖家/房东使用精简卡片
+- [X] 精简卖家/房东卡片：仅展示房源名、预约时间、备注、潜在买家联系方式、WhatsApp、编辑删除刷新
+- [X] 移除卖家/房东卡片的图片、价格、卧室浴室面积、户型图、查看房源、卖家中介信息
+- [X] 视觉区分：amber 左边框、#fffbeb 背景、顶部醒目「代表卖家/房东」徽章
+
+## 已完成：刷新按钮改为异步抓取
+- [X] 将 AgentDashboard 中 handleRefreshProperty 改为调用 triggerScrapeAsync（即时返回）+ 展示 asyncScrapeHint
+- [X] 两个 handleRefreshProperty（PendingAppointmentsSection、AppointmentsSectionContent）均已修改
+
+## 已完成：时间表卖家预约合并修复
+- [X] 新增 mergeConsecutiveSellerBlocksByStartGap：连续卖家/房东块且起始时间差 < 45 分钟则合并，不显示休息
+
+## 已完成：时间表自定义事件
+- [X] 添加事件按钮 + 弹窗（名称、日期、起止时间、地点）
+- [X] 自定义事件用 violet 特殊颜色区分，支持删除
+- [X] localStorage 存储，按 user.id 隔离
+
 ## 已完成：中介时间表 - 替换客户视图，新增智能合并的时间表
 - [X] 删除「客户视图」tab
 - [X] 新增「时间表」tab：展示未来预约，同客户同天相邻时段（30分钟内）合并为一块

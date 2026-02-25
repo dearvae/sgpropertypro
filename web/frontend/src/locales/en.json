@@ -50,6 +50,7 @@
     "optional": "optional",
     "loading": "Loading...",
     "copy": "Copy",
+    "copied": "Copied",
     "cancel": "Cancel",
     "save": "Save",
     "delete": "Delete",
@@ -422,7 +423,19 @@
     "noFuture": "No upcoming appointments",
     "serveRole": "Serving {{role}}",
     "viewProperties": "{{count}} viewings",
-    "mins": "~ {{count}} min"
+    "mins": "~ {{count}} min",
+    "addEvent": "Add event",
+    "editEvent": "Edit event",
+    "eventName": "Event name",
+    "eventNamePlaceholder": "e.g. Meeting, viewing",
+    "eventDate": "Date",
+    "eventStartTime": "Start time",
+    "eventEndTime": "End time",
+    "eventLocation": "Location",
+    "eventLocationPlaceholder": "Optional",
+    "customEventBadge": "Custom event",
+    "deleteCustomEvent": "Delete",
+    "deleteCustomEventConfirm": "Delete this event?"
   },
   "agentPublic": {
     "notFound": "This page does not exist",

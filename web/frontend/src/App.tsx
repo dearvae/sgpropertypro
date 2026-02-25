@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { AuthProvider, useAuth } from './hooks/useAuth'
 import { ErrorBoundary } from './components/ErrorBoundary'
+import { FullPageSkeleton } from './components/Skeleton'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import InvitePage from './pages/InvitePage'
@@ -18,7 +19,7 @@ function ProtectedRoute({ children, requireAgent }: { children: React.ReactNode;
   const { user, loading } = useAuth()
   const { t } = useTranslation()
   const location = useLocation()
-  if (loading) return <div className="min-h-screen flex items-center justify-center text-stone-500">{t('common.loading')}</div>
+  if (loading) return <FullPageSkeleton message={t('common.loading')} />
   if (!user) return <Navigate to="/login" state={{ from: location }} replace />
   if (requireAgent) {
     const role = (user.user_metadata?.role as string) || 'agent'
@@ -31,7 +32,7 @@ function ProtectedClientRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
   const { t } = useTranslation()
   const location = useLocation()
-  if (loading) return <div className="min-h-screen flex items-center justify-center text-stone-500">{t('common.loading')}</div>
+  if (loading) return <FullPageSkeleton message={t('common.loading')} />
   if (!user) return <Navigate to="/login" state={{ from: location }} replace />
   const role = (user.user_metadata?.role as string) || 'agent'
   if (role === 'agent') return <Navigate to="/home/agent" replace />

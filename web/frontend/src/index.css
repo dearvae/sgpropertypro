@@ -66,3 +66,76 @@ html, body {
   background: rgba(83, 134, 142, 0.15) !important;
   border-color: rgba(83, 134, 142, 0.5) !important;
 }
+
+/* Glassmorphism: backdrop blur + semi-transparent background */
+.glass-overlay {
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+.glass-overlay-dark {
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+.glass-modal {
+  background: rgba(246, 243, 241, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(83, 134, 142, 0.2);
+  box-shadow: 0 8px 32px rgba(43, 88, 67, 0.12);
+}
+.glass-header {
+  background: rgba(246, 243, 241, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(83, 134, 142, 0.15);
+}
+
+/* Aurora gradient - animated subtle gradient for hero */
+@keyframes aurora-shift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+.aurora-gradient {
+  background: linear-gradient(
+    135deg,
+    rgba(83, 134, 142, 0.15) 0%,
+    rgba(43, 88, 67, 0.08) 25%,
+    rgba(150, 180, 180, 0.12) 50%,
+    rgba(83, 134, 142, 0.1) 75%,
+    rgba(43, 88, 67, 0.06) 100%
+  );
+  background-size: 200% 200%;
+  animation: aurora-shift 12s ease infinite;
+}
+
+/* Micro-interactions */
+.micro-hover {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.micro-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(43, 88, 67, 0.12);
+}
+.micro-btn {
+  transition: transform 0.15s ease;
+}
+.micro-btn:active {
+  transform: scale(0.98);
+}
+.micro-scale:hover {
+  transition: transform 0.2s ease;
+}
+.micro-scale:hover {
+  transform: scale(1.02);
+}
+
+/* Modal entrance animation */
+@keyframes modal-enter {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+.modal-enter {
+  animation: modal-enter 0.2s ease-out forwards;
+}

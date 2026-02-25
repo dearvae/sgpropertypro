@@ -10,18 +10,23 @@ import { useAppointments } from '@/hooks/useAppointments'
 import { usePendingAppointments } from '@/hooks/usePendingAppointments'
 import { useRealtimeAppointments } from '@/hooks/useRealtimeAppointments'
 import { checkAppointmentConflict } from '@/lib/conflictCheck'
-import { scrapeProperty, triggerScrapeAsync, batchScrapeProperties } from '@/lib/scrapeApi'
+import { triggerScrapeAsync, batchScrapeProperties } from '@/lib/scrapeApi'
 import { CreateClientModal } from '@/components/CreateClientModal'
 import { AddListingModal } from '@/components/AddListingModal'
 import { getWhatsAppChatUrl, getTelUrl } from '@/lib/whatsapp'
+import { buildDayDisplayItems, getSavedSellerMergedVariant } from '@/lib/sellerMergedBlocks'
+import { SellerMergedCard } from '@/components/SellerLandlordMergedCard'
 import {
   applyTemplate,
   buildTemplateVars,
+  extractProjectOrLocation,
   getDefaultWhatsAppTemplate,
 } from '@/lib/whatsappTemplate'
 import { useAuth } from '@/hooks/useAuth'
 import { useProfile } from '@/hooks/useProfile'
 import { AgentFeedbackSection } from '@/pages/AgentFeedback'
+import { AddCustomEventModal } from '@/components/AddCustomEventModal'
+import { getCustomEvents, addCustomEvent, updateCustomEvent, deleteCustomEvent } from '@/lib/scheduleCustomEvents'
 import type { CustomerGroup, PartyRole, Property, Appointment, PendingAppointment, PendingAppointmentStatus, ClientFeedback } from '@/types'
 import { formatPriceDisplay } from '@/types'
 
@@ -972,32 +977,9 @@ function PendingAppointmentsSection({
     }
     setRefreshingPropertyId(prop.id)
     try {
-      const scraped = await scrapeProperty(normalizeSourceUrl(url), {
-        propertyId: prop.id,
-        operatorId: user?.id,
-      })
-      await properties.update.mutateAsync({
-        id: prop.id,
-        title: scraped.title,
-        link: scraped.link,
-        basic_info: scraped.basic_info || undefined,
-        price: scraped.price || undefined,
-        price_value: scraped.price_value || undefined,
-        price_description: scraped.price_description || undefined,
-        size_sqft: scraped.size_sqft || undefined,
-        bedrooms: scraped.bedrooms || undefined,
-        bathrooms: scraped.bathrooms || undefined,
-        main_image_url: scraped.main_image_url || undefined,
-        image_urls: scraped.image_urls || undefined,
-        floor_plan_url: scraped.floor_plan_url || undefined,
-        site_plan_url: scraped.site_plan_url || prop.site_plan_url || undefined,
-        listing_agent_name: scraped.listing_agent_name || undefined,
-        listing_agent_phone: scraped.listing_agent_phone || undefined,
-        listing_type: scraped.listing_type || undefined,
-        lease_tenure: scraped.lease_tenure || undefined,
-        top_year: scraped.top_year || undefined,
-        last_scraped_at: new Date().toISOString(),
-      })
+      await triggerScrapeAsync(prop.id, normalizeSourceUrl(url), user?.id)
+      message.info(t('common.asyncScrapeHint'), 5)
+      setTimeout(() => properties.refetch(), 20000)
     } catch (e) {
       message.error((e as Error).message || t('pendingSection.refreshFailed'))
     } finally {
@@ -1686,9 +1668,9 @@ function PendingAppointmentsSection({
         </div>
       )}
       {lightboxImage && (
-        <div role="dialog" aria-modal="true" aria-label={t('lightbox.title')} className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={() => setLightboxImage(null)}>
-          <button type="button" onClick={() => setLightboxImage(null)} className="absolute top-4 right-4 text-white/80 hover:text-white text-2xl leading-none" aria-label={t('common.close')}>✕</button>
-          <img src={lightboxImage} alt={t('lightbox.alt')} className="max-w-full max-h-[90vh] w-auto object-contain rounded-lg" onClick={(e) => e.stopPropagation()} />
+        <div role="dialog" aria-modal="true" aria-label={t('lightbox.title')} className="fixed inset-0 z-50 flex items-center justify-center glass-overlay-dark p-4" onClick={() => setLightboxImage(null)}>
+          <button type="button" onClick={() => setLightboxImage(null)} className="absolute top-4 right-4 text-white/80 hover:text-white text-2xl leading-none micro-btn" aria-label={t('common.close')}>✕</button>
+          <img src={lightboxImage} alt={t('lightbox.alt')} className="max-w-full max-h-[90vh] w-auto object-contain rounded-lg micro-scale" onClick={(e) => e.stopPropagation()} />
         </div>
       )}
     </section>
@@ -1786,32 +1768,9 @@ function AppointmentsSection({
     }
     setRefreshingPropertyId(prop.id)
     try {
-      const scraped = await scrapeProperty(normalizeSourceUrl(url), {
-        propertyId: prop.id,
-        operatorId: user?.id,
-      })
-      await properties.update.mutateAsync({
-        id: prop.id,
-        title: scraped.title,
-        link: scraped.link,
-        basic_info: scraped.basic_info || undefined,
-        price: scraped.price || undefined,
-        price_value: scraped.price_value || undefined,
-        price_description: scraped.price_description || undefined,
-        size_sqft: scraped.size_sqft || undefined,
-        bedrooms: scraped.bedrooms || undefined,
-        bathrooms: scraped.bathrooms || undefined,
-        main_image_url: scraped.main_image_url || undefined,
-        image_urls: scraped.image_urls || undefined,
-        floor_plan_url: scraped.floor_plan_url || undefined,
-        site_plan_url: scraped.site_plan_url || prop.site_plan_url || undefined,
-        listing_agent_name: scraped.listing_agent_name || undefined,
-        listing_agent_phone: scraped.listing_agent_phone || undefined,
-        listing_type: scraped.listing_type || undefined,
-        lease_tenure: scraped.lease_tenure || undefined,
-        top_year: scraped.top_year || undefined,
-        last_scraped_at: new Date().toISOString(),
-      })
+      await triggerScrapeAsync(prop.id, normalizeSourceUrl(url), user?.id)
+      message.info(t('common.asyncScrapeHint'), 5)
+      setTimeout(() => properties.refetch(), 20000)
     } catch (e) {
       message.error((e as Error).message || t('pendingSection.refreshFailed'))
     } finally {
@@ -2535,11 +2494,56 @@ function AppointmentsSection({
           </p>
         ) : sortedDates.map((date) => {
           const list = groupedByDate[date]
+          const dayItems = buildDayDisplayItems(list)
+          const sellerVariant = getSavedSellerMergedVariant()
           return (
           <div key={date}>
             <p className="text-xs text-[#2b5843]/70 mb-2">{new Date(date).toLocaleDateString('zh-CN')}</p>
             <div className="space-y-2">
-              {list.map((a) => {
+              {dayItems.map((item) => {
+                if (item.type === 'merged') {
+                  return (
+                    <SellerMergedCard
+                      key={`merged-${item.block.property.id}-${date}`}
+                      block={item.block}
+                      variant={sellerVariant}
+                      t={t as (k: string, o?: Record<string, unknown>) => string}
+                      renderActions={(appts) => (
+                        <>
+                          {item.block.property && (item.block.property.source_url || item.block.property.link) && isSupportedScrapeUrl((item.block.property.source_url || item.block.property.link)!) && (
+                            <button
+                              onClick={() => handleRefreshProperty(item.block.property)}
+                              disabled={refreshingPropertyId === item.block.property.id}
+                              className="text-xs text-[#2b5843]/60 hover:text-[#2b5843]/90 disabled:opacity-50 flex items-center gap-1"
+                              title={t('pendingSection.refreshTitle')}
+                            >
+                              {refreshingPropertyId === item.block.property.id ? (
+                                <svg className="animate-spin h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                </svg>
+                              ) : (
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5">
+                                  <path fillRule="evenodd" d="M4.755 10.059a7.5 7.5 0 0112.548-3.364l1.903 1.903h-3.183a.75.75 0 100 1.5h4.992a.75.75 0 00.75-.75V4.356a.75.75 0 00-1.5 0v3.18l-1.9-1.9A9 9 0 003.306 9.67a.75.75 0 011.45.388zm15.408 3.352a.75.75 0 00-.919.53 7.5 7.5 0 01-12.548 3.364l-1.902-1.903h3.183a.75.75 0 000-1.5H2.984a.75.75 0 00-.75.75v4.992a.75.75 0 001.5 0v-3.18l1.9 1.9a9 9 0 0015.059 4.035.75.75 0 00-.53-.918z" clipRule="evenodd" />
+                                </svg>
+                              )}
+                              {t('common.refresh')}
+                            </button>
+                          )}
+                          {appts.map((a) => (
+                            <span key={a.id} className="flex gap-2 items-center">
+                              <button onClick={() => handleOpenEdit(a)} className="text-xs text-[#2b5843]/60 hover:text-[#2b5843]/90">{t('common.edit')}</button>
+                              <Popconfirm title={t('appointmentsSection.deleteAppointmentConfirm')} onConfirm={() => appointments.remove.mutate(a.id)} okText={t('common.confirm')} cancelText={t('common.cancel')} icon={null}>
+                                <button className="text-xs text-[#2b5843]/60 hover:text-red-600">{t('common.delete')}</button>
+                              </Popconfirm>
+                            </span>
+                          ))}
+                        </>
+                      )}
+                    />
+                  )
+                }
+                const a = item.appointment
                 const prop = a.properties as Property | undefined
                 const agentName = prop?.listing_agent_name
                 const agentPhone = prop?.listing_agent_phone
@@ -2557,6 +2561,106 @@ function AppointmentsSection({
                   existingForConflict,
                   a.id
                 )
+
+                if (isMeListingAgent) {
+                  return (
+                    <div
+                      key={a.id}
+                      className="border-l-4 border-amber-500 rounded-r-xl overflow-hidden bg-[#fffbeb] shadow-sm hover:shadow-md transition-shadow"
+                    >
+                      <div className="p-4 flex flex-col gap-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-2 flex-wrap min-w-0">
+                            <span className="px-2 py-1 rounded text-xs font-medium bg-amber-100 text-amber-800 shrink-0">
+                              {t('appointmentsSection.represent', { role: PARTY_ROLE_LABELS[a.party_role] })}
+                            </span>
+                            {hasConflictTag && (
+                              <span className="px-2.5 py-1 rounded text-xs font-medium bg-red-100 text-red-700 border border-red-200 shrink-0">
+                                {t('appointmentsSection.timeConflict')}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <p className="font-semibold text-base leading-tight text-[#2b5843] break-words">{prop?.title ?? '—'}</p>
+                        <p className="text-[#2b5843]/70 text-sm">
+                          {new Date(a.start_time).toLocaleString(i18n.language === 'zh' ? 'zh-CN' : 'en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                        {a.notes && (
+                          <p className="text-[#2b5843]/80 text-sm px-3 py-2 rounded-lg bg-amber-100/50 border border-amber-200/50">
+                            {t('appointmentsSection.agentNote')}：{a.notes}
+                          </p>
+                        )}
+                        {(a.customer_info || customerPhone) && (
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-xs text-[#2b5843]/80">
+                              {t('appointmentsSection.potentialBuyer', { role: a.party_role === 'seller' ? t('partyRole.buyer') : t('partyRole.tenant') })}
+                              {a.customer_info && <span className="font-medium text-[#2b5843]/90">{a.customer_info}</span>}
+                              {a.customer_info && customerPhone && <span className="text-[#2b5843]/60 mx-1">·</span>}
+                              {customerPhone && (
+                                <a href={getTelUrl(customerPhone)} className="font-medium text-[#2b5843]/90 hover:underline ml-1">
+                                  {customerPhone}
+                                </a>
+                              )}
+                            </span>
+                            {customerWhatsAppUrl && (
+                              <a
+                                href={customerWhatsAppUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-xl bg-[#25D366] text-white hover:bg-[#20BD5A]"
+                              >
+                                <svg viewBox="0 0 24 24" className="w-4 h-4" fill="currentColor">
+                                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+                                </svg>
+                                WhatsApp
+                              </a>
+                            )}
+                          </div>
+                        )}
+                        <div className="flex items-center gap-2 pt-2 border-t border-amber-200/50 shrink-0">
+                          {prop && (prop.source_url || prop.link) && isSupportedScrapeUrl((prop.source_url || prop.link)!) && (
+                            <button
+                              onClick={() => handleRefreshProperty(prop)}
+                              disabled={refreshingPropertyId === prop.id}
+                              className="text-xs text-[#2b5843]/60 hover:text-[#2b5843]/90 disabled:opacity-50 flex items-center gap-1"
+                              title={t('pendingSection.refreshTitle')}
+                            >
+                              {refreshingPropertyId === prop.id ? (
+                                <svg className="animate-spin h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                </svg>
+                              ) : (
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5">
+                                  <path fillRule="evenodd" d="M4.755 10.059a7.5 7.5 0 0112.548-3.364l1.903 1.903h-3.183a.75.75 0 100 1.5h4.992a.75.75 0 00.75-.75V4.356a.75.75 0 00-1.5 0v3.18l-1.9-1.9A9 9 0 003.306 9.67a.75.75 0 011.45.388zm15.408 3.352a.75.75 0 00-.919.53 7.5 7.5 0 01-12.548 3.364l-1.902-1.903h3.183a.75.75 0 000-1.5H2.984a.75.75 0 00-.75.75v4.992a.75.75 0 001.5 0v-3.18l1.9 1.9a9 9 0 0015.059 4.035.75.75 0 00-.53-.918z" clipRule="evenodd" />
+                                </svg>
+                              )}
+                              {t('common.refresh')}
+                            </button>
+                          )}
+                          <button
+                            onClick={() => handleOpenEdit(a)}
+                            className="text-xs text-[#2b5843]/60 hover:text-[#2b5843]/90"
+                          >
+                            {t('common.edit')}
+                          </button>
+                          <Popconfirm
+                            title={t('appointmentsSection.deleteAppointmentConfirm')}
+                            onConfirm={() => appointments.remove.mutate(a.id)}
+                            okText={t('common.confirm')}
+                            cancelText={t('common.cancel')}
+                            icon={null}
+                          >
+                            <button className="text-xs text-[#2b5843]/60 hover:text-red-600">
+                              {t('common.delete')}
+                            </button>
+                          </Popconfirm>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                }
+
                 const imgs = displayImages(prop)
                 return (
                   <div
@@ -2752,13 +2856,13 @@ function AppointmentsSection({
           role="dialog"
           aria-modal="true"
           aria-label={t('lightbox.title')}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center glass-overlay-dark p-4"
           onClick={() => setLightboxImage(null)}
         >
           <button
             type="button"
             onClick={() => setLightboxImage(null)}
-            className="absolute top-4 right-4 text-white/80 hover:text-white text-2xl leading-none"
+            className="absolute top-4 right-4 text-white/80 hover:text-white text-2xl leading-none micro-btn"
             aria-label={t('common.close')}
           >
             ✕
@@ -2766,7 +2870,7 @@ function AppointmentsSection({
           <img
             src={lightboxImage}
             alt={t('lightbox.alt')}
-            className="max-w-full max-h-[90vh] w-auto object-contain rounded-lg"
+            className="max-w-full max-h-[90vh] w-auto object-contain rounded-lg micro-scale"
             onClick={(e) => e.stopPropagation()}
           />
         </div>
@@ -2784,6 +2888,8 @@ type ScheduleBlock = {
   endTime: string
   appointments: Appointment[]
   propertyCount: number
+  /** 自定义事件（用户手动添加） */
+  customEvent?: import('@/lib/scheduleCustomEvents').ScheduleCustomEvent
 }
 
 /** 时间轴条目：预约块或空闲时段 */
@@ -2792,6 +2898,7 @@ type TimelineItem =
   | { type: 'free'; startTime: string; endTime: string; durationMinutes: number }
 
 const MERGE_GAP_MS = 30 * 60 * 1000 // 30 分钟内视为相邻，可合并
+const SELLER_START_GAP_MS = 45 * 60 * 1000 // 卖家/房东：两预约起始时间差 ≤ 45 分钟则合并，不显示休息
 
 function mergeAppointmentsIntoBlocks(
   appointments: Appointment[],
@@ -2872,6 +2979,32 @@ function mergeConsecutiveSameCustomerBlocks(blocks: ScheduleBlock[]): ScheduleBl
   return merged
 }
 
+/** 合并连续卖家/房东块：起始时间差 < 45 分钟则不显示休息，合并展示 */
+function mergeConsecutiveSellerBlocksByStartGap(blocks: ScheduleBlock[]): ScheduleBlock[] {
+  const sellerRoles: PartyRole[] = ['seller', 'landlord']
+  if (blocks.length === 0) return []
+  const merged: ScheduleBlock[] = []
+  let current = { ...blocks[0], appointments: [...blocks[0].appointments], propertyCount: blocks[0].propertyCount }
+  for (let i = 1; i < blocks.length; i++) {
+    const next = blocks[i]
+    const currIsSeller = sellerRoles.includes(current.partyRole)
+    const nextIsSeller = sellerRoles.includes(next.partyRole)
+    const currStartMs = new Date(current.startTime).getTime()
+    const nextStartMs = new Date(next.startTime).getTime()
+    const startGapMs = nextStartMs - currStartMs
+    if (currIsSeller && nextIsSeller && startGapMs <= SELLER_START_GAP_MS) {
+      current.endTime = next.endTime
+      current.appointments.push(...next.appointments)
+      current.propertyCount = current.appointments.length
+    } else {
+      merged.push(current)
+      current = { ...next, appointments: [...next.appointments], propertyCount: next.propertyCount }
+    }
+  }
+  merged.push(current)
+  return merged
+}
+
 /** 为某天的预约块插入空闲时段，生成时间轴条目列表（仅在不同客户之间显示空闲） */
 function buildTimelineWithFreeSlots(blocks: ScheduleBlock[]): TimelineItem[] {
   if (blocks.length === 0) return []
@@ -2897,6 +3030,19 @@ function buildTimelineWithFreeSlots(blocks: ScheduleBlock[]): TimelineItem[] {
   return items
 }
 
+function customEventToBlock(ce: import('@/lib/scheduleCustomEvents').ScheduleCustomEvent): ScheduleBlock {
+  return {
+    customerGroupId: `custom-${ce.id}`,
+    customerGroupName: ce.name,
+    partyRole: 'buyer',
+    startTime: ce.startTime,
+    endTime: ce.endTime,
+    appointments: [],
+    propertyCount: 0,
+    customEvent: ce,
+  }
+}
+
 function AgentScheduleSection({
   appointments,
   groups,
@@ -2905,8 +3051,17 @@ function AgentScheduleSection({
   groups: ReturnType<typeof useCustomerGroups>
 }) {
   const { t, i18n } = useTranslation()
+  const { user } = useAuth()
   const PARTY_ROLE_LABELS = usePartyRoleLabels()
   const [rangeMode, setRangeMode] = useState<'twoWeeks' | 'all'>('twoWeeks')
+  const [showAddEvent, setShowAddEvent] = useState(false)
+  const [editingEvent, setEditingEvent] = useState<import('@/lib/scheduleCustomEvents').ScheduleCustomEvent | null>(null)
+  const [customEvents, setCustomEvents] = useState<import('@/lib/scheduleCustomEvents').ScheduleCustomEvent[]>([])
+
+  useEffect(() => {
+    if (user?.id) setCustomEvents(getCustomEvents(user.id))
+  }, [user?.id])
+
   const activeGroupIds = new Set(groups.data?.filter((g) => g.is_active !== false).map((g) => g.id) ?? [])
   const rawAppts = appointments.data ?? []
   const appts = rawAppts.filter((a) => !a.customer_group_id || activeGroupIds.has(a.customer_group_id))
@@ -2925,9 +3080,43 @@ function AgentScheduleSection({
     acc[d].push(b)
     return acc
   }, {})
+
+  // 合并自定义事件
+  const futureCustomEvents = customEvents.filter((ce) => new Date(ce.startTime) >= now)
+  const rangeCustomEvents =
+    rangeMode === 'twoWeeks'
+      ? futureCustomEvents.filter((ce) => new Date(ce.startTime) <= twoWeeksEnd)
+      : futureCustomEvents
+  for (const ce of rangeCustomEvents) {
+    const d = new Date(ce.startTime).toDateString()
+    if (!byDate[d]) byDate[d] = []
+    byDate[d].push(customEventToBlock(ce))
+  }
+  for (const arr of Object.values(byDate)) {
+    arr.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
+  }
+
   const sortedDates = Object.keys(byDate).sort(
     (a, b) => new Date(a).getTime() - new Date(b).getTime()
   )
+
+  const handleAddCustomEvent = (event: Omit<import('@/lib/scheduleCustomEvents').ScheduleCustomEvent, 'id'>) => {
+    if (!user?.id) return
+    addCustomEvent(user.id, event)
+    setCustomEvents(getCustomEvents(user.id))
+  }
+
+  const handleUpdateCustomEvent = (eventId: string, event: Omit<import('@/lib/scheduleCustomEvents').ScheduleCustomEvent, 'id'>) => {
+    if (!user?.id) return
+    updateCustomEvent(user.id, eventId, event)
+    setCustomEvents(getCustomEvents(user.id))
+  }
+
+  const handleDeleteCustomEvent = (eventId: string) => {
+    if (!user?.id) return
+    deleteCustomEvent(user.id, eventId)
+    setCustomEvents(getCustomEvents(user.id))
+  }
 
   const dayNames = i18n.language === 'zh'
     ? ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
@@ -2935,8 +3124,30 @@ function AgentScheduleSection({
 
   return (
     <section>
+      <AddCustomEventModal
+        open={showAddEvent}
+        onClose={() => { setShowAddEvent(false); setEditingEvent(null) }}
+        onSubmit={(event) => {
+          if (editingEvent) {
+            handleUpdateCustomEvent(editingEvent.id, event)
+          } else {
+            handleAddCustomEvent(event)
+          }
+          setEditingEvent(null)
+          setShowAddEvent(false)
+        }}
+        initialEvent={editingEvent ?? undefined}
+      />
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-sm font-medium text-[#2b5843]/90">{t('scheduleSection.title')}</h2>
+        <div className="flex items-center gap-3">
+          <h2 className="text-sm font-medium text-[#2b5843]/90">{t('scheduleSection.title')}</h2>
+          <button
+            onClick={() => setShowAddEvent(true)}
+            className="micro-btn text-xs px-3 py-1.5 rounded-xl border border-[#53868e]/35 hover:bg-[#53868e]/15 text-[#2b5843]/90"
+          >
+            + {t('scheduleSection.addEvent')}
+          </button>
+        </div>
         <div className="flex gap-1 border border-[#53868e]/25 rounded-xl p-0.5">
           <button
             onClick={() => setRangeMode('twoWeeks')}
@@ -2974,7 +3185,8 @@ function AgentScheduleSection({
             const dayName = dayNames[date.getDay()]
             const blocksForDate = byDate[dateStr]
             const mergedBlocks = mergeConsecutiveSameCustomerBlocks(blocksForDate)
-            const timelineItems = buildTimelineWithFreeSlots(mergedBlocks)
+            const sellerMergedBlocks = mergeConsecutiveSellerBlocksByStartGap(mergedBlocks)
+            const timelineItems = buildTimelineWithFreeSlots(sellerMergedBlocks)
             const totalMinutes = timelineItems.reduce((sum, item) => {
               if (item.type === 'appointment') {
                 const s = new Date(item.block.startTime).getTime()
@@ -3025,6 +3237,49 @@ function AgentScheduleSection({
                     const start = new Date(block.startTime)
                     const end = new Date(block.endTime)
                     const timeStr = `${start.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })} – ${end.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })}`
+
+                    if (block.customEvent) {
+                      const ce = block.customEvent
+                      return (
+                        <div
+                          key={`custom-${ce.id}`}
+                          className="flex-shrink-0 flex items-center gap-3 px-4 py-3 rounded-lg bg-violet-50 border border-violet-200/70"
+                          style={{ flex: `${flexRatio} 1 0`, minHeight: 64 }}
+                        >
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs text-violet-600/80 mb-0.5">{t('scheduleSection.customEventBadge')}</p>
+                            <p className="font-medium text-violet-900 text-sm truncate">{ce.name}</p>
+                            <p className="text-violet-700/80 text-xs mt-0.5">
+                              {timeStr}
+                              {ce.location && <span className="ml-1.5 text-violet-600">· {ce.location}</span>}
+                            </p>
+                          </div>
+                          <div className="shrink-0 flex gap-1">
+                            <button
+                              type="button"
+                              onClick={() => { setEditingEvent(ce); setShowAddEvent(true) }}
+                              className="micro-btn text-xs px-2 py-1 rounded-lg text-violet-600 hover:bg-violet-200/50 border border-violet-200/60"
+                            >
+                              {t('common.edit')}
+                            </button>
+                            <Popconfirm
+                              title={t('scheduleSection.deleteCustomEventConfirm')}
+                              onConfirm={() => handleDeleteCustomEvent(ce.id)}
+                              okText={t('common.confirm')}
+                              cancelText={t('common.cancel')}
+                            >
+                              <button
+                                type="button"
+                                className="micro-btn text-xs px-2 py-1 rounded-lg text-violet-600 hover:bg-violet-200/50 border border-violet-200/60"
+                              >
+                                {t('scheduleSection.deleteCustomEvent')}
+                              </button>
+                            </Popconfirm>
+                          </div>
+                        </div>
+                      )
+                    }
+
                     return (
                       <div
                         key={`${block.customerGroupId}-${block.startTime}`}
@@ -3048,23 +3303,41 @@ function AgentScheduleSection({
                           </p>
                         </div>
                         <div className="shrink-0 flex gap-1 flex-wrap">
-                          {block.appointments.slice(0, 3).map((a) => {
-                            const prop = a.properties as Property | undefined
+                          {(() => {
+                            const seen = new Set<string>()
+                            const locations: string[] = []
+                            for (const a of block.appointments) {
+                              const prop = a.properties as Property | undefined
+                              const loc = extractProjectOrLocation(prop?.title) || prop?.title?.trim() || '—'
+                              if (loc && !seen.has(loc)) {
+                                seen.add(loc)
+                                locations.push(loc)
+                                if (locations.length >= 3) break
+                              }
+                            }
+                            const totalUnique = new Set(
+                              block.appointments
+                                .map((a) => extractProjectOrLocation((a.properties as Property | undefined)?.title) || (a.properties as Property | undefined)?.title?.trim())
+                                .filter(Boolean)
+                            ).size
+                            const hasMore = totalUnique > 3
                             return (
-                              <span
-                                key={a.id}
-                                className="text-xs px-2 py-0.5 rounded bg-[#f6f3f1] border border-[#53868e]/25 text-[#2b5843]/80 break-words max-w-full sm:max-w-[140px] line-clamp-2 sm:line-clamp-1"
-                                title={prop?.title}
-                              >
-                                {prop?.title ?? '—'}
-                              </span>
+                              <>
+                                {locations.map((loc) => (
+                                  <span
+                                    key={loc}
+                                    className="text-xs px-2 py-0.5 rounded bg-[#f6f3f1] border border-[#53868e]/25 text-[#2b5843]/80 break-words max-w-full sm:max-w-[140px] line-clamp-2 sm:line-clamp-1"
+                                    title={loc}
+                                  >
+                                    {loc}
+                                  </span>
+                                ))}
+                                {hasMore && (
+                                  <span className="text-xs text-[#2b5843]/60 self-center">+{totalUnique - 3}</span>
+                                )}
+                              </>
                             )
-                          })}
-                          {block.propertyCount > 3 && (
-                            <span className="text-xs text-[#2b5843]/60 self-center">
-                              +{block.propertyCount - 3}
-                            </span>
-                          )}
+                          })()}
                         </div>
                       </div>
                     )

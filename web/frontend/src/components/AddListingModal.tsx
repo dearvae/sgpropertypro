@@ -63,9 +63,9 @@ export function AddListingModal({ open, onClose, listingType, agentId, onSuccess
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center glass-overlay" onClick={onClose}>
       <div
-        className="bg-[#f6f3f1] rounded-xl shadow-lg p-6 w-full max-w-md mx-4 border border-[#53868e]/25"
+        className="glass-modal rounded-xl p-6 w-full max-w-md mx-4 micro-btn"
         onClick={(e) => e.stopPropagation()}
       >
         <h3 className="text-sm font-medium text-[#2b5843] mb-4">{title}</h3>
@@ -99,7 +99,7 @@ export function AddListingModal({ open, onClose, listingType, agentId, onSuccess
           <button
             onClick={handleSubmit}
             disabled={isPending || !propertyLink.trim()}
-            className="px-4 py-2 text-sm border border-[#53868e]/35 rounded-xl hover:bg-[#53868e]/15 disabled:opacity-50 flex items-center gap-2"
+            className="micro-btn px-4 py-2 text-sm border border-[#53868e]/35 rounded-xl hover:bg-[#53868e]/15 disabled:opacity-50 flex items-center gap-2"
           >
             {isPending && (
               <svg className="animate-spin h-4 w-4 text-[#2b5843]/70" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">

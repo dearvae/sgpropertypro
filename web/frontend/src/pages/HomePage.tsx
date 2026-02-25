@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 import { LanguageSwitcher } from '@/components/LanguageSwitcher'
+import { RevealOnScroll } from '@/components/RevealOnScroll'
 import { useAuth } from '@/hooks/useAuth'
 import { useProfile } from '@/hooks/useProfile'
 import { getDisplayName } from '@/types'
@@ -70,20 +71,17 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen flex flex-col text-[#2b5843]" style={{ background: 'linear-gradient(180deg, #f6f3f1 0%, #e8ebe8 50%, #dde4e2 100%)' }}>
-      {/* Header: sticky, cream gradient */}
-      <header className="sticky top-0 z-50 backdrop-blur-md border-b border-[#53868e]/20 rounded-b-3xl mx-4 mt-2 sm:mx-6 sm:mt-3" style={{ background: 'linear-gradient(135deg, #f6f3f1 0%, #f0ebe8 100%)' }}>
+      {/* Header: sticky, glassmorphism */}
+      <header className="sticky top-0 z-50 border-b border-[#53868e]/20 rounded-b-3xl mx-4 mt-2 sm:mx-6 sm:mt-3 glass-header">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between gap-4">
           <Link to="/" className="text-lg font-medium text-[#2b5843] hover:opacity-80 transition-opacity">
             propsuite.tech
           </Link>
           <nav className="hidden sm:flex items-center gap-6">
-            <a href="#features" className="text-base text-[#2b5843]/90 hover:text-[#2b5843] transition-colors">
+            <a href="#features" className="text-base text-[#2b5843]/90 hover:text-[#2b5843] transition-colors micro-btn">
               {t('landing.navFeatures')}
             </a>
-            <a href="#pricing" className="text-base text-[#2b5843]/90 hover:text-[#2b5843] transition-colors">
-              {t('landing.navPricing')}
-            </a>
-            <a href="#whyUs" className="text-base text-[#2b5843]/90 hover:text-[#2b5843] transition-colors">
+            <a href="#whyUs" className="text-base text-[#2b5843]/90 hover:text-[#2b5843] transition-colors micro-btn">
               {t('landing.navTestimonials')}
             </a>
           </nav>
@@ -92,7 +90,7 @@ export default function HomePage() {
             {user ? (
               <Link
                 to={dashboardPath}
-                className="px-5 py-2.5 rounded-full text-[#f6f3f1] text-base font-medium hover:opacity-95 transition-opacity"
+                className="micro-btn micro-hover px-5 py-2.5 rounded-full text-[#f6f3f1] text-base font-medium hover:opacity-95 transition-opacity"
                 style={{ background: 'linear-gradient(135deg, #53868e 0%, #2b5843 100%)' }}
               >
                 {displayName}
@@ -101,13 +99,13 @@ export default function HomePage() {
               <>
                 <Link
                   to="/login"
-                  className="text-base text-[#2b5843]/90 hover:text-[#2b5843] transition-colors hidden sm:inline"
+                  className="micro-btn text-base text-[#2b5843]/90 hover:text-[#2b5843] transition-colors hidden sm:inline"
                 >
                   {t('landing.login')}
                 </Link>
                 <Link
                   to="/register"
-                  className="px-5 py-2.5 rounded-full text-[#f6f3f1] text-base font-medium hover:opacity-95 transition-opacity"
+                  className="micro-btn micro-hover px-5 py-2.5 rounded-full text-[#f6f3f1] text-base font-medium hover:opacity-95 transition-opacity"
                   style={{ background: 'linear-gradient(135deg, #53868e 0%, #2b5843 100%)' }}
                 >
                   {t('landing.getStarted')}
@@ -118,8 +116,8 @@ export default function HomePage() {
         </div>
       </header>
 
-      {/* Hero: gradient bg, geometric shapes, headline, CTA */}
-      <section className="relative pt-16 sm:pt-24 pb-20 sm:pb-28 px-4 sm:px-6 overflow-hidden" style={{ background: 'linear-gradient(180deg, rgba(246,243,241,0.5) 0%, rgba(83,134,142,0.08) 50%, rgba(246,243,241,0.3) 100%)' }}>
+      {/* Hero: Aurora gradient, geometric shapes, headline, CTA */}
+      <section className="relative pt-16 sm:pt-24 pb-20 sm:pb-28 px-4 sm:px-6 overflow-hidden aurora-gradient">
         {/* Soft geometric shapes - no right angles */}
         <div className="absolute inset-0 pointer-events-none" aria-hidden>
           <div className="absolute top-10 right-10 w-24 h-24 sm:w-32 sm:h-32 rounded-full border border-[#53868e]/25" />
@@ -127,7 +125,7 @@ export default function HomePage() {
           <div className="absolute top-1/4 right-1/5 w-40 h-40 rounded-full" style={{ background: 'radial-gradient(circle, rgba(83,134,142,0.12) 0%, transparent 70%)' }} />
           <div className="absolute bottom-1/3 right-1/4 w-24 h-24 rounded-[2rem] border border-[#2b5843]/15" />
         </div>
-        <div className="relative max-w-3xl mx-auto text-center">
+        <RevealOnScroll className="relative max-w-3xl mx-auto text-center" direction="up">
           <h1 className="text-4xl sm:text-5xl md:text-6xl font-semibold tracking-tight text-[#2b5843] leading-tight">
             {t('landing.heroTitle')}
           </h1>
@@ -140,18 +138,18 @@ export default function HomePage() {
           <div className="mt-10">
             <Link
               to={user ? dashboardPath : '/register'}
-              className="inline-flex px-8 py-3.5 rounded-full text-[#f6f3f1] text-base font-medium hover:opacity-95 transition-opacity"
+              className="micro-btn micro-hover inline-flex px-8 py-3.5 rounded-full text-[#f6f3f1] text-base font-medium hover:opacity-95 transition-opacity"
               style={{ background: 'linear-gradient(135deg, #53868e 0%, #2b5843 100%)' }}
             >
               {user ? t('landing.dashboard') : t('landing.getStarted')}
             </Link>
           </div>
-        </div>
+        </RevealOnScroll>
       </section>
 
       {/* Designed for Serious Agents */}
       <section className="py-12 sm:py-16 px-4 sm:px-6" style={{ background: 'linear-gradient(180deg, #f6f3f1 0%, #e8ebe8 100%)' }}>
-        <div className="max-w-2xl mx-auto text-center">
+        <RevealOnScroll className="max-w-2xl mx-auto text-center" delay={100}>
           <h2 className="text-xl sm:text-2xl font-semibold text-[#2b5843] mb-6">
             {t('landing.forAgents')}
           </h2>
@@ -167,22 +165,24 @@ export default function HomePage() {
           <p className="mt-6 text-base font-medium text-[#2b5843]">
             {t('landing.agentCta')}
           </p>
-        </div>
+        </RevealOnScroll>
       </section>
 
       {/* Features: What You Can Do */}
       <section id="features" className="py-16 sm:py-24 px-4 sm:px-6" style={{ background: 'linear-gradient(180deg, #e8ebe8 0%, #f6f3f1 100%)' }}>
         <div className="max-w-5xl mx-auto">
-          <h2 className="text-2xl sm:text-3xl font-semibold text-[#2b5843] text-center mb-12">
-            {t('landing.whatYouCanDo')}
-          </h2>
+          <RevealOnScroll>
+            <h2 className="text-2xl sm:text-3xl font-semibold text-[#2b5843] text-center mb-12">
+              {t('landing.whatYouCanDo')}
+            </h2>
+          </RevealOnScroll>
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {features.map(({ key, Icon }) => (
-              <article
-                key={key}
-                className="p-6 border border-[#53868e]/25 rounded-2xl"
-                style={{ background: 'linear-gradient(145deg, #f6f3f1 0%, #ebe8e5 100%)' }}
-              >
+            {features.map(({ key, Icon }, i) => (
+              <RevealOnScroll key={key} delay={i * 80}>
+                <article
+                  className="micro-hover p-6 border border-[#53868e]/25 rounded-2xl"
+                  style={{ background: 'linear-gradient(145deg, #f6f3f1 0%, #ebe8e5 100%)' }}
+                >
                 <div className="flex items-center gap-3 mb-4">
                   <span className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium text-[#53868e]" style={{ background: 'linear-gradient(135deg, rgba(83,134,142,0.2) 0%, rgba(43,88,67,0.1) 100%)' }}>
                     {key}
@@ -198,6 +198,7 @@ export default function HomePage() {
                   {t(`landing.feature${key}Desc`)}
                 </p>
               </article>
+              </RevealOnScroll>
             ))}
           </div>
         </div>
@@ -206,40 +207,30 @@ export default function HomePage() {
       {/* Why Agents Love PropSuite */}
       <section id="whyUs" className="py-16 sm:py-24 px-4 sm:px-6" style={{ background: 'linear-gradient(180deg, #f6f3f1 0%, #e8ebe8 100%)' }}>
         <div className="max-w-5xl mx-auto">
-          <h2 className="text-2xl sm:text-3xl font-semibold text-[#2b5843] text-center mb-12">
-            {t('landing.whyLoveUs')}
-          </h2>
+          <RevealOnScroll>
+            <h2 className="text-2xl sm:text-3xl font-semibold text-[#2b5843] text-center mb-12">
+              {t('landing.whyLoveUs')}
+            </h2>
+          </RevealOnScroll>
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {benefits.map(({ key }) => (
-              <div
-                key={key}
-                className="flex items-center gap-3 p-4 border border-[#53868e]/20 rounded-2xl"
-                style={{ background: 'linear-gradient(145deg, #f6f3f1 0%, #ebece8 100%)' }}
-              >
+            {benefits.map(({ key }, i) => (
+              <RevealOnScroll key={key} delay={i * 60}>
+                <div
+                  className="micro-hover flex items-center gap-3 p-4 border border-[#53868e]/20 rounded-2xl"
+                  style={{ background: 'linear-gradient(145deg, #f6f3f1 0%, #ebece8 100%)' }}
+                >
                 <IconCheck />
                 <span className="text-base font-medium text-[#2b5843]">{t(`landing.benefit${key}`)}</span>
               </div>
+              </RevealOnScroll>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Pricing */}
-      <section id="pricing" className="py-16 sm:py-24 px-4 sm:px-6" style={{ background: 'linear-gradient(180deg, #e8ebe8 0%, #dde4e2 100%)' }}>
-        <div className="max-w-xl mx-auto text-center">
-          <h2 className="text-2xl sm:text-3xl font-semibold text-[#2b5843] mb-6">
-            {t('landing.pricing')}
-          </h2>
-          <p className="text-lg text-[#2b5843]/90">
-            {t('landing.pricingFree')}{' '}
-            <span className="font-medium">{t('landing.pricingPro')}</span>
-          </p>
-        </div>
-      </section>
-
       {/* CTA block */}
       <section className="py-16 sm:py-20 px-4 sm:px-6" style={{ background: 'linear-gradient(180deg, #e8ebe8 0%, #dde4e2 100%)' }}>
-        <div className="max-w-xl mx-auto text-center">
+        <RevealOnScroll className="max-w-xl mx-auto text-center">
           <h2 className="text-2xl sm:text-3xl font-semibold text-[#2b5843]">
             {t('landing.ctaTitle')}
           </h2>
@@ -248,12 +239,12 @@ export default function HomePage() {
           </p>
           <Link
             to={user ? dashboardPath : '/register'}
-            className="mt-6 inline-flex px-8 py-3.5 rounded-full text-[#f6f3f1] text-base font-medium hover:opacity-95 transition-opacity"
+            className="micro-btn micro-hover mt-6 inline-flex px-8 py-3.5 rounded-full text-[#f6f3f1] text-base font-medium hover:opacity-95 transition-opacity"
             style={{ background: 'linear-gradient(135deg, #53868e 0%, #2b5843 100%)' }}
           >
             {user ? t('landing.dashboard') : t('landing.getStarted')}
           </Link>
-        </div>
+        </RevealOnScroll>
       </section>
 
       {/* Footer: gradient to dark green, cream text, rounded top */}

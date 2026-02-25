@@ -85,6 +85,21 @@ export function extractPropertyTitle(fullTitle: string): string {
   return t
 }
 
+/** 提取小区/项目名用于去重：同一小区只展示一次。优先取 "at/in XXX"、"- XXX" 部分 */
+export function extractProjectOrLocation(fullTitle: string | null | undefined): string {
+  if (!fullTitle?.trim()) return ''
+  const t = fullTitle.trim()
+  const at = t.match(/\s+at\s+(.+)$/i)
+  if (at) return at[1].trim()
+  const inMatch = t.match(/\s+in\s+(.+)$/i)
+  if (inMatch) return inMatch[1].trim()
+  const afterDash = t.match(/\s*[-–—]\s+(.+)$/)
+  if (afterDash) return afterDash[1].trim()
+  const beforeDash = t.match(/^(.+?)\s*[-–—]\s+/)
+  if (beforeDash) return beforeDash[1].trim()
+  return t
+}
+
 /**
  * 根据 property 和 profile 构建模板变量
  */

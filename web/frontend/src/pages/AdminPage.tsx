@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase'
 import { getTelUrl } from '@/lib/whatsapp'
 import { useAuth } from '@/hooks/useAuth'
 import { useProfile } from '@/hooks/useProfile'
+import { FullPageSkeleton } from '@/components/Skeleton'
 
 function ErrorLogModal({ content, onClose }: { content: string; onClose: () => void }) {
   const [copied, setCopied] = useState(false)
@@ -122,11 +123,7 @@ export default function AdminPage() {
   })
 
   if (authLoading || !user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: 'linear-gradient(180deg, #f6f3f1 0%, #e8ebe8 100%)' }}>
-        <p className="text-[#2b5843]/70">{t('common.loading')}</p>
-      </div>
-    )
+    return <FullPageSkeleton message={t('common.loading')} />
   }
 
   if (!isAdmin) {

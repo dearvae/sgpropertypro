@@ -39,7 +39,7 @@ app = FastAPI(title="Property Scrape API")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,  # True 与 allow_origins=["*"] 不兼容，会导致 preflight 失败
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -821,18 +821,28 @@ def _get_client_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
+logger = logging.getLogger(__name__)
+
+
 @app.post("/api/scrape-property", response_model=ScrapeResponse)
 async def scrape_property(req: ScrapeRequest, request: Request):
     """同步抓取，用于刷新按钮（用户等待结果）"""
-    if not _check_rate_limit(_get_client_ip(request), RATE_LIMIT_SCRAPE_PROPERTY):
+    client_ip = _get_client_ip(request)
+    logger.info("scrape-property 请求: url=%s property_id=%s client_ip=%s", req.url, req.property_id, client_ip)
+    if not _check_rate_limit(client_ip, RATE_LIMIT_SCRAPE_PROPERTY):
+        logger.warning("scrape-property 限流: client_ip=%s", client_ip)
         raise HTTPException(status_code=429, detail="请求过于频繁，请稍后再试")
     url = _normalize_propertyguru_url(req.url)
     _validate_scrape_url(url)
     if not _check_and_mark_in_progress(f"url:{url}"):
+        logger.warning("scrape-property 并发冲突: url=%s", url)
         raise HTTPException(status_code=429, detail="你点得太快了，请稍后再点")
     started_at = time.time()
+    logger.info("scrape-property 开始抓取: url=%s", url)
     try:
         result = await _run_property_scraper(url)
+        elapsed = time.time() - started_at
+        logger.info("scrape-property 成功: url=%s title=%s elapsed=%.2fs", url, result.title, elapsed)
         _record_scrape_run(
             url=url,
             scrape_type="sync",
@@ -844,7 +854,9 @@ async def scrape_property(req: ScrapeRequest, request: Request):
         )
         return result
     except Exception as e:
+        elapsed = time.time() - started_at
         err_log = traceback.format_exc()
+        logger.exception("scrape-property 失败: url=%s elapsed=%.2fs error=%s", url, elapsed, e)
         _record_scrape_run(
             url=url,
             scrape_type="sync",

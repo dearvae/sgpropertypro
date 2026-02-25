@@ -4,8 +4,49 @@
  */
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { MapViewModal } from '@/components/MapViewModal'
+import { SellerMergedCard } from '@/components/SellerLandlordMergedCard'
 import { getGoogleMapsSearchUrl, getGoogleMapsDirectionsUrl } from '@/lib/mapUtils'
+import {
+  getSavedSellerMergedVariant,
+  setSavedSellerMergedVariant,
+  type SellerMergedCardVariant,
+} from '@/lib/sellerMergedBlocks'
+import type { Appointment, Property } from '@/types'
+
+// 代表卖家/房东的合并预约卡片 - 模拟数据
+const DEMO_PROP: Property = {
+  id: 'demo-prop-1',
+  agent_id: '',
+  title: 'Marina Bay Residences 3BR · 海景',
+  link: null,
+  source_url: null,
+  basic_info: null,
+  price: null,
+  price_value: null,
+  price_description: null,
+  main_image_url: null,
+  image_urls: null,
+  floor_plan_url: null,
+  site_plan_url: null,
+  listing_agent_name: null,
+  listing_agent_phone: null,
+  listing_type: 'sale',
+  bedrooms: '3',
+  bathrooms: '2',
+  size_sqft: '1200',
+  lease_tenure: '99年',
+  top_year: '2020',
+  created_at: '',
+  updated_at: '',
+}
+const DEMO_APPOINTMENTS: Appointment[] = [
+  { id: 'a1', property_id: 'demo-prop-1', customer_group_id: null, start_time: '2026-03-01T14:00:00Z', end_time: '2026-03-01T14:30:00Z', status: 'scheduled', party_role: 'seller', customer_info: '张先生夫妇', customer_phone: '91234567', notes: '带钥匙、提前到', created_at: '', updated_at: '', properties: DEMO_PROP },
+  { id: 'a2', property_id: 'demo-prop-1', customer_group_id: null, start_time: '2026-03-01T14:30:00Z', end_time: '2026-03-01T15:00:00Z', status: 'scheduled', party_role: 'seller', customer_info: '李女士', customer_phone: '87654321', notes: '', created_at: '', updated_at: '', properties: DEMO_PROP },
+  { id: 'a3', property_id: 'demo-prop-1', customer_group_id: null, start_time: '2026-03-01T15:00:00Z', end_time: '2026-03-01T15:30:00Z', status: 'scheduled', party_role: 'seller', customer_info: '王先生', customer_phone: '98881234', notes: '投资客', created_at: '', updated_at: '', properties: DEMO_PROP },
+]
+const DEMO_MERGED_BLOCK = { property: DEMO_PROP, partyRole: 'seller' as const, appointments: DEMO_APPOINTMENTS, hasInterleaving: false }
 
 // 示例房源，用于地图演示
 const DEMO_PROPERTIES = [
@@ -14,9 +55,24 @@ const DEMO_PROPERTIES = [
   { id: '3', title: 'Sentosa Cove' },
 ]
 
+const LAYOUT_OPTIONS: { value: SellerMergedCardVariant; label: string }[] = [
+  { value: 'table', label: '表格' },
+  { value: 'timeline', label: '时间轴' },
+  { value: 'compact', label: '紧凑行' },
+  { value: 'blocks', label: '分块卡片' },
+  { value: 'minimal', label: '极简' },
+]
+
 export default function Playground() {
   const [mapModalOpen, setMapModalOpen] = useState(false)
+  const [sellerVariant, setSellerVariantState] = useState<SellerMergedCardVariant>(() => getSavedSellerMergedVariant())
+  const { t } = useTranslation()
   const titles = DEMO_PROPERTIES.map((p) => p.title)
+
+  const setSellerVariant = (v: SellerMergedCardVariant) => {
+    setSellerVariantState(v)
+    setSavedSellerMergedVariant(v)
+  }
 
   return (
     <div className="min-h-screen bg-stone-100 text-stone-900">
@@ -202,6 +258,34 @@ export default function Playground() {
             <span className="px-3 py-1.5 rounded-full bg-amber-100 text-amber-700 text-xs font-medium">标签 B</span>
             <span className="px-3 py-1.5 rounded-full bg-indigo-100 text-indigo-700 text-xs font-medium">标签 C</span>
             <span className="px-3 py-1.5 rounded-full bg-stone-200 text-stone-600 text-xs font-medium">中性标签</span>
+          </div>
+        </section>
+
+        {/* ========== 四、代表卖家/房东的合并预约卡片 ========== */}
+        <section>
+          <h2 className="text-2xl font-bold text-stone-900 mb-2">四、代表卖家/房东的合并预约卡片</h2>
+          <p className="text-stone-500 text-sm mb-6">
+            代表卖家或房东时，同一房源会在同一时段约多组潜在买家/租客。当这些预约没有穿插其他预约时，合并为一张大卡片并以时间表展示。请选择您偏好的布局，选择后会保存并在预约列表中生效。
+          </p>
+          <div className="flex flex-wrap gap-2 mb-6">
+            {LAYOUT_OPTIONS.map(({ value, label }) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setSellerVariant(value)}
+                className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
+                  sellerVariant === value
+                    ? 'bg-amber-500 text-white'
+                    : 'bg-white border border-stone-200 text-stone-600 hover:bg-stone-50'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="rounded-xl border-2 border-amber-300 bg-amber-50/30 p-4">
+            <p className="text-xs text-amber-700 mb-3 font-medium">当前所选：{LAYOUT_OPTIONS.find((o) => o.value === sellerVariant)?.label ?? sellerVariant}</p>
+            <SellerMergedCard block={DEMO_MERGED_BLOCK} variant={sellerVariant} t={t as (k: string, o?: Record<string, unknown>) => string} />
           </div>
         </section>
 

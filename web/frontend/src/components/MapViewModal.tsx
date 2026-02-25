@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
+import { Skeleton } from '@/components/Skeleton'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 
@@ -122,36 +123,41 @@ export function MapViewModal({ properties, onClose, title }: Props) {
       role="dialog"
       aria-modal="true"
       aria-label={title}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-2 sm:p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center glass-overlay p-2 sm:p-4"
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-xl shadow-xl w-full max-w-3xl h-[85vh] sm:h-[80vh] flex flex-col overflow-hidden"
+        className="glass-modal rounded-xl w-full max-w-3xl h-[85vh] sm:h-[80vh] flex flex-col overflow-hidden modal-enter"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 shrink-0">
-          <h3 className="text-base font-semibold text-slate-900">{title ?? 'Map'}</h3>
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[#53868e]/20 shrink-0">
+          <h3 className="text-base font-semibold text-[#2b5843]">{title ?? 'Map'}</h3>
           <button
             type="button"
             onClick={onClose}
-            className="p-1 rounded hover:bg-slate-100 text-slate-500 hover:text-slate-700"
+            className="p-1 rounded micro-btn hover:bg-[#53868e]/10 text-[#2b5843]/70 hover:text-[#2b5843]"
             aria-label="Close"
           >
             ✕
           </button>
         </div>
-        <div className="flex-1 min-h-0 relative">
+        <div className="flex-1 min-h-0 relative bg-[#f6f3f1]/50">
           {loading ? (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-slate-50">
-              <div className="w-8 h-8 rounded-full border-2 border-slate-200 border-t-emerald-500 animate-spin" />
-              <p className="text-sm text-slate-600">
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 p-4">
+              <div className="w-full max-w-md space-y-3">
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-48 w-full rounded-xl" />
+                <Skeleton className="h-4 w-2/3" />
+                <Skeleton className="h-4 w-1/2" />
+              </div>
+              <p className="text-sm text-[#2b5843]/70">
                 {progress.total > 0
                   ? t('clientView.mapLoadingProgress', { current: progress.current, total: progress.total })
                   : t('common.loading')}
               </p>
             </div>
           ) : markers.length === 0 ? (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-slate-50 text-slate-600 text-sm">
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-[#2b5843]/70 text-sm">
               <p>{t('clientView.mapNoLocations')}</p>
               {failed.length > 0 && (
                 <p className="text-xs text-slate-500">{t('clientView.mapGeocodeFailed', { count: failed.length })}</p>

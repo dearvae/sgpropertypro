@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { message, Modal } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { useAgentFeedback, type FeedbackSort } from '@/hooks/useAgentFeedback'
+import { Skeleton } from '@/components/Skeleton'
 import { useProfile } from '@/hooks/useProfile'
 import type { AgentFeedback } from '@/types'
 
@@ -138,7 +139,17 @@ export function AgentFeedbackSection() {
 
       <div className="space-y-3">
         {feedback.isLoading ? (
-          <div className="py-12 text-center text-[#2b5843]/70 text-sm">{t('common.loading')}</div>
+          <div className="space-y-3">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="border border-[#53868e]/25 rounded-xl p-4 flex gap-4">
+                <div className="flex-1 space-y-2">
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-3/4" />
+                  <Skeleton className="h-3 w-24" />
+                </div>
+              </div>
+            ))}
+          </div>
         ) : items.length === 0 ? (
           <div className="py-12 text-center text-[#2b5843]/70 text-sm border border-dashed border-[#53868e]/25 rounded-xl">
             {t('feedback.noFeedback')}

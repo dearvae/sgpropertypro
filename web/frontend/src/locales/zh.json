@@ -50,6 +50,7 @@
     "optional": "选填",
     "loading": "加载中...",
     "copy": "复制",
+    "copied": "已复制",
     "cancel": "取消",
     "save": "保存",
     "delete": "删除",
@@ -422,7 +423,19 @@
     "noFuture": "暂无未来预约",
     "serveRole": "服务{{role}}",
     "viewProperties": "看 {{count}} 套房",
-    "mins": "约 {{count}} 分钟"
+    "mins": "约 {{count}} 分钟",
+    "addEvent": "添加事件",
+    "editEvent": "编辑事件",
+    "eventName": "事件名称",
+    "eventNamePlaceholder": "如：开会、带客看房",
+    "eventDate": "日期",
+    "eventStartTime": "开始时间",
+    "eventEndTime": "结束时间",
+    "eventLocation": "地点",
+    "eventLocationPlaceholder": "可选",
+    "customEventBadge": "自定义事件",
+    "deleteCustomEvent": "删除",
+    "deleteCustomEventConfirm": "确定删除此事件？"
   },
   "agentPublic": {
     "notFound": "该主页不存在",

@@ -98,10 +98,9 @@ export function ProfileEditModal({ onClose }: { onClose: () => void }) {
   const displayName = getDisplayName({ family_name: familyName, given_name: givenName, full_name: profile.full_name })
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center glass-overlay" onClick={onClose}>
       <div
-        className="rounded-2xl shadow-lg p-6 w-full max-w-md mx-4 border border-[#53868e]/25"
-        style={{ background: 'linear-gradient(145deg, #f6f3f1 0%, #ebece8 100%)' }}
+        className="glass-modal rounded-2xl p-6 w-full max-w-md mx-4 micro-btn"
         onClick={(e) => e.stopPropagation()}
       >
         <h3 className="text-sm font-medium text-[#2b5843] mb-4">{t('profile.title')}</h3>
