@@ -178,6 +178,7 @@
     "mapPartialFailed": "Could not find on map: {{list}}{{extra}}",
     "mapMore": "more",
     "showAgentInfo": "Show agent info",
+    "showContactNumbers": "Show contact numbers",
     "backToAgent": "Back to dashboard",
     "pendingTab": "Pending",
     "upcoming": "Upcoming",
@@ -217,7 +218,12 @@
     "favoritesTab": "Favorites",
     "noFavorites": "No favorites yet. Click the star on pending or upcoming properties to add.",
     "favorite": "Favorite",
-    "unfavorite": "Unfavorite"
+    "unfavorite": "Unfavorite",
+    "tableTime": "Time",
+    "tablePotentialBuyer": "Potential buyer",
+    "tablePotentialTenant": "Potential tenant",
+    "tableContact": "Contact",
+    "tableNotes": "Notes"
   },
   "profile": {
     "title": "Profile",

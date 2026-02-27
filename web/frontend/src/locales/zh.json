@@ -178,6 +178,7 @@
     "mapPartialFailed": "以下地址未能在地图上找到：{{list}}{{extra}}",
     "mapMore": "个更多",
     "showAgentInfo": "展示中介信息",
+    "showContactNumbers": "展示联系人号码",
     "backToAgent": "返回工作台",
     "pendingTab": "待预约",
     "upcoming": "已预约",
@@ -217,7 +218,12 @@
     "favoritesTab": "收藏",
     "noFavorites": "暂无收藏，点击待预约或已预约房源旁的星标添加",
     "favorite": "收藏",
-    "unfavorite": "取消收藏"
+    "unfavorite": "取消收藏",
+    "tableTime": "时间",
+    "tablePotentialBuyer": "潜在买家",
+    "tablePotentialTenant": "潜在租客",
+    "tableContact": "联系方式",
+    "tableNotes": "备注"
   },
   "profile": {
     "title": "个人资料",

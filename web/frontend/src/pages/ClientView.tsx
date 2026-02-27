@@ -43,6 +43,9 @@ type AppointmentItem = {
   status: string
   notes: string
   client_note: string
+  party_role?: string
+  customer_info?: string | null
+  customer_phone?: string | null
   property: PropertyData
 }
 
@@ -56,11 +59,12 @@ type PendingItem = {
 }
 
 type ClientViewData = {
-  group: { id: string; name: string } | null
+  group: { id: string; name: string; group_type?: string; property_id?: string | null } | null
   appointments: AppointmentItem[]
   pending_appointments?: PendingItem[]
   can_edit?: boolean
   favorited_property_ids?: string[]
+  listing_property?: PropertyData | null
   error?: string
 }
 
@@ -87,7 +91,7 @@ export default function ClientView() {
   const { t, i18n } = useTranslation()
   const { user } = useAuth()
   const isAgent = !!(user && (user.user_metadata?.role as string) === 'agent')
-  const [showAgentInfo, setShowAgentInfo] = useState(false)
+  const [showContactNumbers, setShowContactNumbers] = useState(false)
   const qc = useQueryClient()
   useRealtimeClientView(token)
 
@@ -170,7 +174,11 @@ export default function ClientView() {
     )
   }
 
-  const { group, appointments: rawAppointments, pending_appointments: rawPending = [], can_edit: canEdit = false, favorited_property_ids: rawFavorited = [] } = data
+  const { group, appointments: rawAppointments, pending_appointments: rawPending = [], can_edit: canEdit = false, favorited_property_ids: rawFavorited = [], listing_property: rawListingProperty } = data
+  const isListingView = !!(group?.group_type === 'listing' && group?.property_id)
+  const listingProperty = isListingView
+    ? (rawListingProperty ?? (appointments.length > 0 ? appointments[0].property : null))
+    : null
   const favoritedIds = new Set(Array.isArray(rawFavorited) ? rawFavorited : [])
   const appointments = Array.isArray(rawAppointments) ? rawAppointments : []
   const pendingItems = Array.isArray(rawPending) ? rawPending : []
@@ -330,7 +338,8 @@ export default function ClientView() {
     const imgs = displayImages(a.property)
     const hasNote = !!a.client_note?.trim()
     const p = a.property
-    const hasAgentInfo = showAgentInfo && (p.listing_agent_name || p.listing_agent_phone)
+    const canShowPhones = isAgent && showContactNumbers
+    const hasAgentInfo = canShowPhones && (p.listing_agent_name || p.listing_agent_phone)
     const agentWhatsAppUrl = p.listing_agent_phone ? getWhatsAppChatUrl(p.listing_agent_phone) : null
     return (
       <div
@@ -650,23 +659,23 @@ export default function ClientView() {
                   {t('clientView.backToAgent')}
                 </button>
                 <label className="flex items-center gap-2 cursor-pointer">
-                  <span className="text-sm text-[#2b5843]/80">{t('clientView.showAgentInfo')}</span>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={showAgentInfo}
-                  onClick={() => setShowAgentInfo((v) => !v)}
-                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-1 ${
-                    showAgentInfo ? 'bg-emerald-600' : 'bg-slate-200'
-                  }`}
-                >
-                  <span
-                    className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow ring-0 transition-transform ${
-                      showAgentInfo ? 'translate-x-5' : 'translate-x-0.5'
+                  <span className="text-sm text-[#2b5843]/80">{t('clientView.showContactNumbers')}</span>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={showContactNumbers}
+                    onClick={() => setShowContactNumbers((v) => !v)}
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-1 ${
+                      showContactNumbers ? 'bg-emerald-600' : 'bg-slate-200'
                     }`}
-                  />
-                </button>
-              </label>
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow ring-0 transition-transform ${
+                        showContactNumbers ? 'translate-x-5' : 'translate-x-0.5'
+                      }`}
+                    />
+                  </button>
+                </label>
               </div>
             )}
             <div className="shrink-0 flex items-center gap-2">
@@ -692,6 +701,113 @@ export default function ClientView() {
       </header>
 
       <main className="max-w-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-10">
+        {isListingView && listingProperty ? (
+          <section className="space-y-6">
+            <div
+              className="overflow-hidden rounded-xl shadow-sm border border-amber-200 bg-[#fffbeb]"
+              style={{ borderLeftWidth: '4px', borderLeftColor: 'rgb(245 158 11)' }}
+            >
+              <div className="flex flex-col sm:flex-row p-4 gap-4">
+                <div className="flex flex-col w-full sm:w-[180px] flex-shrink-0 gap-1" style={{ background: 'rgba(245,158,11,0.08)' }}>
+                  {displayImages(listingProperty)[0] ? (
+                    <button
+                      type="button"
+                      onClick={() => setLightboxImage(displayImages(listingProperty)[0])}
+                      className="block w-full rounded-lg overflow-hidden cursor-zoom-in hover:opacity-90 transition-opacity aspect-[4/3]"
+                    >
+                      <img src={displayImages(listingProperty)[0]!} alt={listingProperty.title} className="w-full h-full object-cover" />
+                    </button>
+                  ) : (
+                    <div className="w-full aspect-[4/3] rounded-lg flex items-center justify-center text-[#2b5843]/50 text-xs" style={{ background: 'rgba(245,158,11,0.15)' }}>{t('common.noImage')}</div>
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between gap-2 flex-wrap">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="font-semibold text-lg text-[#2b5843] break-words">{listingProperty.title}</p>
+                      {listingProperty.listing_type && (
+                        <span className={`px-2 py-0.5 rounded text-xs font-medium ${listingProperty.listing_type === 'rent' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>
+                          {listingProperty.listing_type === 'rent' ? t('clientView.rent') : t('clientView.sale')}
+                        </span>
+                      )}
+                    </div>
+                    {formatPriceDisplay(listingProperty) && <span className="font-medium text-emerald-700">{formatPriceDisplay(listingProperty)}</span>}
+                  </div>
+                  <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-2 text-sm text-[#2b5843]/80">
+                    {listingProperty.bedrooms && <span>{listingProperty.bedrooms}</span>}
+                    {listingProperty.bathrooms && <span>{listingProperty.bathrooms}</span>}
+                    {(listingProperty.size_sqft || listingProperty.basic_info) && <span>{(listingProperty.size_sqft || listingProperty.basic_info)}</span>}
+                    {listingProperty.listing_type === 'sale' && listingProperty.lease_tenure && <span>{listingProperty.lease_tenure}</span>}
+                    {listingProperty.top_year && <span>{listingProperty.top_year}</span>}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-3 text-sm">
+                    {listingProperty.link && (
+                      <a href={listingProperty.link} target="_blank" rel="noreferrer" className="text-emerald-600 hover:underline font-medium">{t('clientView.viewProperty')}</a>
+                    )}
+                    <a href={getGoogleMapsSearchUrl(listingProperty.title)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-emerald-600 hover:underline font-medium">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" /><circle cx="12" cy="10" r="3" /></svg>
+                      {t('clientView.mapNav')}
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="border-l-4 border-amber-500 rounded-r-xl overflow-hidden bg-[#fffbeb] shadow-sm">
+              <div className="p-4">
+                <h3 className="font-semibold text-base text-[#2b5843] mb-3">{t('clientView.upcoming')} / {t('clientView.history')}</h3>
+                {upcoming.length === 0 && history.length === 0 ? (
+                  <p className="text-slate-500 text-sm">{t('clientView.noUpcoming')}</p>
+                ) : (
+                  <table className="w-full text-left">
+                    <thead>
+                      <tr className="text-xs text-[#2b5843]/60 border-b border-amber-200/50">
+                        <th className="py-2 pr-3 font-medium">{t('clientView.tableTime')}</th>
+                        <th className="py-2 pr-3 font-medium">
+                          {listingProperty.listing_type === 'rent' ? t('clientView.tablePotentialTenant') : t('clientView.tablePotentialBuyer')}
+                        </th>
+                        <th className="py-2 pr-3 font-medium">{t('clientView.tableContact')}</th>
+                        <th className="py-2 font-medium">{t('clientView.tableNotes')}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[...upcoming, ...history]
+                        .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
+                        .map((a) => {
+                          const canShowPhones = isAgent && showContactNumbers
+                          const timeStr = new Date(a.start_time).toLocaleString(i18n.language === 'zh' ? 'zh-CN' : 'en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+                          const name = a.customer_info ?? '—'
+                          const phone = canShowPhones ? a.customer_phone : null
+                          const waUrl = phone ? getWhatsAppChatUrl(phone) : null
+                          const telUrl = phone ? getTelUrl(phone) : null
+                          return (
+                            <tr key={a.id} className="border-b border-amber-200/50 last:border-0">
+                              <td className="py-2 pr-3 text-sm text-[#2b5843]/80 tabular-nums">{timeStr}</td>
+                              <td className="py-2 pr-3 text-sm text-[#2b5843]/90">{name}</td>
+                              <td className="py-2 pr-3 text-sm">
+                                {phone && telUrl ? (
+                                  <span className="flex items-center gap-2">
+                                    <a href={telUrl} className="text-[#2b5843]/90 hover:underline">{phone}</a>
+                                    <CopyIcon onClick={() => copyPhone(phone)} title={t('clientView.copyNumber')} t={t} />
+                                    {waUrl && (
+                                      <a href={waUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-lg bg-[#25D366] text-white hover:bg-[#20BD5A]">WhatsApp</a>
+                                    )}
+                                  </span>
+                                ) : (
+                                  <span className="text-[#2b5843]/50">—</span>
+                                )}
+                              </td>
+                              <td className="py-2 text-sm text-[#2b5843]/70">{a.notes || '—'}</td>
+                            </tr>
+                          )
+                        })}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          </section>
+        ) : (
         <section>
           {mapProperties.length > 0 && (
             <div className="flex justify-end mb-3">
@@ -932,6 +1048,7 @@ export default function ClientView() {
             </>
           )}
         </section>
+        )}
       </main>
 
       {noteModal && (

@@ -110,6 +110,11 @@ If needed, you can further use the `web_scraper.py` file to scrape the web page 
 - Use 'gpt-4o' as the model name for OpenAI's GPT-4 with vision capabilities
 
 # Scratchpad
+## 已完成：ClientView 房源模式 + 联系人号码仅中介可见
+- [X] 当 client 是房源（group_type=listing）时：顶部展示房源信息，下方用 table 形式展示预约（复刻中介界面的表格）
+- [X] 联系人号码（customer_phone、listing_agent_phone）：仅中介登录时显示「展示联系人号码」按钮，点开后才展示；非中介无按钮、不显示任何号码
+- [X]  migration 048：get_client_view 返回 group_type、property_id、appointment 的 customer_info/customer_phone/party_role
+
 ## 已完成：UI 风格升级 - Skeleton / Glassmorphism / Aurora / 微交互
 - [X] Skeleton Screen：PageSkeleton、FullPageSkeleton、ViewPageSkeleton；应用到 App 路由守卫、ClientView、AgentPublicPage、AdminPage、MapViewModal、AgentFeedback
 - [X] 浮窗 Glassmorphism：glass-overlay、glass-overlay-dark、glass-modal、glass-header；所有 Modal、Lightbox 使用

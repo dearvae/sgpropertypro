@@ -1636,7 +1636,7 @@ function PendingAppointmentsSection({
                   const cg = pending.customer_groups as CustomerGroup | undefined
                   const partyRole: PartyRole = cg?.intent === 'rent' ? 'tenant' : 'buyer'
                   const startIso = new Date(confirmStartTime).toISOString()
-                  const endIso = new Date(new Date(confirmStartTime).getTime() + 30 * 60 * 1000).toISOString()
+                  const endIso = new Date(new Date(confirmStartTime).getTime() + 15 * 60 * 1000).toISOString()
                   try {
                     await appointments.create.mutateAsync({
                       property_id: pending.property_id,
@@ -1794,7 +1794,7 @@ function AppointmentsSection({
     const effGroup = clientMode && needsCustomerGroup ? selectedGroupId : groupId
     if (needsCustomerGroup && !effGroup) return null
     const startDate = new Date(startTime)
-    const endDate = new Date(startDate.getTime() + 5 * 60 * 1000)
+    const endDate = new Date(startDate.getTime() + 15 * 60 * 1000)
     const startIso = startDate.toISOString()
     const endIso = endDate.toISOString()
     const existing = (allAppointments.data ?? []).map((a) => ({
@@ -1859,7 +1859,7 @@ function AppointmentsSection({
     }
 
     const startDate = new Date(startTime)
-    const endDate = new Date(startDate.getTime() + 5 * 60 * 1000)
+    const endDate = new Date(startDate.getTime() + 15 * 60 * 1000)
     const startIso = startDate.toISOString()
     const endIso = endDate.toISOString()
     try {
@@ -1918,7 +1918,7 @@ function AppointmentsSection({
   const editConflictInfo = useMemo(() => {
     if (!editingAppointment || !editStartTime) return null
     const startDate = new Date(editStartTime)
-    const endDate = new Date(startDate.getTime() + 5 * 60 * 1000)
+    const endDate = new Date(startDate.getTime() + 15 * 60 * 1000)
     const startIso = startDate.toISOString()
     const endIso = endDate.toISOString()
     const existing = (allAppointments.data ?? []).map((a) => ({
@@ -1958,7 +1958,7 @@ function AppointmentsSection({
       return
     }
     const startDate = new Date(editStartTime)
-    const endDate = new Date(startDate.getTime() + 5 * 60 * 1000)
+    const endDate = new Date(startDate.getTime() + 15 * 60 * 1000)
     const startIso = startDate.toISOString()
     const endIso = endDate.toISOString()
     try {
