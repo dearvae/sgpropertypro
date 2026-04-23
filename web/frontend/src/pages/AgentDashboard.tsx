@@ -2508,37 +2508,35 @@ function AppointmentsSection({
                       block={item.block}
                       variant={sellerVariant}
                       t={t as (k: string, o?: Record<string, unknown>) => string}
-                      renderActions={(appts) => (
-                        <>
-                          {item.block.property && (item.block.property.source_url || item.block.property.link) && isSupportedScrapeUrl((item.block.property.source_url || item.block.property.link)!) && (
-                            <button
-                              onClick={() => handleRefreshProperty(item.block.property)}
-                              disabled={refreshingPropertyId === item.block.property.id}
-                              className="text-xs text-[#2b5843]/60 hover:text-[#2b5843]/90 disabled:opacity-50 flex items-center gap-1"
-                              title={t('pendingSection.refreshTitle')}
-                            >
-                              {refreshingPropertyId === item.block.property.id ? (
-                                <svg className="animate-spin h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                                </svg>
-                              ) : (
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5">
-                                  <path fillRule="evenodd" d="M4.755 10.059a7.5 7.5 0 0112.548-3.364l1.903 1.903h-3.183a.75.75 0 100 1.5h4.992a.75.75 0 00.75-.75V4.356a.75.75 0 00-1.5 0v3.18l-1.9-1.9A9 9 0 003.306 9.67a.75.75 0 011.45.388zm15.408 3.352a.75.75 0 00-.919.53 7.5 7.5 0 01-12.548 3.364l-1.902-1.903h3.183a.75.75 0 000-1.5H2.984a.75.75 0 00-.75.75v4.992a.75.75 0 001.5 0v-3.18l1.9 1.9a9 9 0 0015.059 4.035.75.75 0 00-.53-.918z" clipRule="evenodd" />
-                                </svg>
-                              )}
-                              {t('common.refresh')}
-                            </button>
-                          )}
-                          {appts.map((a) => (
-                            <span key={a.id} className="flex gap-2 items-center">
-                              <button onClick={() => handleOpenEdit(a)} className="text-xs text-[#2b5843]/60 hover:text-[#2b5843]/90">{t('common.edit')}</button>
-                              <Popconfirm title={t('appointmentsSection.deleteAppointmentConfirm')} onConfirm={() => appointments.remove.mutate(a.id)} okText={t('common.confirm')} cancelText={t('common.cancel')} icon={null}>
-                                <button className="text-xs text-[#2b5843]/60 hover:text-red-600">{t('common.delete')}</button>
-                              </Popconfirm>
-                            </span>
-                          ))}
-                        </>
+                      renderActions={() => (
+                        item.block.property && (item.block.property.source_url || item.block.property.link) && isSupportedScrapeUrl((item.block.property.source_url || item.block.property.link)!) ? (
+                          <button
+                            onClick={() => handleRefreshProperty(item.block.property)}
+                            disabled={refreshingPropertyId === item.block.property.id}
+                            className="text-xs text-[#2b5843]/60 hover:text-[#2b5843]/90 disabled:opacity-50 flex items-center gap-1"
+                            title={t('pendingSection.refreshTitle')}
+                          >
+                            {refreshingPropertyId === item.block.property.id ? (
+                              <svg className="animate-spin h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                              </svg>
+                            ) : (
+                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5">
+                                <path fillRule="evenodd" d="M4.755 10.059a7.5 7.5 0 0112.548-3.364l1.903 1.903h-3.183a.75.75 0 100 1.5h4.992a.75.75 0 00.75-.75V4.356a.75.75 0 00-1.5 0v3.18l-1.9-1.9A9 9 0 003.306 9.67a.75.75 0 011.45.388zm15.408 3.352a.75.75 0 00-.919.53 7.5 7.5 0 01-12.548 3.364l-1.902-1.903h3.183a.75.75 0 000-1.5H2.984a.75.75 0 00-.75.75v4.992a.75.75 0 001.5 0v-3.18l1.9 1.9a9 9 0 0015.059 4.035.75.75 0 00-.53-.918z" clipRule="evenodd" />
+                              </svg>
+                            )}
+                            {t('common.refresh')}
+                          </button>
+                        ) : null
+                      )}
+                      renderRowActions={(a) => (
+                        <span className="flex gap-2 items-center">
+                          <button onClick={() => handleOpenEdit(a)} className="text-xs text-[#2b5843]/60 hover:text-[#2b5843]/90">{t('common.edit')}</button>
+                          <Popconfirm title={t('appointmentsSection.deleteAppointmentConfirm')} onConfirm={() => appointments.remove.mutate(a.id)} okText={t('common.confirm')} cancelText={t('common.cancel')} icon={null}>
+                            <button className="text-xs text-[#2b5843]/60 hover:text-red-600">{t('common.delete')}</button>
+                          </Popconfirm>
+                        </span>
                       )}
                     />
                   )

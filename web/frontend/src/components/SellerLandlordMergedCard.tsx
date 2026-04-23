@@ -2,6 +2,7 @@
  * 代表卖家/房东的合并预约卡片：同一房源、同一时段、多组潜在买家，无穿插其他预约时合并展示
  * 支持多种时间表布局变体，供 Playground 选型
  */
+import type { ReactNode } from 'react'
 import { message } from 'antd'
 import { getWhatsAppChatUrl, getTelUrl } from '@/lib/whatsapp'
 import type { Appointment, PartyRole } from '@/types'
@@ -32,7 +33,8 @@ function renderRow(
   a: Appointment,
   _partyRole: PartyRole,
   variant: SellerMergedCardVariant,
-  t: (key: string, options?: Record<string, unknown>) => string
+  t: (key: string, options?: Record<string, unknown>) => string,
+  renderRowActions?: (appointment: Appointment) => ReactNode
 ) {
   const name = a.customer_info ?? `—`
   const phone = a.customer_phone
@@ -76,14 +78,21 @@ function renderRow(
             <span className="text-[#2b5843]/50">—</span>
           )}
         </td>
-        <td className="py-2 text-sm text-[#2b5843]/70">{a.notes || '—'}</td>
+        <td className="py-2 pr-3 text-sm text-[#2b5843]/70">{a.notes || '—'}</td>
+        {renderRowActions && (
+          <td className="py-2 text-right align-middle">
+            <div className="flex items-center justify-end gap-2">
+              {renderRowActions(a)}
+            </div>
+          </td>
+        )}
       </tr>
     )
   }
 
   if (variant === 'timeline') {
     return (
-      <div key={a.id} className="flex gap-3 py-2 border-b border-amber-200/30 last:border-0">
+      <div key={a.id} className="flex gap-3 py-2 border-b border-amber-200/30 last:border-0 items-center">
         <span className="shrink-0 w-14 text-sm text-amber-700 font-medium tabular-nums">{timeStr}</span>
         <div className="flex-1 min-w-0">
           <span className="text-sm font-medium text-[#2b5843]">{name}</span>
@@ -99,25 +108,29 @@ function renderRow(
           )}
           {a.notes && <p className="text-xs text-[#2b5843]/60 mt-0.5">{a.notes}</p>}
         </div>
+        {renderRowActions && <div className="shrink-0 flex gap-2">{renderRowActions(a)}</div>}
       </div>
     )
   }
 
   if (variant === 'compact') {
     return (
-      <div key={a.id} className="flex flex-wrap items-center gap-2 py-1.5 text-sm">
-        <span className="shrink-0 text-amber-700 tabular-nums font-medium">{timeStr}</span>
-        <span className="text-[#2b5843]/90">{name}</span>
-        {phone && telUrl && (
-          <>
-            <a href={telUrl} className="text-[#2b5843]/80 hover:underline">{phone}</a>
-            {waUrl && (
-              <a href={waUrl ?? ''} target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-[#25D366]/10 text-[#25D366] hover:bg-[#25D366]/20 text-xs">
-                <WhatsAppIcon /> WA
-              </a>
-            )}
-          </>
-        )}
+      <div key={a.id} className="flex flex-wrap items-center gap-2 py-1.5 text-sm justify-between">
+        <span className="flex flex-wrap items-center gap-2">
+          <span className="shrink-0 text-amber-700 tabular-nums font-medium">{timeStr}</span>
+          <span className="text-[#2b5843]/90">{name}</span>
+          {phone && telUrl && (
+            <>
+              <a href={telUrl} className="text-[#2b5843]/80 hover:underline">{phone}</a>
+              {waUrl && (
+                <a href={waUrl ?? ''} target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-[#25D366]/10 text-[#25D366] hover:bg-[#25D366]/20 text-xs">
+                  <WhatsAppIcon /> WA
+                </a>
+              )}
+            </>
+          )}
+        </span>
+        {renderRowActions && <span className="shrink-0 flex gap-2">{renderRowActions(a)}</span>}
       </div>
     )
   }
@@ -127,11 +140,14 @@ function renderRow(
       <div key={a.id} className="rounded-lg border border-amber-200/50 bg-amber-50/30 p-3">
         <div className="flex items-center justify-between gap-2">
           <span className="text-sm font-medium text-amber-800 tabular-nums">{timeStr}</span>
-          {waUrl && phone && (
-            <a href={waUrl ?? ''} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-lg bg-[#25D366] text-white hover:bg-[#20BD5A]">
-              <WhatsAppIcon /> WhatsApp
-            </a>
-          )}
+          <span className="flex items-center gap-2">
+            {waUrl && phone && (
+              <a href={waUrl ?? ''} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-lg bg-[#25D366] text-white hover:bg-[#20BD5A]">
+                <WhatsAppIcon /> WhatsApp
+              </a>
+            )}
+            {renderRowActions && renderRowActions(a)}
+          </span>
         </div>
         <p className="text-sm font-medium text-[#2b5843] mt-1">{name}</p>
         {phone && telUrl && <a href={telUrl} className="text-xs text-[#2b5843]/80 hover:underline">{phone}</a>}
@@ -143,13 +159,16 @@ function renderRow(
   // minimal
   return (
     <div key={a.id} className="flex items-center justify-between gap-2 py-1.5 text-sm">
-      <span className="tabular-nums text-amber-700">{timeStr}</span>
-      <span className="text-[#2b5843]/90 truncate">{name}</span>
-      {waUrl && (
-        <a href={waUrl ?? ''} target="_blank" rel="noreferrer" className="shrink-0 p-1 rounded text-[#25D366] hover:bg-[#25D366]/10" title="WhatsApp">
-          <WhatsAppIcon />
-        </a>
-      )}
+      <span className="flex items-center gap-2 min-w-0">
+        <span className="tabular-nums text-amber-700 shrink-0">{timeStr}</span>
+        <span className="text-[#2b5843]/90 truncate">{name}</span>
+        {waUrl && (
+          <a href={waUrl ?? ''} target="_blank" rel="noreferrer" className="shrink-0 p-1 rounded text-[#25D366] hover:bg-[#25D366]/10" title="WhatsApp">
+            <WhatsAppIcon />
+          </a>
+        )}
+      </span>
+      {renderRowActions && <span className="shrink-0 flex gap-2">{renderRowActions(a)}</span>}
     </div>
   )
 }
@@ -158,10 +177,13 @@ export type SellerMergedCardProps = {
   block: SellerMergedBlock
   variant: SellerMergedCardVariant
   t: (key: string, options?: Record<string, unknown>) => string
-  renderActions?: (appointments: Appointment[]) => React.ReactNode
+  /** 卡片底部操作区（如刷新按钮） */
+  renderActions?: (appointments: Appointment[]) => ReactNode
+  /** 表格每行右侧操作区（如编辑、删除） */
+  renderRowActions?: (appointment: Appointment) => ReactNode
 }
 
-export function SellerMergedCard({ block, variant, t, renderActions }: SellerMergedCardProps) {
+export function SellerMergedCard({ block, variant, t, renderActions, renderRowActions }: SellerMergedCardProps) {
   const { property, partyRole, appointments } = block
   const roleLabel = ROLE_LABELS[partyRole]
   const timeRange =
@@ -187,36 +209,37 @@ export function SellerMergedCard({ block, variant, t, renderActions }: SellerMer
                 <th className="py-2 pr-3 font-medium">时间</th>
                 <th className="py-2 pr-3 font-medium">{partyRole === 'seller' ? '潜在买家' : '潜在租客'}</th>
                 <th className="py-2 pr-3 font-medium">联系方式</th>
-                <th className="py-2 font-medium">备注</th>
+                <th className="py-2 pr-3 font-medium">备注</th>
+                {renderRowActions && <th className="py-2 text-right font-medium">操作</th>}
               </tr>
             </thead>
             <tbody>
-              {appointments.map((a) => renderRow(a, partyRole, 'table', t))}
+              {appointments.map((a) => renderRow(a, partyRole, 'table', t, renderRowActions))}
             </tbody>
           </table>
         )}
 
         {variant === 'timeline' && (
           <div className="space-y-0">
-            {appointments.map((a) => renderRow(a, partyRole, 'timeline', t))}
+            {appointments.map((a) => renderRow(a, partyRole, 'timeline', t, renderRowActions))}
           </div>
         )}
 
         {variant === 'compact' && (
           <div className="space-y-0 divide-y divide-amber-200/30">
-            {appointments.map((a) => renderRow(a, partyRole, 'compact', t))}
+            {appointments.map((a) => renderRow(a, partyRole, 'compact', t, renderRowActions))}
           </div>
         )}
 
         {variant === 'blocks' && (
           <div className="grid gap-2 sm:grid-cols-2">
-            {appointments.map((a) => renderRow(a, partyRole, 'blocks', t))}
+            {appointments.map((a) => renderRow(a, partyRole, 'blocks', t, renderRowActions))}
           </div>
         )}
 
         {variant === 'minimal' && (
           <div className="space-y-0">
-            {appointments.map((a) => renderRow(a, partyRole, 'minimal', t))}
+            {appointments.map((a) => renderRow(a, partyRole, 'minimal', t, renderRowActions))}
           </div>
         )}
 

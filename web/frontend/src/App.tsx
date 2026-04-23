@@ -14,6 +14,7 @@ import ClientDashboard from './pages/ClientDashboard'
 import ClientView from './pages/ClientView'
 import AgentPublicPage from './pages/AgentPublicPage'
 import Playground from './pages/Playground'
+import FloorplanTool from './pages/FloorplanTool'
 
 function ProtectedRoute({ children, requireAgent }: { children: React.ReactNode; requireAgent?: boolean }) {
   const { user, loading } = useAuth()
@@ -69,6 +70,7 @@ function App() {
             <Route path="/view/:token" element={<ErrorBoundary><ClientView /></ErrorBoundary>} />
             <Route path="/agent/:inviteCode" element={<ErrorBoundary><AgentPublicPage /></ErrorBoundary>} />
             <Route path="/playground" element={<Playground />} />
+            <Route path="/tools/floorplan" element={<ErrorBoundary><FloorplanTool /></ErrorBoundary>} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </BrowserRouter>

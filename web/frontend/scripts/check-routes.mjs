@@ -28,6 +28,7 @@ const ROUTES = [
   { path: '/home/user', name: '客户工作台' },
   { path: '/view/smoke-test', name: '客户查看 (view)' },
   { path: '/playground', name: 'Playground' },
+  { path: '/tools/floorplan', name: '户型图测量工具' },
   { path: '/nonexistent-route-xyz', name: '404 重定向' },
 ]
 
