@@ -176,11 +176,11 @@ export default function ClientView() {
 
   const { group, appointments: rawAppointments, pending_appointments: rawPending = [], can_edit: canEdit = false, favorited_property_ids: rawFavorited = [], listing_property: rawListingProperty } = data
   const isListingView = !!(group?.group_type === 'listing' && group?.property_id)
+  const appointments = Array.isArray(rawAppointments) ? rawAppointments : []
   const listingProperty = isListingView
     ? (rawListingProperty ?? (appointments.length > 0 ? appointments[0].property : null))
     : null
   const favoritedIds = new Set(Array.isArray(rawFavorited) ? rawFavorited : [])
-  const appointments = Array.isArray(rawAppointments) ? rawAppointments : []
   const pendingItems = Array.isArray(rawPending) ? rawPending : []
   const getPriceNumber = (p: PropertyData): number => {
     const val = p?.price_value ?? p?.price
