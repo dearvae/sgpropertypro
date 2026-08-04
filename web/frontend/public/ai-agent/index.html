@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<title>开课装机指南 · 一人中介，一队 AI</title>
+<style>
+  :root {
+    --bg: #faf6ee;
+    --bg2: #f3ecdd;
+    --ink: #1a1a1a;
+    --ink-soft: #55504a;
+    --orange: #e8890c;
+    --orange-deep: #c9720a;
+    --gold: #b8963e;
+    --card: #ffffff;
+    --line: #e6ddc9;
+    --term-bg: #1e1c19;
+    --term-ink: #e8e2d6;
+    --ok: #3d9b4f;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+    background: linear-gradient(160deg, var(--bg) 0%, var(--bg2) 100%);
+    color: var(--ink);
+    line-height: 1.75;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 0 20px 80px; }
+
+  /* ---------- hero ---------- */
+  header { text-align: center; padding: 56px 0 8px; }
+  .pill {
+    display: inline-block; background: var(--orange); color: #fff;
+    font-size: 13px; font-weight: 600; letter-spacing: .08em;
+    padding: 6px 16px; border-radius: 999px; margin-bottom: 18px;
+  }
+  h1 { font-size: clamp(30px, 6vw, 42px); font-weight: 800; letter-spacing: .02em; }
+  h1 .hl { color: var(--orange); }
+  .sub { color: var(--ink-soft); margin-top: 12px; font-size: 15.5px; }
+  .sub strong { color: var(--ink); }
+
+  /* ---------- step overview ---------- */
+  .overview {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;
+    margin: 36px 0 8px;
+  }
+  .ov-card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+    padding: 14px 8px 12px; text-align: center;
+  }
+  .ov-card .num {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 26px; height: 26px; border-radius: 50%;
+    background: var(--ink); color: #fff; font-size: 13px; font-weight: 700;
+    margin-bottom: 6px;
+  }
+  .ov-card .t { font-size: 13px; font-weight: 600; line-height: 1.4; }
+  .ov-card .m { font-size: 11.5px; color: var(--ink-soft); margin-top: 2px; }
+  @media (max-width: 560px) {
+    .overview { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  /* ---------- sections ---------- */
+  section { margin-top: 44px; }
+  .sec-head { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }
+  .sec-num {
+    flex: none; width: 44px; height: 44px; border-radius: 14px;
+    background: var(--ink); color: #fff; display: flex; align-items: center; justify-content: center;
+    font-size: 20px; font-weight: 800;
+  }
+  .sec-num.gold { background: var(--orange); }
+  h2 { font-size: 22px; font-weight: 800; }
+  .sec-min { font-size: 13px; color: var(--ink-soft); font-weight: 400; margin-left: 4px; }
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 18px;
+    padding: 22px 24px; margin-bottom: 14px;
+  }
+  .card p { margin: 8px 0; font-size: 15.5px; }
+  .card p.note { color: var(--ink-soft); font-size: 14px; }
+  .card strong { font-weight: 700; }
+  .em { background: linear-gradient(transparent 62%, #f7d9a8 62%); font-weight: 700; }
+
+  /* ---------- os toggle ---------- */
+  .os-toggle {
+    position: sticky; top: 12px; z-index: 50;
+    display: flex; gap: 6px; background: #e9e1cf; border-radius: 999px;
+    padding: 5px; width: fit-content; margin: 28px auto 0;
+    box-shadow: 0 4px 14px rgba(0,0,0,.08);
+  }
+  .os-toggle button {
+    border: 0; background: transparent; font-family: inherit; font-size: 15px; font-weight: 700;
+    color: var(--ink-soft); padding: 8px 26px; border-radius: 999px; cursor: pointer;
+  }
+  .os-toggle button.on { background: var(--ink); color: #fff; }
+  .mac-only, .win-only { display: none; }
+  body.os-mac .mac-only { display: block; }
+  body.os-win .win-only { display: block; }
+  span.mac-only, span.win-only { display: none; }
+  body.os-mac span.mac-only { display: inline; }
+  body.os-win span.win-only { display: inline; }
+
+  /* ---------- terminal ---------- */
+  .term {
+    background: var(--term-bg); border-radius: 14px; overflow: hidden;
+    margin: 14px 0; box-shadow: 0 6px 20px rgba(30,25,15,.18);
+  }
+  .term-bar {
+    display: flex; align-items: center; gap: 6px;
+    padding: 10px 14px; background: #2b2823;
+  }
+  .dot { width: 11px; height: 11px; border-radius: 50%; }
+  .dot.r { background: #f2564d; } .dot.y { background: #f6b53a; } .dot.g { background: #47c353; }
+  .term-title { margin-left: 8px; font-size: 12px; color: #9a9384; }
+  .term-body {
+    padding: 16px 18px; color: var(--term-ink);
+    font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+    font-size: 13.5px; line-height: 1.7; overflow-x: auto; white-space: pre;
+  }
+  .term-body .p { color: #7fb069; }
+  .term-body .c { color: #8a8375; }
+  .term-body .okline { color: #6fd382; font-weight: 700; }
+
+  /* ---------- copy block ---------- */
+  .copyblock { position: relative; margin: 14px 0; }
+  .copyblock pre {
+    background: #fdf9f0; border: 1.5px dashed var(--gold); border-radius: 14px;
+    padding: 18px 18px 16px; font-family: inherit; font-size: 14.5px;
+    white-space: pre-wrap; word-break: break-all; line-height: 1.8; color: var(--ink);
+  }
+  .copyblock.mono pre { font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace; font-size: 13.5px; word-break: break-all; }
+  .copybtn {
+    position: absolute; top: -12px; right: 14px;
+    border: 0; background: var(--orange); color: #fff; font-family: inherit;
+    font-size: 13px; font-weight: 700; padding: 7px 18px; border-radius: 999px;
+    cursor: pointer; box-shadow: 0 3px 10px rgba(232,137,12,.35);
+  }
+  .copybtn:active { transform: scale(.96); }
+  .copybtn.done { background: var(--ok); }
+
+  /* ---------- table ---------- */
+  table { width: 100%; border-collapse: collapse; margin: 10px 0 4px; font-size: 14.5px; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 13px; color: var(--ink-soft); font-weight: 600; white-space: nowrap; }
+  td:first-child { font-weight: 700; white-space: nowrap; }
+
+  /* ---------- faq ---------- */
+  .faq-q { font-weight: 800; font-size: 16.5px; margin-bottom: 4px; }
+  .faq-q::before { content: "Q "; color: var(--orange); font-weight: 800; }
+
+  /* ---------- callout ---------- */
+  .callout {
+    display: flex; gap: 12px; align-items: flex-start;
+    background: #fff6e8; border: 1px solid #f0d9b0; border-radius: 14px;
+    padding: 16px 18px; margin: 14px 0; font-size: 14.5px;
+  }
+  .callout svg { flex: none; margin-top: 3px; }
+  .callout.dark { background: var(--ink); border-color: var(--ink); color: #f5f0e6; }
+  .callout.dark strong { color: #ffc46b; }
+
+  /* ---------- step illustration ---------- */
+  .illus { display: flex; justify-content: center; margin: 6px 0 2px; }
+
+  footer {
+    text-align: center; margin-top: 64px; color: var(--ink-soft); font-size: 13.5px;
+  }
+  footer .brand {
+    display: inline-block; background: var(--ink); color: #fff;
+    padding: 6px 18px; border-radius: 999px; font-size: 13px; font-weight: 600; margin-bottom: 10px;
+  }
+</style>
+</head>
+<body class="os-mac">
+<div class="wrap">
+
+  <header>
+    <div class="pill">一人中介，一队 AI · 学员专用</div>
+    <h1>上课前，先把电脑<span class="hl">装好</span></h1>
+    <p class="sub">课上一分钟都不装电脑，五小时全部用来跑<strong>你自己的东西</strong>。<br>
+    大概花 <strong>30–60 分钟</strong>，大半是等下载。<strong>建议提前两天做</strong>，别等上课前一晚。</p>
+  </header>
+
+  <div class="overview">
+    <div class="ov-card"><span class="num">1</span><div class="t">装 Claude Code</div><div class="m">约 10 分钟</div></div>
+    <div class="ov-card"><span class="num">2</span><div class="t">让它自己装环境</div><div class="m">20–40 分钟</div></div>
+    <div class="ov-card"><span class="num">3</span><div class="t">截图发我</div><div class="m">1 分钟</div></div>
+    <div class="ov-card"><span class="num">4</span><div class="t">Chrome + WhatsApp</div><div class="m">约 5 分钟</div></div>
+  </div>
+
+  <!-- ======== FAQ ======== -->
+  <section>
+    <div class="card">
+      <p class="faq-q">要花钱吗？</p>
+      <p>两笔，都是<strong>你自己的账号、你自己付</strong>，我不碰：</p>
+      <table>
+        <tr><th></th><th>多少钱</th><th>干什么用</th></tr>
+        <tr><td>Claude 订阅</td><td>US$20 / 月起</td><td>这套东西的引擎</td></tr>
+        <tr><td>MiniMax</td><td>先充 S$5 够用很久</td><td>克隆你的声音、配音。一条 60 秒口播只要几分钱。<strong>Windows 同学必须充</strong>（Mac 有免费备用引擎，Windows 没有）</td></tr>
+      </table>
+    </div>
+    <div class="card">
+      <p class="faq-q">Windows 可以吗？</p>
+      <p>可以。差别只有两处：<strong>字幕不能逐词高亮</strong>（变成整句显示）；<strong>配音必须走 MiniMax</strong>（见上表）。其余功能一样。</p>
+    </div>
+  </section>
+
+  <!-- ======== OS toggle ======== -->
+  <div class="os-toggle" id="osToggle">
+    <button data-os="mac" class="on"> Mac</button>
+    <button data-os="win">⊞ Windows</button>
+  </div>
+  <p style="text-align:center; font-size:13px; color:var(--ink-soft); margin-top:8px;">先选你的电脑，下面的命令会跟着变</p>
+
+  <!-- ======== STEP 1 ======== -->
+  <section>
+    <div class="sec-head">
+      <div class="sec-num">1</div>
+      <h2>注册 + 订阅 Claude，装上 Claude Code<span class="sec-min">约 10 分钟</span></h2>
+    </div>
+
+    <div class="card">
+      <div class="illus">
+        <svg width="220" height="90" viewBox="0 0 220 90" fill="none" aria-hidden="true">
+          <rect x="4" y="8" width="120" height="74" rx="8" fill="#fff" stroke="#e6ddc9" stroke-width="2"/>
+          <rect x="4" y="8" width="120" height="18" rx="8" fill="#f3ecdd"/>
+          <circle cx="15" cy="17" r="3" fill="#f2564d"/><circle cx="25" cy="17" r="3" fill="#f6b53a"/><circle cx="35" cy="17" r="3" fill="#47c353"/>
+          <rect x="18" y="38" width="92" height="8" rx="4" fill="#f0e8d8"/>
+          <rect x="18" y="52" width="60" height="8" rx="4" fill="#f0e8d8"/>
+          <rect x="18" y="66" width="44" height="10" rx="5" fill="#e8890c"/>
+          <path d="M138 45 h36" stroke="#b8963e" stroke-width="2.5" stroke-dasharray="4 4"/>
+          <path d="M170 39 l10 6 -10 6" fill="none" stroke="#b8963e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="200" cy="45" r="17" fill="#1a1a1a"/>
+          <text x="200" y="51" text-anchor="middle" font-size="15" font-weight="800" fill="#fff" font-family="-apple-system,sans-serif">✳</text>
+        </svg>
+      </div>
+      <p><strong>① </strong>去 <strong>claude.com</strong> 注册账号并订阅（US$20/月那档就够）。</p>
+      <p><strong>② </strong>打开<span class="mac-only">「终端」（启动台里搜 <strong>Terminal</strong>）</span><span class="win-only"><strong>PowerShell</strong>（开始菜单直接搜）</span>，粘贴这行回车：</p>
+
+      <div class="copyblock mono mac-only">
+        <button class="copybtn">复制</button>
+        <pre>curl -fsSL https://claude.ai/install.sh | bash</pre>
+      </div>
+      <div class="copyblock mono win-only">
+        <button class="copybtn">复制</button>
+        <pre>irm https://claude.ai/install.ps1 | iex</pre>
+      </div>
+
+      <p><strong>③ </strong>装完输入 <strong>claude</strong> 回车，按提示登录刚才的账号。</p>
+      <p><strong>④ </strong><span class="em">随便问它一句话</span>，它回你了 = 这步成了。</p>
+
+      <div class="term">
+        <div class="term-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="term-title mac-only">终端 — 你会看到类似这样</span><span class="term-title win-only">PowerShell — 你会看到类似这样</span></div>
+        <div class="term-body"><span class="p">&gt;</span> claude
+<span class="c">✳ Welcome to Claude Code!</span>
+
+<span class="p">&gt;</span> 你好，能听到吗
+<span class="c">你好！可以的，有什么要帮忙的？</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======== STEP 2 ======== -->
+  <section>
+    <div class="sec-head">
+      <div class="sec-num gold">2</div>
+      <h2>把这段话整个粘给 Claude，让它自己装<span class="sec-min">20–40 分钟</span></h2>
+    </div>
+
+    <div class="card">
+      <div class="illus">
+        <svg width="230" height="90" viewBox="0 0 230 90" fill="none" aria-hidden="true">
+          <rect x="10" y="18" width="70" height="46" rx="10" fill="#fdf9f0" stroke="#b8963e" stroke-width="2" stroke-dasharray="5 4"/>
+          <rect x="22" y="30" width="46" height="5" rx="2.5" fill="#e0d5bd"/>
+          <rect x="22" y="40" width="38" height="5" rx="2.5" fill="#e0d5bd"/>
+          <rect x="22" y="50" width="42" height="5" rx="2.5" fill="#e0d5bd"/>
+          <path d="M92 41 h28" stroke="#b8963e" stroke-width="2.5" stroke-dasharray="4 4"/>
+          <path d="M116 35 l10 6 -10 6" fill="none" stroke="#b8963e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="155" cy="41" r="19" fill="#1a1a1a"/>
+          <text x="155" y="47" text-anchor="middle" font-size="16" font-weight="800" fill="#fff" font-family="-apple-system,sans-serif">✳</text>
+          <g stroke="#e8890c" stroke-width="2.5" stroke-linecap="round">
+            <path d="M186 28 l6 -6"/><path d="M192 41 h9"/><path d="M186 54 l6 6"/>
+          </g>
+          <text x="212" y="34" font-size="13" fill="#e8890c" font-weight="700" font-family="-apple-system,sans-serif">⚙</text>
+          <text x="214" y="58" font-size="13" fill="#e8890c" font-weight="700" font-family="-apple-system,sans-serif">⚙</text>
+        </svg>
+      </div>
+      <p>还是刚才那个窗口，把下面整段<strong>原样粘贴</strong>给 Claude，回车，然后等它干活：</p>
+
+      <div class="copyblock mac-only">
+        <button class="copybtn">复制整段</button>
+        <pre>帮我把这台电脑配好做视频的环境：Homebrew（没有就先装）、Node.js LTS、ffmpeg、poppler、whisper-cpp，并把 whisper 模型下载到 ~/.cache/whisper-models/ggml-large-v3-turbo.bin（来源 https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin，约1.6GB）。已有的跳过，缺的装上。装完逐一验证版本号，全部通过就输出一行「✅ 体检通过」加各版本号；有装不上的，把是哪一项、报什么错列给我。</pre>
+      </div>
+      <div class="copyblock win-only">
+        <button class="copybtn">复制整段</button>
+        <pre>帮我把这台电脑配好做视频的环境，用 winget 安装：Node.js LTS、Python 3、ffmpeg、LibreOffice。装完确认这几样在命令行里能直接调用，不行就帮我把 PATH 配好（配完提醒我重开窗口）。然后逐一验证版本号，全部通过就输出一行「✅ 体检通过」加各版本号；有装不上的，把是哪一项、报什么错列给我。</pre>
+      </div>
+
+      <div class="callout">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="9" stroke="#c9720a" stroke-width="2"/><path d="M10 5.5v5.5" stroke="#c9720a" stroke-width="2" stroke-linecap="round"/><circle cx="10" cy="14.2" r="1.2" fill="#c9720a"/></svg>
+        <div>过程中它可能让你<strong>输电脑密码</strong>或点「允许」——正常，照做就行。中途它问「是否继续 / 是否执行」，看一眼是在装东西就选<strong>是</strong>。</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======== STEP 3 ======== -->
+  <section>
+    <div class="sec-head">
+      <div class="sec-num">3</div>
+      <h2>看到 ✅ 就截图发我<span class="sec-min">1 分钟</span></h2>
+    </div>
+
+    <div class="card">
+      <p>装完 Claude 会自己做一遍体检。你要等的就是这一行：</p>
+      <div class="term">
+        <div class="term-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="term-title">装好之后 — 你会看到类似这样</span></div>
+        <div class="term-body mac-only"><span class="c">…（一堆安装过程）…</span>
+
+<span class="okline">✅ 体检通过</span>
+<span class="c">node v22.x · ffmpeg 7.x · whisper-cli OK · 模型已就位</span></div>
+        <div class="term-body win-only"><span class="c">…（一堆安装过程）…</span>
+
+<span class="okline">✅ 体检通过</span>
+<span class="c">node v22.x · Python 3.12 · ffmpeg 7.x · LibreOffice OK</span></div>
+      </div>
+      <p><span class="em">看到 ✅ = 装完了，把这一屏截图发我。</span></p>
+      <p class="note">没看到 ✅、或者它列了装不上的东西——<strong>把那一屏截图发我，别自己琢磨</strong>，两分钟的事。</p>
+    </div>
+  </section>
+
+  <!-- ======== STEP 4 ======== -->
+  <section>
+    <div class="sec-head">
+      <div class="sec-num">4</div>
+      <h2>Chrome + WhatsApp 桌面版<span class="sec-min">约 5 分钟，要你自己登录</span></h2>
+    </div>
+
+    <div class="card">
+      <div class="illus">
+        <svg width="180" height="76" viewBox="0 0 180 76" fill="none" aria-hidden="true">
+          <circle cx="50" cy="38" r="24" fill="#fff" stroke="#e6ddc9" stroke-width="2"/>
+          <circle cx="50" cy="38" r="10" fill="#fdf9f0" stroke="#e8890c" stroke-width="3"/>
+          <path d="M50 14 a24 24 0 0 1 20.8 12 l-16 9.3" fill="none" stroke="#f2564d" stroke-width="5"/>
+          <path d="M70.8 26 a24 24 0 0 1 -8.3 32.8 l-8.5 -16.4" fill="none" stroke="#f6b53a" stroke-width="0"/>
+          <circle cx="130" cy="38" r="24" fill="#3d9b4f"/>
+          <path d="M120 48 l3-7 a12 12 0 1 1 4 3.5z" fill="#fff"/>
+          <path d="M125.5 32.5 c0-1 .8-1.8 1.8-1.8 l2 .2 1 3.4 -1.6 1.6 c1 2 2.6 3.6 4.6 4.6 l1.6-1.6 3.4 1 .2 2 c0 1-.8 1.8-1.8 1.8 -6.8-.4-10.8-4.4-11.2-11.2z" fill="#3d9b4f"/>
+        </svg>
+      </div>
+      <p><strong>① </strong>装 <strong>Chrome 浏览器</strong>（已有就跳过）。</p>
+      <p><strong>② </strong>装 <strong>WhatsApp 桌面版</strong>，<span class="em">登录好、确认能收发消息</span>——第三个模块（找盘、问价）要用。</p>
+    </div>
+  </section>
+
+  <!-- ======== final ======== -->
+  <section>
+    <div class="callout dark">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 2 l2.2 5 5.3.5 -4 3.6 1.2 5.2 -4.7-2.8 -4.7 2.8 1.2-5.2 -4-3.6 5.3-.5z" fill="#ffc46b"/></svg>
+      <div><strong>上课前一天</strong>，我会跟你连一次线，跑一条真命令确认能出东西。这一步不做，第二天大概率要浪费一小时在你的电脑上，另外两个同学干等。</div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="brand">看房上瘾患者 Penny</div>
+    <p>卡在任何一步，截图直接发我，别自己耗。</p>
+  </footer>
+</div>
+
+<script>
+  // OS toggle
+  var toggle = document.getElementById('osToggle');
+  var isWin = /Windows/i.test(navigator.userAgent);
+  function setOS(os) {
+    document.body.className = 'os-' + os;
+    toggle.querySelectorAll('button').forEach(function (b) {
+      b.classList.toggle('on', b.dataset.os === os);
+    });
+  }
+  toggle.addEventListener('click', function (e) {
+    var b = e.target.closest('button');
+    if (b) setOS(b.dataset.os);
+  });
+  setOS(isWin ? 'win' : 'mac');
+
+  // copy buttons
+  document.querySelectorAll('.copybtn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var text = btn.parentElement.querySelector('pre').innerText;
+      navigator.clipboard.writeText(text).then(function () {
+        btn.textContent = '已复制 ✓';
+        btn.classList.add('done');
+        setTimeout(function () { btn.textContent = '复制'; btn.classList.remove('done'); }, 2000);
+      });
+    });
+  });
+</script>
+</body>
+</html>
