@@ -189,6 +189,31 @@
   .callout.dark { background: var(--ink); border-color: var(--ink); color: #f5f0e6; }
   .callout.dark strong { color: #ffc46b; }
 
+  /* ---------- audio A/B ---------- */
+  .ab-row {
+    background: #f7f3ea; border: 1px solid var(--line); border-radius: 14px;
+    padding: 14px 16px 12px; margin: 10px 0;
+  }
+  .ab-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  .ab-name { font-weight: 800; font-size: 15px; }
+  .ab-tag {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 22px; height: 22px; border-radius: 50%; margin-right: 8px;
+    color: #fff; font-size: 12.5px; font-weight: 800; vertical-align: -4px;
+  }
+  .ab-tag.a { background: var(--orange); }
+  .ab-tag.b { background: #8a8375; }
+  .ab-meta { font-size: 12.5px; color: var(--ink-soft); }
+  .ab-row audio { width: 100%; margin-top: 10px; height: 40px; }
+  .ab-script {
+    font-size: 13.5px; color: var(--ink-soft); background: #fdf9f0;
+    border-left: 3px solid var(--gold); border-radius: 0 10px 10px 0;
+    padding: 10px 14px; margin: 12px 0 4px;
+  }
+  ul.diff { margin: 8px 0 4px 2px; list-style: none; }
+  ul.diff li { padding-left: 20px; position: relative; margin: 8px 0; font-size: 14.5px; }
+  ul.diff li::before { content: "·"; color: var(--orange); font-weight: 800; font-size: 22px; position: absolute; left: 2px; top: -4px; }
+
   /* ---------- screenshots ---------- */
   .shot { margin: 16px 0; }
   .shot img {
@@ -441,6 +466,47 @@
         <p>MiniMax is the <strong>voiceover engine</strong> — in class we'll use it to clone your voice, so every video narrates in your own voice.</p>
         <p><span class="em">With it, a 60-second voiceover takes seconds to generate;</span> on Mac there's a free local fallback, but it takes 30+ minutes per voiceover. <strong>On Windows there is no fallback — you need this.</strong></p>
         <p>Your voice clone lives in <strong>your own account</strong> — you hold the authorization and the billing.</p>
+      </div>
+
+      <div class="zh">
+        <p style="margin-top:18px;"><strong>先亲耳听听区别</strong>——同一句话，两个引擎各念一遍（都是我的克隆声）：</p>
+      </div>
+      <div class="en">
+        <p style="margin-top:18px;"><strong>Hear the difference yourself</strong> — the same sentence, spoken by both engines (both are my cloned voice):</p>
+      </div>
+      <div class="ab-row">
+        <div class="ab-head">
+          <span class="ab-name"><span class="ab-tag a">A</span>MiniMax<span class="zh"> 云端</span><span class="en"> Cloud</span></span>
+          <span class="ab-meta"><span class="zh">生成只花了 4.5 秒</span><span class="en">generated in 4.5 seconds</span></span>
+        </div>
+        <audio controls preload="metadata" src="audio/voice_minimax.mp3"></audio>
+      </div>
+      <div class="ab-row">
+        <div class="ab-head">
+          <span class="ab-name"><span class="ab-tag b">B</span><span class="zh">本地免费引擎（Mac 备用）</span><span class="en">Free local engine (Mac fallback)</span></span>
+          <span class="ab-meta"><span class="zh">同一句话跑了 4 分多钟</span><span class="en">took over 4 minutes for the same line</span></span>
+        </div>
+        <audio controls preload="metadata" src="audio/voice_f5.mp3"></audio>
+      </div>
+      <div class="ab-script"><span class="zh">两段念的都是：「大家好，我是 Penny。榜鹅这套三房上个月成交 158 万新币，比半年前贵了 8 万，到底值不值，我们一条条来算。」</span><span class="en">Both read the same Chinese script: "Hi, I'm Penny. This Punggol 3-bedder sold for S$1.58M last month — S$80K more than half a year ago. Worth it or not? Let's run the numbers."</span></div>
+
+      <div class="zh">
+        <p style="margin-top:14px;"><strong>差别在哪：</strong></p>
+        <ul class="diff">
+          <li><strong>速度</strong>：A 是 4.5 秒，B 是 4 分多钟。一天出几条视频的话，这个差距是决定性的。</li>
+          <li><strong>连贯度</strong>：A 整段一次合成，停顿跟着标点走，像正常说话；B 是一句一句拼出来的，停顿规整但发僵，整段也因此长了一秒多。</li>
+          <li><strong>情绪和干净度</strong>：A 可以调情绪（这段用的是「开心」），底噪也干净；B 没有情绪可调，安静处能听出底噪一断一断。</li>
+          <li><strong>B 的长处</strong>：免费、断网能用、文本和音频不出你的电脑。所以 Mac 上留它当备胎，正常出片走 A。</li>
+        </ul>
+      </div>
+      <div class="en">
+        <p style="margin-top:14px;"><strong>What's different:</strong></p>
+        <ul class="diff">
+          <li><strong>Speed</strong>: A took 4.5 seconds, B took over 4 minutes. If you publish several videos a day, this gap decides everything.</li>
+          <li><strong>Flow</strong>: A generates the whole passage in one go — pauses follow the punctuation, like natural speech. B is stitched sentence by sentence, so pauses sound stiff and the clip runs over a second longer.</li>
+          <li><strong>Emotion &amp; cleanliness</strong>: A supports emotion control (this clip uses "happy") and outputs clean audio; B has no emotion control and you can hear the background hiss cut in and out between sentences.</li>
+          <li><strong>B's strengths</strong>: free, works offline, and nothing leaves your computer. That's why Mac keeps it as a fallback — day-to-day, use A.</li>
+        </ul>
       </div>
 
       <div class="zh">
