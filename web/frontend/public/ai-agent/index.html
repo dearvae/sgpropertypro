@@ -1,587 +1,291 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="robots" content="noindex">
-<title>开课装机指南 · Setup Guide</title>
-<style>
-  :root {
-    --bg: #faf6ee;
-    --bg2: #f3ecdd;
-    --ink: #1a1a1a;
-    --ink-soft: #55504a;
-    --orange: #e8890c;
-    --gold: #b8963e;
-    --card: #ffffff;
-    --line: #e6ddc9;
-    --ok: #3d9b4f;
-  }
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
-    background: linear-gradient(160deg, var(--bg) 0%, var(--bg2) 100%);
-    color: var(--ink);
-    line-height: 1.85;
-    -webkit-font-smoothing: antialiased;
-    font-size: 16px;
-  }
-  .wrap { max-width: 680px; margin: 0 auto; padding: 0 20px 80px; }
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <meta name="description" content="Bilingual Mac and Windows preparation guide for the AgentOS SG practical class.">
+  <title>课前准备 · Pre-class Preparation</title>
+  <style>
+    :root {
+      --paper: #faf6ee;
+      --margin: #f3ecdd;
+      --ink: #1a1a1a;
+      --note: #55504a;
+      --orange: #e8890c;
+      --orange-dark: #b85e00;
+      --gold: #b8963e;
+      --green: #287b3b;
+      --line: #e6ddc9;
+      --white: #fff;
+      --warning: #fff6e8;
+      --focus: #1859b7;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+      font-size: 17px;
+      line-height: 1.78;
+      -webkit-font-smoothing: antialiased;
+    }
+    button, input { font: inherit; }
+    a { color: var(--orange-dark); text-underline-offset: .18em; text-decoration-thickness: 2px; }
+    a:hover { color: var(--ink); }
+    :focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+    [hidden] { display: none !important; }
 
-  /* ---------- language visibility ---------- */
-  .zh, .en { display: none; }
-  body.lang-zh .zh { display: block; }
-  body.lang-en .en { display: block; }
-  body.lang-zh span.zh, body.lang-zh strong.zh, body.lang-zh a.zh, body.lang-zh b.zh, body.lang-zh i.zh { display: inline; }
-  body.lang-en span.en, body.lang-en strong.en, body.lang-en a.en, body.lang-en b.en, body.lang-en i.en { display: inline; }
-  body.lang-zh table.zh { display: table; }
-  body.lang-en table.en { display: table; }
-  /* ---------- os visibility ---------- */
-  .mac-only, .win-only { display: none; }
-  body.os-mac .mac-only { display: block; }
-  body.os-win .win-only { display: block; }
-  body.os-mac span.mac-only { display: inline; }
-  body.os-win span.win-only { display: inline; }
-  /* hard overrides: wrong lang / wrong OS always hidden */
-  body.lang-zh .en { display: none !important; }
-  body.lang-en .zh { display: none !important; }
-  body.os-mac .win-only { display: none !important; }
-  body.os-win .mac-only { display: none !important; }
-  /* re-allow: right lang + right os */
-  body.lang-zh.os-mac .zh.mac-only { display: block !important; }
-  body.lang-zh.os-win .zh.win-only { display: block !important; }
-  body.lang-en.os-mac .en.mac-only { display: block !important; }
-  body.lang-en.os-win .en.win-only { display: block !important; }
-  body.lang-zh.os-mac span.zh.mac-only, body.lang-zh.os-win span.zh.win-only { display: inline !important; }
-  body.lang-en.os-mac span.en.mac-only, body.lang-en.os-win span.en.win-only { display: inline !important; }
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      border-bottom: 1px solid var(--line);
+      background: rgba(250, 246, 238, .97);
+      box-shadow: 0 4px 14px rgba(0, 0, 0, .08);
+    }
+    .topbar-inner {
+      width: min(980px, calc(100% - 28px));
+      min-height: 70px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+    }
+    .brand { color: var(--ink); text-decoration: none; font-weight: 850; }
+    .top-actions { display: flex; align-items: center; gap: 10px; }
+    .class-link { white-space: nowrap; font-size: 14px; font-weight: 800; }
+    .toggle {
+      display: inline-flex;
+      gap: 4px;
+      padding: 4px;
+      border-radius: 999px;
+      background: #e9e1cf;
+    }
+    .toggle button {
+      min-width: 52px;
+      min-height: 40px;
+      padding: 6px 13px;
+      border: 0;
+      border-radius: 999px;
+      background: transparent;
+      color: var(--note);
+      font-size: 14px;
+      font-weight: 850;
+      cursor: pointer;
+    }
+    .toggle button[aria-pressed="true"] { background: var(--ink); color: var(--white); }
 
-  /* ---------- lang toggle (top-right) ---------- */
-  .lang-toggle {
-    position: fixed; top: 14px; right: 14px; z-index: 60;
-    display: flex; gap: 4px; background: #e9e1cf; border-radius: 999px; padding: 4px;
-    box-shadow: 0 4px 14px rgba(0,0,0,.10);
-  }
-  .lang-toggle button {
-    border: 0; background: transparent; font-family: inherit; font-size: 13.5px; font-weight: 700;
-    color: var(--ink-soft); padding: 5px 14px; border-radius: 999px; cursor: pointer;
-  }
-  .lang-toggle button.on { background: var(--ink); color: #fff; }
+    .shell { width: min(760px, calc(100% - 36px)); margin: 0 auto; padding: 64px 0 100px; }
+    .hero { text-align: center; }
+    h1 { margin: 0; font-size: clamp(2.35rem, 7.4vw, 4.5rem); line-height: 1.03; letter-spacing: -.035em; text-wrap: balance; }
+    .hero > p { max-width: 62ch; margin: 20px auto 0; color: var(--note); font-size: clamp(1.02rem, 2.3vw, 1.2rem); }
+    .time-box {
+      width: fit-content;
+      margin: 28px auto 0;
+      padding: 11px 18px;
+      border-radius: 999px;
+      background: var(--ink);
+      color: var(--white);
+      font-weight: 800;
+      font-size: 15px;
+    }
 
-  /* ---------- hero ---------- */
-  header { text-align: center; padding: 56px 0 8px; }
-  .pill {
-    display: inline-block; background: var(--orange); color: #fff;
-    font-size: 13px; font-weight: 600; letter-spacing: .08em;
-    padding: 6px 16px; border-radius: 999px; margin-bottom: 18px;
-  }
-  h1 { font-size: clamp(30px, 6vw, 42px); font-weight: 800; letter-spacing: .02em; }
-  h1 .hl { color: var(--orange); }
-  .sub { color: var(--ink-soft); margin-top: 14px; font-size: 16px; }
-  .sub strong { color: var(--ink); }
+    .os-row { display: flex; justify-content: center; margin: 34px 0 0; }
+    .overview { list-style: none; display: grid; grid-template-columns: repeat(4, 1fr); gap: 9px; margin: 42px 0 0; padding: 0; }
+    .overview li { min-height: 96px; padding: 15px; border: 1px solid var(--line); border-radius: 14px; background: var(--white); }
+    .overview strong { display: block; margin-bottom: 7px; color: var(--orange-dark); font-size: 14px; }
+    .overview span { display: block; font-weight: 800; line-height: 1.25; }
 
-  /* ---------- step overview ---------- */
-  .overview {
-    display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px;
-    margin: 36px 0 8px;
-  }
-  .ov-card {
-    background: var(--card); border: 1px solid var(--line); border-radius: 14px;
-    padding: 14px 6px 12px; text-align: center;
-  }
-  .ov-card .num {
-    display: inline-flex; align-items: center; justify-content: center;
-    width: 26px; height: 26px; border-radius: 50%;
-    background: var(--ink); color: #fff; font-size: 13px; font-weight: 700;
-    margin-bottom: 6px;
-  }
-  .ov-card.opt .num { background: var(--gold); }
-  .ov-card .t { font-size: 12.5px; font-weight: 600; line-height: 1.4; }
-  .ov-card .m { font-size: 11px; color: var(--ink-soft); margin-top: 2px; }
-  @media (max-width: 620px) {
-    .overview { grid-template-columns: repeat(2, 1fr); }
-    .ov-card:last-child { grid-column: span 2; }
-  }
+    .step { scroll-margin-top: 92px; margin-top: 54px; }
+    .step-title { display: flex; align-items: center; gap: 14px; margin-bottom: 15px; }
+    .step-number {
+      flex: none;
+      width: 46px;
+      height: 46px;
+      display: grid;
+      place-items: center;
+      border-radius: 14px;
+      background: var(--ink);
+      color: var(--white);
+      font-size: 20px;
+      font-weight: 900;
+    }
+    h2 { margin: 0; font-size: clamp(1.45rem, 3.7vw, 2rem); line-height: 1.25; }
+    .card { border: 1px solid var(--line); border-radius: 18px; background: var(--white); padding: clamp(22px, 4vw, 32px); }
+    .card > p:first-child { margin-top: 0; }
+    .card p:last-child { margin-bottom: 0; }
+    .action-list { margin: 0; padding-left: 1.25em; }
+    .action-list li { margin: 10px 0; }
+    .success { margin-top: 18px; padding: 15px 17px; border-radius: 13px; background: #edf8ef; color: #1d6c2f; font-weight: 800; }
+    .note { color: var(--note); font-size: 15px; }
 
-  /* ---------- sections ---------- */
-  section { margin-top: 44px; }
-  .sec-head { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }
-  .sec-num {
-    flex: none; width: 44px; height: 44px; border-radius: 14px;
-    background: var(--ink); color: #fff; display: flex; align-items: center; justify-content: center;
-    font-size: 20px; font-weight: 800;
-  }
-  .sec-num.gold { background: var(--orange); }
-  .sec-num.opt { background: var(--gold); }
-  h2 { font-size: 21px; font-weight: 800; line-height: 1.4; }
-  .sec-min { font-size: 13px; color: var(--ink-soft); font-weight: 400; margin-left: 4px; white-space: nowrap; }
-  .card {
-    background: var(--card); border: 1px solid var(--line); border-radius: 18px;
-    padding: 24px 26px; margin-bottom: 14px;
-  }
-  .card p { margin: 10px 0; }
-  .card p.note { color: var(--ink-soft); font-size: 14.5px; }
-  .em { background: linear-gradient(transparent 62%, #f7d9a8 62%); font-weight: 700; }
-  .bigstep { display: flex; gap: 12px; margin: 14px 0; align-items: flex-start; }
-  .bigstep .b {
-    flex: none; width: 26px; height: 26px; border-radius: 50%; margin-top: 5px;
-    background: #f3ecdd; color: var(--ink); font-size: 14px; font-weight: 800;
-    display: flex; align-items: center; justify-content: center;
-  }
+    .prompt { margin-top: 20px; overflow: hidden; border: 1.5px dashed var(--gold); border-radius: 14px; background: #fdf9f0; }
+    .prompt pre { margin: 0; padding: 22px; white-space: pre-wrap; overflow-wrap: anywhere; font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; font-size: 14px; line-height: 1.65; }
+    .prompt-actions { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 11px; border-top: 1px solid var(--line); background: var(--white); }
+    .prompt-actions small { color: var(--note); }
+    .copy-button {
+      min-height: 44px;
+      padding: 8px 20px;
+      border: 0;
+      border-radius: 999px;
+      background: var(--orange-dark);
+      color: var(--white);
+      font-weight: 850;
+      cursor: pointer;
+    }
+    .copy-button:hover { background: #8e4700; }
+    .copy-button.copied { background: var(--green); }
+    .optional { background: var(--warning); border-color: #edd7ad; }
+    .privacy { margin-top: 58px; padding: 28px; border-radius: 18px; background: var(--ink); color: var(--white); }
+    .privacy h2 { margin-bottom: 10px; }
+    .privacy ul { margin: 0; padding-left: 1.2em; }
+    .privacy li { margin: 8px 0; }
+    .cta { margin-top: 28px; text-align: center; }
+    .cta a { display: inline-flex; align-items: center; justify-content: center; min-height: 52px; padding: 11px 24px; border-radius: 999px; background: var(--orange-dark); color: var(--white); font-weight: 900; text-decoration: none; }
+    .cta a:hover { background: #8e4700; color: var(--white); }
+    .status { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 40; max-width: calc(100% - 28px); padding: 10px 18px; border-radius: 999px; background: var(--ink); color: var(--white); font-weight: 750; box-shadow: 0 8px 24px rgba(49, 37, 18, .14); }
 
-  /* ---------- os toggle ---------- */
-  .os-toggle {
-    position: sticky; top: 12px; z-index: 50;
-    display: flex; gap: 6px; background: #e9e1cf; border-radius: 999px;
-    padding: 5px; width: fit-content; margin: 28px auto 0;
-    box-shadow: 0 4px 14px rgba(0,0,0,.08);
-  }
-  .os-toggle button {
-    border: 0; background: transparent; font-family: inherit; font-size: 15px; font-weight: 700;
-    color: var(--ink-soft); padding: 8px 26px; border-radius: 999px; cursor: pointer;
-  }
-  .os-toggle button.on { background: var(--ink); color: #fff; }
-
-  /* ---------- chat mockup ---------- */
-  .chat {
-    background: #f7f3ea; border: 1px solid var(--line); border-radius: 16px;
-    padding: 16px; margin: 14px 0;
-  }
-  .chat-label { font-size: 12.5px; color: var(--ink-soft); text-align: center; margin-bottom: 10px; }
-  .bubble { max-width: 85%; padding: 10px 15px; border-radius: 16px; font-size: 14.5px; line-height: 1.7; margin: 8px 0; }
-  .bubble.me { background: var(--orange); color: #fff; margin-left: auto; border-bottom-right-radius: 5px; }
-  .bubble.ai { background: #fff; border: 1px solid var(--line); border-bottom-left-radius: 5px; }
-  .bubble.ai .okline { color: var(--ok); font-weight: 800; }
-  .bubble.ai .small { color: var(--ink-soft); font-size: 13px; }
-
-  /* ---------- copy block ---------- */
-  .copyblock { position: relative; margin: 18px 0 14px; }
-  .copyblock pre {
-    background: #fdf9f0; border: 1.5px dashed var(--gold); border-radius: 14px;
-    padding: 20px 18px 16px; font-family: inherit; font-size: 15px;
-    white-space: pre-wrap; word-break: break-word; line-height: 1.85; color: var(--ink);
-  }
-  .copybtn {
-    position: absolute; top: -14px; right: 14px;
-    border: 0; background: var(--orange); color: #fff; font-family: inherit;
-    font-size: 14px; font-weight: 700; padding: 8px 22px; border-radius: 999px;
-    cursor: pointer; box-shadow: 0 3px 10px rgba(232,137,12,.35);
-  }
-  .copybtn:active { transform: scale(.96); }
-  .copybtn.done { background: var(--ok); }
-
-  /* ---------- table ---------- */
-  table { width: 100%; border-collapse: collapse; margin: 10px 0 4px; font-size: 15px; }
-  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
-  th { font-size: 13px; color: var(--ink-soft); font-weight: 600; white-space: nowrap; }
-  td:first-child { font-weight: 700; white-space: nowrap; }
-
-  /* ---------- faq ---------- */
-  .faq-q { font-weight: 800; font-size: 17px; margin-bottom: 4px; }
-  .faq-q::before { content: "Q "; color: var(--orange); font-weight: 800; }
-
-  /* ---------- callout ---------- */
-  .callout {
-    display: flex; gap: 12px; align-items: flex-start;
-    background: #fff6e8; border: 1px solid #f0d9b0; border-radius: 14px;
-    padding: 16px 18px; margin: 16px 0; font-size: 15px;
-  }
-  .callout svg { flex: none; margin-top: 4px; }
-  .callout.dark { background: var(--ink); border-color: var(--ink); color: #f5f0e6; }
-  .callout.dark strong { color: #ffc46b; }
-
-  /* ---------- audio A/B ---------- */
-  .ab-row {
-    background: #f7f3ea; border: 1px solid var(--line); border-radius: 14px;
-    padding: 14px 16px 12px; margin: 10px 0;
-  }
-  .ab-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-  .ab-name { font-weight: 800; font-size: 15px; }
-  .ab-tag {
-    display: inline-flex; align-items: center; justify-content: center;
-    width: 22px; height: 22px; border-radius: 50%; margin-right: 8px;
-    color: #fff; font-size: 12.5px; font-weight: 800; vertical-align: -4px;
-  }
-  .ab-tag.a { background: var(--orange); }
-  .ab-tag.b { background: #8a8375; }
-  .ab-meta { font-size: 12.5px; color: var(--ink-soft); }
-  .ab-row audio { width: 100%; margin-top: 10px; height: 40px; }
-  .ab-script {
-    font-size: 13.5px; color: var(--ink-soft); background: #fdf9f0;
-    border-left: 3px solid var(--gold); border-radius: 0 10px 10px 0;
-    padding: 10px 14px; margin: 12px 0 4px;
-  }
-  ul.diff { margin: 8px 0 4px 2px; list-style: none; }
-  ul.diff li { padding-left: 20px; position: relative; margin: 8px 0; font-size: 14.5px; }
-  ul.diff li::before { content: "·"; color: var(--orange); font-weight: 800; font-size: 22px; position: absolute; left: 2px; top: -4px; }
-
-  /* ---------- screenshots ---------- */
-  .shot { margin: 16px 0; }
-  .shot img {
-    width: 100%; border-radius: 14px; border: 1px solid var(--line);
-    box-shadow: 0 6px 20px rgba(30,25,15,.10); display: block;
-  }
-  .shot .cap { font-size: 12.5px; color: var(--ink-soft); text-align: center; margin-top: 8px; }
-
-  .illus { display: flex; justify-content: center; margin: 6px 0 2px; }
-
-  footer { text-align: center; margin-top: 64px; color: var(--ink-soft); font-size: 14px; }
-  footer .brand {
-    display: inline-block; background: var(--ink); color: #fff;
-    padding: 6px 18px; border-radius: 999px; font-size: 13px; font-weight: 600; margin-bottom: 10px;
-  }
-</style>
+    @media (max-width: 680px) {
+      body { font-size: 16px; }
+      .class-link { display: none; }
+      .shell { width: min(100% - 24px, 760px); padding-top: 46px; }
+      .overview { grid-template-columns: 1fr 1fr; }
+      .overview li { min-height: 86px; }
+      .prompt pre { padding: 18px; font-size: 13px; }
+      .prompt-actions { align-items: stretch; flex-direction: column; }
+      .copy-button { width: 100%; }
+    }
+    @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  </style>
 </head>
-<body class="os-mac lang-zh">
-
-<div class="lang-toggle" id="langToggle">
-  <button data-lang="zh" class="on">中文</button>
-  <button data-lang="en">EN</button>
-</div>
-
-<div class="wrap">
-
-  <header>
-    <div class="pill"><span class="zh">一人中介，一队 AI · 学员专用</span><span class="en">One Agent, An AI Team · For Students</span></div>
-    <div class="zh"><h1>上课前，先把电脑<span class="hl">装好</span></h1></div>
-    <div class="en"><h1>Set up your computer <span class="hl">before class</span></h1></div>
-    <p class="sub zh">一共四步（外加一个可选项），<strong>不用懂电脑</strong>，照着点就行。<br>
-    大概 30–60 分钟，大半是等下载。<strong>建议提前两天做</strong>，别等上课前一晚。</p>
-    <p class="sub en">Four steps (plus one optional), <strong>no tech skills needed</strong> — just follow along.<br>
-    Takes 30–60 minutes, mostly waiting for downloads. <strong>Do it two days early</strong>, not the night before.</p>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="#top"><span class="i18n" data-lang="zh">课前准备</span><span class="i18n" data-lang="en" hidden>Pre-class preparation</span></a>
+      <div class="top-actions">
+        <a class="class-link" href="/ai-agent/class/"><span class="i18n" data-lang="zh">打开课堂跟做页</span><span class="i18n" data-lang="en" hidden>Open class guide</span></a>
+        <div class="toggle" role="group" aria-label="Language">
+          <button type="button" data-set-lang="zh" aria-pressed="true">中文</button>
+          <button type="button" data-set-lang="en" aria-pressed="false">EN</button>
+        </div>
+      </div>
+    </div>
   </header>
 
-  <div class="overview">
-    <div class="ov-card"><span class="num">1</span><div class="t"><span class="zh">下载 Claude</span><span class="en">Get Claude</span></div><div class="m"><span class="zh">约 10 分钟</span><span class="en">~10 min</span></div></div>
-    <div class="ov-card"><span class="num">2</span><div class="t"><span class="zh">发一段话给它</span><span class="en">Send it a message</span></div><div class="m"><span class="zh">20–40 分钟</span><span class="en">20–40 min</span></div></div>
-    <div class="ov-card"><span class="num">3</span><div class="t"><span class="zh">截图发我</span><span class="en">Screenshot me</span></div><div class="m"><span class="zh">1 分钟</span><span class="en">1 min</span></div></div>
-    <div class="ov-card"><span class="num">4</span><div class="t">Chrome + WhatsApp</div><div class="m"><span class="zh">约 5 分钟</span><span class="en">~5 min</span></div></div>
-    <div class="ov-card opt"><span class="num">5</span><div class="t">MiniMax</div><div class="m"><span class="zh">可选 · 约 10 分钟</span><span class="en">Optional · ~10 min</span></div></div>
-  </div>
-
-  <!-- ======== FAQ ======== -->
-  <section>
-    <div class="card">
-      <div class="zh">
-        <p class="faq-q">要花钱吗?</p>
-        <p>两笔，都是<strong>你自己的账号、你自己付</strong>，我不碰：</p>
-      </div>
-      <div class="en">
-        <p class="faq-q">Does it cost money?</p>
-        <p>Two things — both on <strong>your own accounts, paid by you</strong>. I never touch them:</p>
-      </div>
-      <table class="zh">
-        <tr><th></th><th>多少钱</th><th>干什么用</th></tr>
-        <tr><td>Claude 订阅</td><td>两档：<br>Pro US$20 / 月<br>Max US$100 / 月</td><td>这套东西的引擎。<strong>建议先订便宜的 Pro</strong>，用着看够不够，不够再升 Max</td></tr>
-        <tr><td>MiniMax</td><td>US$5 / 月<br>（Audio Starter 套餐）</td><td>克隆你的声音、配音。每月 10 万配音点数 + 10 个声音位，做几条视频绰绰有余。<strong>Windows 同学必须订</strong>，Mac 可选（见第 5 步）</td></tr>
-      </table>
-      <table class="en">
-        <tr><th></th><th>Cost</th><th>What for</th></tr>
-        <tr><td>Claude</td><td>Two plans:<br>Pro US$20 / mo<br>Max US$100 / mo</td><td>The engine behind everything. <strong>Start with the cheaper Pro</strong> — upgrade to Max later only if you need it</td></tr>
-        <tr><td>MiniMax</td><td>US$5 / mo<br>(Audio Starter plan)</td><td>Clones your voice for narration. 100k audio points + 10 voice slots per month — plenty for regular videos. <strong>Required on Windows</strong>, optional on Mac (see Step 5)</td></tr>
-      </table>
-    </div>
-    <div class="card">
-      <div class="zh">
-        <p class="faq-q">Windows 可以吗?</p>
-        <p>可以。差别只有两处：字幕是整句显示（Mac 能一个词一个词高亮）；配音必须充 MiniMax。其余一样。</p>
-      </div>
-      <div class="en">
-        <p class="faq-q">Does Windows work?</p>
-        <p>Yes. Only two differences: captions show line-by-line (Mac highlights word-by-word), and voiceover requires MiniMax. Everything else is identical.</p>
-      </div>
-    </div>
-  </section>
-
-  <!-- ======== OS toggle ======== -->
-  <div class="os-toggle" id="osToggle">
-    <button data-os="mac" class="on">Mac</button>
-    <button data-os="win">Windows</button>
-  </div>
-  <p style="text-align:center; font-size:13px; color:var(--ink-soft); margin-top:8px;"><span class="zh">先点一下你的电脑是哪种，下面内容会跟着变</span><span class="en">Pick your computer type — the steps below adjust automatically</span></p>
-
-  <!-- ======== STEP 1 ======== -->
-  <section>
-    <div class="sec-head">
-      <div class="sec-num">1</div>
-      <h2><span class="zh">下载 Claude，注册登录</span><span class="en">Download Claude &amp; sign up</span><span class="sec-min"><span class="zh">约 10 分钟</span><span class="en">~10 min</span></span></h2>
-    </div>
-
-    <div class="card">
-      <div class="illus">
-        <svg width="220" height="90" viewBox="0 0 220 90" fill="none" aria-hidden="true">
-          <rect x="4" y="8" width="120" height="74" rx="8" fill="#fff" stroke="#e6ddc9" stroke-width="2"/>
-          <rect x="4" y="8" width="120" height="18" rx="8" fill="#f3ecdd"/>
-          <circle cx="15" cy="17" r="3" fill="#f2564d"/><circle cx="25" cy="17" r="3" fill="#f6b53a"/><circle cx="35" cy="17" r="3" fill="#47c353"/>
-          <rect x="18" y="38" width="92" height="8" rx="4" fill="#f0e8d8"/>
-          <rect x="18" y="52" width="60" height="8" rx="4" fill="#f0e8d8"/>
-          <rect x="18" y="66" width="44" height="10" rx="5" fill="#e8890c"/>
-          <path d="M138 45 h36" stroke="#b8963e" stroke-width="2.5" stroke-dasharray="4 4"/>
-          <path d="M170 39 l10 6 -10 6" fill="none" stroke="#b8963e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-          <circle cx="200" cy="45" r="17" fill="#1a1a1a"/>
-          <text x="200" y="51" text-anchor="middle" font-size="15" font-weight="800" fill="#fff" font-family="-apple-system,sans-serif">✳</text>
-        </svg>
-      </div>
-
-      <div class="zh">
-        <div class="bigstep"><span class="b">1</span><p>用电脑打开 <strong>claude.com/download</strong>，下载 <strong>Claude Desktop</strong>，像装微信一样装好、打开。</p></div>
-        <div class="bigstep"><span class="b">2</span><p>用你的邮箱<strong>注册账号</strong>，然后<strong>订阅</strong>：先选 <strong>Pro（US$20/月）</strong>就行，跟着页面提示付款。用着不够以后随时能升 Max（US$100/月）。</p></div>
-        <div class="bigstep"><span class="b">3</span><p>随便发它一句话，它回你了，这步就成了 ✓</p></div>
-      </div>
-      <div class="en">
-        <div class="bigstep"><span class="b">1</span><p>On your computer, open <strong>claude.com/download</strong>, download <strong>Claude Desktop</strong>, and install it like any other app.</p></div>
-        <div class="bigstep"><span class="b">2</span><p><strong>Sign up</strong> with your email, then <strong>subscribe</strong>: start with <strong>Pro (US$20/mo)</strong> and follow the payment prompts. You can always upgrade to Max (US$100/mo) later.</p></div>
-        <div class="bigstep"><span class="b">3</span><p>Send it any message. If it replies, this step is done ✓</p></div>
-      </div>
-
-      <div class="chat">
-        <div class="chat-label"><span class="zh">你会看到类似这样</span><span class="en">You'll see something like this</span></div>
-        <div class="bubble me"><span class="zh">你好，能看到吗?</span><span class="en">Hi, can you see this?</span></div>
-        <div class="bubble ai"><span class="zh">你好！可以的，有什么要帮忙的？</span><span class="en">Hello! Yes I can. How can I help?</span></div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ======== STEP 2 ======== -->
-  <section>
-    <div class="sec-head">
-      <div class="sec-num gold">2</div>
-      <h2><span class="zh">把下面这段话发给 Claude，它自己干活</span><span class="en">Paste this message to Claude — it does the work</span><span class="sec-min"><span class="zh">20–40 分钟</span><span class="en">20–40 min</span></span></h2>
-    </div>
-
-    <div class="card">
-      <div class="illus">
-        <svg width="230" height="90" viewBox="0 0 230 90" fill="none" aria-hidden="true">
-          <rect x="10" y="18" width="70" height="46" rx="10" fill="#fdf9f0" stroke="#b8963e" stroke-width="2" stroke-dasharray="5 4"/>
-          <rect x="22" y="30" width="46" height="5" rx="2.5" fill="#e0d5bd"/>
-          <rect x="22" y="40" width="38" height="5" rx="2.5" fill="#e0d5bd"/>
-          <rect x="22" y="50" width="42" height="5" rx="2.5" fill="#e0d5bd"/>
-          <path d="M92 41 h28" stroke="#b8963e" stroke-width="2.5" stroke-dasharray="4 4"/>
-          <path d="M116 35 l10 6 -10 6" fill="none" stroke="#b8963e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-          <circle cx="155" cy="41" r="19" fill="#1a1a1a"/>
-          <text x="155" y="47" text-anchor="middle" font-size="16" font-weight="800" fill="#fff" font-family="-apple-system,sans-serif">✳</text>
-          <g stroke="#e8890c" stroke-width="2.5" stroke-linecap="round">
-            <path d="M186 28 l6 -6"/><path d="M192 41 h9"/><path d="M186 54 l6 6"/>
-          </g>
-        </svg>
-      </div>
-      <p class="zh">做视频还需要装几个小工具。<strong>你不用认识它们，也不用自己装</strong>——点「复制」，粘贴到 Claude 的聊天框里，发送：</p>
-      <p class="en">Making videos needs a few small tools. <strong>You don't need to know what they are or install them yourself</strong> — hit Copy, paste into Claude's chat box, and send:</p>
-
-      <div class="copyblock mac-only zh">
-        <button class="copybtn" data-copy-label="复制">复制</button>
-        <pre>帮我把这台电脑配好做视频的环境：Homebrew（没有就先装）、Node.js LTS、ffmpeg、poppler、whisper-cpp，并把 whisper 模型下载到 ~/.cache/whisper-models/ggml-large-v3-turbo.bin（来源 https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin，约1.6GB）。已有的跳过，缺的装上。我不懂电脑，过程里用大白话告诉我进展。装完逐一验证，全部通过就输出一行「✅ 体检通过」加各项版本号；有装不上的，列出来是哪一项、报什么错。</pre>
-      </div>
-      <div class="copyblock win-only zh">
-        <button class="copybtn" data-copy-label="复制">复制</button>
-        <pre>帮我把这台电脑配好做视频的环境，用 winget 安装：Node.js LTS、Python 3、ffmpeg、LibreOffice。装完确认这几样在命令行里能直接调用，不行就帮我把 PATH 配好。我不懂电脑，过程里用大白话告诉我进展。装完逐一验证，全部通过就输出一行「✅ 体检通过」加各项版本号；有装不上的，列出来是哪一项、报什么错。</pre>
-      </div>
-      <div class="copyblock mac-only en">
-        <button class="copybtn" data-copy-label="Copy">Copy</button>
-        <pre>Please set up this computer for video production: Homebrew (install it first if missing), Node.js LTS, ffmpeg, poppler, whisper-cpp, and download the whisper model to ~/.cache/whisper-models/ggml-large-v3-turbo.bin (from https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin, ~1.6GB). Skip what's already installed. I'm not technical — explain progress in plain language. When done, verify each item and print one line "✅ Health check passed" with version numbers; if anything fails, list which item and the error.</pre>
-      </div>
-      <div class="copyblock win-only en">
-        <button class="copybtn" data-copy-label="Copy">Copy</button>
-        <pre>Please set up this computer for video production using winget: Node.js LTS, Python 3, ffmpeg, LibreOffice. Make sure each is callable from the command line — fix PATH if needed (and tell me to reopen the window after). I'm not technical — explain progress in plain language. When done, verify each item and print one line "✅ Health check passed" with version numbers; if anything fails, list which item and the error.</pre>
-      </div>
-
-      <div class="zh">
-        <p>然后<span class="em">等它干完</span>，中间你只需要做两件事：</p>
-        <div class="bigstep"><span class="b">a</span><p>它问「<strong>允许吗 / 是否继续</strong>」→ 点<strong>允许 / 是</strong></p></div>
-        <div class="bigstep"><span class="b">b</span><p>它让你<strong>输密码</strong> → 输你<strong>电脑的开机密码</strong>（这是电脑在跟你确认，正常）</p></div>
-      </div>
-      <div class="en">
-        <p>Then <span class="em">let it work</span>. You only need to do two things along the way:</p>
-        <div class="bigstep"><span class="b">a</span><p>It asks "<strong>Allow? / Continue?</strong>" → click <strong>Allow / Yes</strong></p></div>
-        <div class="bigstep"><span class="b">b</span><p>It asks for a <strong>password</strong> → type your <strong>computer login password</strong> (that's your computer double-checking — normal)</p></div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ======== STEP 3 ======== -->
-  <section>
-    <div class="sec-head">
-      <div class="sec-num">3</div>
-      <h2><span class="zh">看到 ✅ 就截图发我</span><span class="en">See the ✅? Screenshot it to me</span><span class="sec-min"><span class="zh">1 分钟</span><span class="en">1 min</span></span></h2>
-    </div>
-
-    <div class="card">
-      <p class="zh">它干完活会自己检查一遍。你要等的就是这个：</p>
-      <p class="en">When it finishes, it checks its own work. This is what you're waiting for:</p>
-      <div class="chat">
-        <div class="chat-label"><span class="zh">装好之后，它会说类似这样</span><span class="en">When everything's installed, it says something like</span></div>
-        <div class="bubble ai"><span class="okline zh">✅ 体检通过</span><span class="okline en">✅ Health check passed</span><br><span class="small mac-only">node v22 · ffmpeg 7 · whisper OK<span class="zh"> · 模型已就位</span><span class="en"> · model ready</span></span><span class="small win-only">node v22 · Python 3.12 · ffmpeg 7 · LibreOffice OK</span></div>
-      </div>
-      <p class="zh"><span class="em">看到 ✅ = 装完了，截图发我。</span></p>
-      <p class="en"><span class="em">✅ means you're done — screenshot it and send it to me.</span></p>
-      <p class="note zh">没看到 ✅，或者它说有东西装不上？<strong>把那一屏截图发我，别自己琢磨</strong>，两分钟的事。</p>
-      <p class="note en">No ✅, or something failed to install? <strong>Screenshot that screen and send it to me — don't troubleshoot alone.</strong> It's a two-minute fix.</p>
-    </div>
-  </section>
-
-  <!-- ======== STEP 4 ======== -->
-  <section>
-    <div class="sec-head">
-      <div class="sec-num">4</div>
-      <h2><span class="zh">装 Chrome 和 WhatsApp</span><span class="en">Install Chrome &amp; WhatsApp</span><span class="sec-min"><span class="zh">约 5 分钟</span><span class="en">~5 min</span></span></h2>
-    </div>
-
-    <div class="card">
-      <div class="illus">
-        <svg width="180" height="76" viewBox="0 0 180 76" fill="none" aria-hidden="true">
-          <circle cx="50" cy="38" r="24" fill="#fff" stroke="#e6ddc9" stroke-width="2"/>
-          <circle cx="50" cy="38" r="10" fill="#fdf9f0" stroke="#e8890c" stroke-width="3"/>
-          <path d="M50 14 a24 24 0 0 1 20.8 12 l-16 9.3" fill="none" stroke="#f2564d" stroke-width="5"/>
-          <circle cx="130" cy="38" r="24" fill="#3d9b4f"/>
-          <path d="M120 48 l3-7 a12 12 0 1 1 4 3.5z" fill="#fff"/>
-          <path d="M125.5 32.5 c0-1 .8-1.8 1.8-1.8 l2 .2 1 3.4 -1.6 1.6 c1 2 2.6 3.6 4.6 4.6 l1.6-1.6 3.4 1 .2 2 c0 1-.8 1.8-1.8 1.8 -6.8-.4-10.8-4.4-11.2-11.2z" fill="#3d9b4f"/>
-        </svg>
-      </div>
-      <div class="zh">
-        <div class="bigstep"><span class="b">1</span><p>装 <strong>Chrome 浏览器</strong>（已经有就跳过）。</p></div>
-        <div class="bigstep"><span class="b">2</span><p>装 <strong>WhatsApp 电脑版</strong>，<span class="em">登录好，发条消息试试能不能用</span>——上课要用它找盘、问价。</p></div>
-        <p class="note">这两个也可以偷懒：直接在 Claude 里发「帮我装 Chrome 和 WhatsApp 桌面版」，装完你自己登录就行。</p>
-      </div>
-      <div class="en">
-        <div class="bigstep"><span class="b">1</span><p>Install <strong>Chrome</strong> (skip if you have it).</p></div>
-        <div class="bigstep"><span class="b">2</span><p>Install <strong>WhatsApp Desktop</strong>, <span class="em">log in and send a test message</span> — we'll use it in class for listings and enquiries.</p></div>
-        <p class="note">Shortcut: just tell Claude "install Chrome and WhatsApp Desktop for me", then log in yourself.</p>
-      </div>
-    </div>
-  </section>
-
-  <!-- ======== STEP 5 (optional): MiniMax ======== -->
-  <section>
-    <div class="sec-head">
-      <div class="sec-num opt">5</div>
-      <h2><span class="zh">（可选）注册 MiniMax，订 $5 套餐</span><span class="en">(Optional) Set up MiniMax — $5/mo plan</span><span class="sec-min"><span class="zh">约 10 分钟</span><span class="en">~10 min</span></span></h2>
-    </div>
-
-    <div class="card">
-      <div class="zh">
-        <p>MiniMax 是<strong>配音引擎</strong>——上课时我们会用它克隆你的声音，之后视频旁白都用你自己的声音出。</p>
-        <p><span class="em">有它，一条 60 秒的配音几十秒就出来；</span>Mac 上没有它也能出声（用免费本地引擎，但一条配音要等半小时起步）。<strong>Windows 同学没有备选，必须弄。</strong></p>
-        <p>声音克隆在<strong>你自己的账号</strong>里，授权和账单都在你手上。</p>
-      </div>
-      <div class="en">
-        <p>MiniMax is the <strong>voiceover engine</strong> — in class we'll use it to clone your voice, so every video narrates in your own voice.</p>
-        <p><span class="em">With it, a 60-second voiceover takes seconds to generate;</span> on Mac there's a free local fallback, but it takes 30+ minutes per voiceover. <strong>On Windows there is no fallback — you need this.</strong></p>
-        <p>Your voice clone lives in <strong>your own account</strong> — you hold the authorization and the billing.</p>
-      </div>
-
-      <div class="zh">
-        <p style="margin-top:18px;"><strong>先亲耳听听区别</strong>——同一句话，两个引擎各念一遍（都是我的克隆声）：</p>
-      </div>
-      <div class="en">
-        <p style="margin-top:18px;"><strong>Hear the difference yourself</strong> — the same sentence, spoken by both engines (both are my cloned voice):</p>
-      </div>
-      <div class="ab-row">
-        <div class="ab-head">
-          <span class="ab-name"><span class="ab-tag a">A</span>MiniMax<span class="zh"> 云端</span><span class="en"> Cloud</span></span>
-          <span class="ab-meta"><span class="zh">生成只花了 4.5 秒</span><span class="en">generated in 4.5 seconds</span></span>
+  <main id="top" class="shell">
+    <section class="hero" aria-labelledby="page-title">
+      <h1 id="page-title"><span class="i18n" data-lang="zh">上课前，<br>先把电脑准备好</span><span class="i18n" data-lang="en" hidden>Prepare your computer<br>before class</span></h1>
+      <p><span class="i18n" data-lang="zh">不需要懂程序。选好 Mac 或 Windows，然后从上往下照做。最好提前两天完成，给下载和安装留时间。</span><span class="i18n" data-lang="en" hidden>No programming knowledge is needed. Choose Mac or Windows, then work from top to bottom. Do this two days early so downloads have time to finish.</span></p>
+      <div class="time-box"><span class="i18n" data-lang="zh">大约 30–45 分钟 · MiniMax 不是必修</span><span class="i18n" data-lang="en" hidden>About 30–45 minutes · MiniMax is optional</span></div>
+      <div class="os-row">
+        <div class="toggle" role="group" aria-label="Computer type">
+          <button type="button" data-set-os="mac" aria-pressed="true">Mac</button>
+          <button type="button" data-set-os="win" aria-pressed="false">Windows</button>
         </div>
-        <audio controls preload="metadata" src="audio/voice_minimax.mp3"></audio>
       </div>
-      <div class="ab-row">
-        <div class="ab-head">
-          <span class="ab-name"><span class="ab-tag b">B</span><span class="zh">本地免费引擎（Mac 备用）</span><span class="en">Free local engine (Mac fallback)</span></span>
-          <span class="ab-meta"><span class="zh">同一句话跑了 4 分多钟</span><span class="en">took over 4 minutes for the same line</span></span>
+    </section>
+
+    <ol class="overview" aria-label="Preparation overview">
+      <li><strong>1</strong><span><span class="i18n" data-lang="zh">安装 ChatGPT 桌面版并打开 Codex</span><span class="i18n" data-lang="en" hidden>Install ChatGPT desktop and open Codex</span></span></li>
+      <li><strong>2</strong><span><span class="i18n" data-lang="zh">检查电脑工具</span><span class="i18n" data-lang="en" hidden>Check computer tools</span></span></li>
+      <li><strong>3</strong><span><span class="i18n" data-lang="zh">安装 3 个 Skill</span><span class="i18n" data-lang="en" hidden>Install the 3 Skills</span></span></li>
+      <li><strong>4</strong><span><span class="i18n" data-lang="zh">跑虚构首次检查</span><span class="i18n" data-lang="en" hidden>Run synthetic first-use checks</span></span></li>
+    </ol>
+
+    <section class="step" aria-labelledby="step-1-title">
+      <div class="step-title"><div class="step-number">1</div><h2 id="step-1-title"><span class="i18n" data-lang="zh">安装桌面应用，选择 Codex</span><span class="i18n" data-lang="en" hidden>Install the desktop app and choose Codex</span></h2></div>
+      <div class="card">
+        <ol class="action-list">
+          <li><span class="i18n" data-lang="zh">用电脑打开 <a href="https://chatgpt.com/download/" target="_blank" rel="noreferrer">chatgpt.com/download</a>，下载 ChatGPT 桌面应用。</span><span class="i18n" data-lang="en" hidden>On your computer, open <a href="https://chatgpt.com/download/" target="_blank" rel="noreferrer">chatgpt.com/download</a> and download the ChatGPT desktop app.</span></li>
+          <li><span class="i18n" data-lang="zh">安装、登录你自己的 ChatGPT 账号，然后在左上角选择 <strong>Codex</strong>。可用性依你的账号和工作区设置而定。</span><span class="i18n" data-lang="en" hidden>Install it, sign in to your own ChatGPT account, then choose <strong>Codex</strong> from the top-left menu. Availability depends on your account and workspace.</span></li>
+          <li><span class="i18n" data-lang="zh">新建一个 Codex 聊天，发送「请回复一句你已准备好帮我做课前设置」。</span><span class="i18n" data-lang="en" hidden>Start a Codex chat and send: “Reply with one sentence saying you are ready to help me with pre-class setup.”</span></li>
+        </ol>
+        <div class="success"><span class="i18n" data-lang="zh">成功信号：Codex 回复了你。</span><span class="i18n" data-lang="en" hidden>Success signal: Codex replies.</span></div>
+      </div>
+    </section>
+
+    <section class="step" aria-labelledby="step-2-title">
+      <div class="step-title"><div class="step-number">2</div><h2 id="step-2-title"><span class="i18n" data-lang="zh">让 Codex 检查并安装本地工具</span><span class="i18n" data-lang="en" hidden>Let Codex check and install local tools</span></h2></div>
+      <div class="card">
+        <p><span class="i18n" data-lang="zh">Codex 可能会请求运行安装命令。先看清是否只在安装下面列出的工具，然后再允许。</span><span class="i18n" data-lang="en" hidden>Codex may ask to run installation commands. Confirm they only install the tools listed below before allowing them.</span></p>
+        <div class="prompt os mac-only">
+          <pre id="tools-mac"><span class="i18n" data-lang="zh">请为这台 Mac 准备课程环境。检查 Git、Node.js LTS、npm、npx、Python 3、FFmpeg、FFprobe 和 LibreOffice。只在缺少时用 Homebrew 或官方安装方式补齐。我不熟悉电脑，请用大白话解释每个权限请求。不要打印环境变量、密钥或私人文件。安装后验证 git --version、node --version、npm --version、npx --version、python3 --version、ffmpeg -version、ffprobe -version，并确认 LibreOffice 可打开。最后只列出 ready 或 missing 的项目。</span><span class="i18n" data-lang="en" hidden>Prepare this Mac for class. Check Git, Node.js LTS, npm, npx, Python 3, FFmpeg, FFprobe, and LibreOffice. Use Homebrew or an official installer only for missing items. I am not technical, so explain each permission request in plain language. Do not print environment variables, keys, or private files. Verify git --version, node --version, npm --version, npx --version, python3 --version, ffmpeg -version, and ffprobe -version, and confirm LibreOffice opens. Finish with only a ready-or-missing list.</span></pre>
+          <div class="prompt-actions"><small>Mac</small><button class="copy-button" type="button" data-copy="tools-mac"><span class="i18n" data-lang="zh">复制 Mac 检查</span><span class="i18n" data-lang="en" hidden>Copy Mac check</span></button></div>
         </div>
-        <audio controls preload="metadata" src="audio/voice_f5.mp3"></audio>
+        <div class="prompt os win-only" hidden>
+          <pre id="tools-win"><span class="i18n" data-lang="zh">请为这台 Windows 电脑准备课程环境。检查 Git、Node.js LTS、npm、npx、Python 3、FFmpeg、FFprobe 和 LibreOffice。只在缺少时用 winget 或官方安装程序补齐，必要时帮我正确设置 PATH，并告诉我何时要重新打开 Codex。我不熟悉电脑，请用大白话解释每个权限请求。不要打印环境变量、密钥或私人文件。安装后验证 git --version、node --version、npm --version、npx --version、python --version 或 py --version、ffmpeg -version、ffprobe -version，并确认 LibreOffice 可打开。最后只列出 ready 或 missing 的项目。</span><span class="i18n" data-lang="en" hidden>Prepare this Windows computer for class. Check Git, Node.js LTS, npm, npx, Python 3, FFmpeg, FFprobe, and LibreOffice. Use winget or an official installer only for missing items, fix PATH when needed, and tell me when to reopen Codex. I am not technical, so explain each permission request in plain language. Do not print environment variables, keys, or private files. Verify git --version, node --version, npm --version, npx --version, python --version or py --version, ffmpeg -version, and ffprobe -version, and confirm LibreOffice opens. Finish with only a ready-or-missing list.</span></pre>
+          <div class="prompt-actions"><small>Windows</small><button class="copy-button" type="button" data-copy="tools-win"><span class="i18n" data-lang="zh">复制 Windows 检查</span><span class="i18n" data-lang="en" hidden>Copy Windows check</span></button></div>
+        </div>
+        <div class="success"><span class="i18n" data-lang="zh">成功信号：上面的工具都显示 ready，或 Codex 清楚说明只缺哪一项。</span><span class="i18n" data-lang="en" hidden>Success signal: every tool says ready, or Codex clearly names the one missing item.</span></div>
       </div>
-      <div class="ab-script"><span class="zh">两段念的都是：「大家好，我是 Penny。榜鹅这套三房上个月成交 158 万新币，比半年前贵了 8 万，到底值不值，我们一条条来算。」</span><span class="en">Both read the same Chinese script: "Hi, I'm Penny. This Punggol 3-bedder sold for S$1.58M last month — S$80K more than half a year ago. Worth it or not? Let's run the numbers."</span></div>
+    </section>
 
-      <div class="zh">
-        <p style="margin-top:14px;"><strong>差别在哪：</strong></p>
-        <ul class="diff">
-          <li><strong>速度</strong>：A 是 4.5 秒，B 是 4 分多钟。一天出几条视频的话，这个差距是决定性的。</li>
-          <li><strong>连贯度</strong>：A 整段一次合成，停顿跟着标点走，像正常说话；B 是一句一句拼出来的，停顿规整但发僵，整段也因此长了一秒多。</li>
-          <li><strong>情绪和干净度</strong>：A 可以调情绪（这段用的是「开心」），底噪也干净；B 没有情绪可调，安静处能听出底噪一断一断。</li>
-          <li><strong>B 的长处</strong>：免费、断网能用、文本和音频不出你的电脑。所以 Mac 上留它当备胎，正常出片走 A。</li>
-        </ul>
+    <section class="step" aria-labelledby="step-3-title">
+      <div class="step-title"><div class="step-number">3</div><h2 id="step-3-title"><span class="i18n" data-lang="zh">安装课程的 3 个 Skill</span><span class="i18n" data-lang="en" hidden>Install the 3 course Skills</span></h2></div>
+      <div class="card">
+        <p><span class="i18n" data-lang="zh">把这条命令给 Codex，让它在终端里运行。仓库只包含脱敏的三个 Skill 和虚构/获授权素材，不含公司正式表格。</span><span class="i18n" data-lang="en" hidden>Give this command to Codex and let it run in the terminal. The repository contains only the three sanitised Skills and fictional or authorised assets, with no company formal forms.</span></p>
+        <div class="prompt"><pre id="install-command">npx skills add dearvae/agentos-sg-course-skills --skill propnex-forms --skill agent-shot --skill pg-cobroke -g -a codex -y</pre><div class="prompt-actions"><small><a href="https://github.com/dearvae/agentos-sg-course-skills" target="_blank" rel="noreferrer">dearvae/agentos-sg-course-skills</a></small><button class="copy-button" type="button" data-copy="install-command"><span class="i18n" data-lang="zh">复制安装命令</span><span class="i18n" data-lang="en" hidden>Copy install command</span></button></div></div>
+        <div class="success"><span class="i18n" data-lang="zh">成功信号：安装结果只列出 propnex-forms、agent-shot 和 pg-cobroke。</span><span class="i18n" data-lang="en" hidden>Success signal: the result lists only propnex-forms, agent-shot, and pg-cobroke.</span></div>
       </div>
-      <div class="en">
-        <p style="margin-top:14px;"><strong>What's different:</strong></p>
-        <ul class="diff">
-          <li><strong>Speed</strong>: A took 4.5 seconds, B took over 4 minutes. If you publish several videos a day, this gap decides everything.</li>
-          <li><strong>Flow</strong>: A generates the whole passage in one go — pauses follow the punctuation, like natural speech. B is stitched sentence by sentence, so pauses sound stiff and the clip runs over a second longer.</li>
-          <li><strong>Emotion &amp; cleanliness</strong>: A supports emotion control (this clip uses "happy") and outputs clean audio; B has no emotion control and you can hear the background hiss cut in and out between sentences.</li>
-          <li><strong>B's strengths</strong>: free, works offline, and nothing leaves your computer. That's why Mac keeps it as a fallback — day-to-day, use A.</li>
-        </ul>
-      </div>
+    </section>
 
-      <div class="zh">
-        <div class="bigstep"><span class="b">1</span><p>打开 <strong>account.minimax.io</strong>，填邮箱点 <strong>Continue</strong>（或直接用 Google 账号登录），跟着提示完成注册。</p></div>
+    <section class="step" aria-labelledby="step-4-title">
+      <div class="step-title"><div class="step-number">4</div><h2 id="step-4-title"><span class="i18n" data-lang="zh">跑一次安全的首次检查</span><span class="i18n" data-lang="en" hidden>Run one safe first-use check</span></h2></div>
+      <div class="card">
+        <p><span class="i18n" data-lang="zh">这个检查只用包内虚构资料，不需要你的客户文件、声音、照片、登录或 API key。</span><span class="i18n" data-lang="en" hidden>This check uses only bundled fictional data. It does not need client files, your voice, portrait, login, or API key.</span></p>
+        <div class="prompt"><pre id="first-use-prompt">Run the first-use checks for propnex-forms, agent-shot, and pg-cobroke. Use Training mode and only bundled fictional data. Do not log in, send, upload identity media, call a paid API, or use a cloned voice.</pre><div class="prompt-actions"><small>Training mode only</small><button class="copy-button" type="button" data-copy="first-use-prompt"><span class="i18n" data-lang="zh">复制首次检查</span><span class="i18n" data-lang="en" hidden>Copy first-use check</span></button></div></div>
+        <p class="note"><span class="i18n" data-lang="zh">如果 agent-shot 说缺少本地视频依赖，这不影响上课：课上可以先用包内 Golden Sample，再在课后完成本机渲染。</span><span class="i18n" data-lang="en" hidden>If agent-shot reports a missing local video dependency, class can still proceed with the bundled Golden Sample; finish local rendering after class.</span></p>
+        <div class="success"><span class="i18n" data-lang="zh">成功信号：三个 Skill 都回报 Training mode 边界，没有请求真实资料。</span><span class="i18n" data-lang="en" hidden>Success signal: all three Skills report Training-mode boundaries and request no real data.</span></div>
       </div>
-      <div class="en">
-        <div class="bigstep"><span class="b">1</span><p>Open <strong>account.minimax.io</strong>, enter your email and hit <strong>Continue</strong> (or sign in with Google), then follow the prompts.</p></div>
-      </div>
-      <div class="shot"><img src="img/mm_fig1.png" alt="MiniMax sign up page">
-        <div class="cap"><span class="zh">示意图：① 填邮箱 ② 点 Continue（界面如有小改动，以官网为准）</span><span class="en">Illustration: ① enter email ② hit Continue (actual site may differ slightly)</span></div>
-      </div>
+    </section>
 
-      <div class="zh">
-        <div class="bigstep"><span class="b">2</span><p>登录后打开 <strong>platform.minimax.io</strong>，点右上角 <strong>Console</strong>，左边栏找到 <strong>Packages</strong>，选 <strong>Audio</strong> 标签，订 <strong>Starter（US$5/月）</strong>那档，银行卡付款。每月 10 万配音点数 + 10 个声音位，做几条视频绰绰有余。</p></div>
-        <div class="bigstep"><span class="b">3</span><p>完了。<strong>声音克隆和接入都在上课时我带你弄</strong>，今天只要套餐订上就行。</p></div>
+    <section class="step" aria-labelledby="optional-title">
+      <div class="step-title"><div class="step-number" style="background: var(--gold)">+</div><h2 id="optional-title"><span class="i18n" data-lang="zh">可选：MiniMax 以后再设置</span><span class="i18n" data-lang="en" hidden>Optional: set up MiniMax later</span></h2></div>
+      <div class="card optional">
+        <p><span class="i18n" data-lang="zh"><strong>课堂必修路线不需要 MiniMax。</strong> agent-shot 默认使用标准声音。如果你以后想用自己的声音，再使用自己的 MiniMax 账号、密钥和 voice ID。</span><span class="i18n" data-lang="en" hidden><strong>The required class path does not need MiniMax.</strong> agent-shot uses a standard voice by default. If you later want your own voice, use your own MiniMax account, key, and voice ID.</span></p>
+        <ul class="action-list"><li><span class="i18n" data-lang="zh">费用由你自己的套餐或用量决定。</span><span class="i18n" data-lang="en" hidden>Charges depend on your own plan or usage.</span></li><li><span class="i18n" data-lang="zh">密钥不发给老师，不贴在聊天里，不放进 Skill 文件夹或 GitHub。</span><span class="i18n" data-lang="en" hidden>Never send the key to the instructor, paste it into chat, or place it in the Skill folder or GitHub.</span></li><li><span class="i18n" data-lang="zh">克隆或上传声音前，Codex 必须先说明会上传什么并得到你确认。</span><span class="i18n" data-lang="en" hidden>Before voice cloning or upload, Codex must explain what leaves the computer and obtain your confirmation.</span></li></ul>
       </div>
-      <div class="en">
-        <div class="bigstep"><span class="b">2</span><p>Once signed in, open <strong>platform.minimax.io</strong>, click <strong>Console</strong> (top right), find <strong>Packages</strong> in the left sidebar, pick the <strong>Audio</strong> tab, and subscribe to <strong>Starter (US$5/mo)</strong> — pay by card. 100k audio points + 10 voice slots monthly is plenty.</p></div>
-        <div class="bigstep"><span class="b">3</span><p>Done. <strong>Voice cloning and setup happen together in class</strong> — today you just need the plan active.</p></div>
-      </div>
-      <div class="shot"><img src="img/mm_fig4.png" alt="MiniMax audio subscription plans">
-        <div class="cap"><span class="zh">示意图：① Audio 标签 ② 选 Starter $5/月 ③ Subscribe（界面如有小改动，以官网为准）</span><span class="en">Illustration: ① Audio tab ② pick Starter $5/mo ③ Subscribe (actual site may differ slightly)</span></div>
-      </div>
-      <p class="note zh">不想包月？也可以按量充值：Console → Balance → Recharge，单次最低 US$25，克隆声音另收 US$1.5/个。轻度使用两种都行，包月更省心也更便宜。</p>
-      <p class="note en">Prefer not to subscribe? Pay-as-you-go works too: Console → Balance → Recharge, minimum US$25 per top-up, plus US$1.50 per voice clone. Either works — the plan is simpler and cheaper for regular use.</p>
-    </div>
-  </section>
+    </section>
 
-  <!-- ======== final ======== -->
-  <section>
-    <div class="callout dark">
-      <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 2 l2.2 5 5.3.5 -4 3.6 1.2 5.2 -4.7-2.8 -4.7 2.8 1.2-5.2 -4-3.6 5.3-.5z" fill="#ffc46b"/></svg>
-      <div><span class="zh">四步都做完了？把 <strong>✅ 截图</strong>发我，就等上课了。</span><span class="en">All four steps done? Send me the <strong>✅ screenshot</strong> — see you in class.</span></div>
-    </div>
-  </section>
+    <section class="privacy" aria-labelledby="privacy-title">
+      <h2 id="privacy-title"><span class="i18n" data-lang="zh">课前不要给这些资料</span><span class="i18n" data-lang="en" hidden>Do not provide these before class</span></h2>
+      <ul><li><span class="i18n" data-lang="zh">真实客户姓名、电话、NRIC / FIN、银行或签名资料</span><span class="i18n" data-lang="en" hidden>Real client names, phones, NRIC / FIN, bank, or signature data</span></li><li><span class="i18n" data-lang="zh">公司正式表格或未授权素材</span><span class="i18n" data-lang="en" hidden>Company formal forms or unapproved assets</span></li><li><span class="i18n" data-lang="zh">API key、密码、cookie、浏览器 profile</span><span class="i18n" data-lang="en" hidden>API keys, passwords, cookies, or browser profiles</span></li></ul>
+    </section>
 
-  <footer>
-    <div class="brand"><span class="zh">看房上瘾患者 Penny</span><span class="en">Penny · Property Agent</span></div>
-    <p class="zh">卡在任何一步，截图直接发我，别自己耗。</p>
-    <p class="en">Stuck on anything? Screenshot it and send it to me — don't struggle alone.</p>
-  </footer>
-</div>
+    <div class="cta"><a href="/ai-agent/class/"><span class="i18n" data-lang="zh">我准备好了，打开课堂跟做页</span><span class="i18n" data-lang="en" hidden>I'm ready — open the class guide</span></a></div>
+  </main>
 
-<script>
-  // ----- OS toggle -----
-  var osToggle = document.getElementById('osToggle');
-  var langToggle = document.getElementById('langToggle');
-  var isWin = /Windows/i.test(navigator.userAgent);
-  var state = { os: isWin ? 'win' : 'mac', lang: /^zh/i.test(navigator.language || '') ? 'zh' : 'en' };
-  function apply() {
-    document.body.className = 'os-' + state.os + ' lang-' + state.lang;
-    document.documentElement.lang = state.lang === 'zh' ? 'zh-CN' : 'en';
-    osToggle.querySelectorAll('button').forEach(function (b) { b.classList.toggle('on', b.dataset.os === state.os); });
-    langToggle.querySelectorAll('button').forEach(function (b) { b.classList.toggle('on', b.dataset.lang === state.lang); });
-  }
-  osToggle.addEventListener('click', function (e) {
-    var b = e.target.closest('button'); if (b) { state.os = b.dataset.os; apply(); }
-  });
-  langToggle.addEventListener('click', function (e) {
-    var b = e.target.closest('button'); if (b) { state.lang = b.dataset.lang; apply(); }
-  });
-  apply();
+  <div id="status" class="status" role="status" aria-live="polite" hidden></div>
+  <script>
+    (function () {
+      var lang = localStorage.getItem('agentos-course-language-v1') || (/^zh/i.test(navigator.language || '') ? 'zh' : 'en');
+      var os = localStorage.getItem('agentos-course-os-v1') || (/Windows/i.test(navigator.userAgent) ? 'win' : 'mac');
 
-  // ----- copy buttons -----
-  document.querySelectorAll('.copybtn').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      var text = btn.parentElement.querySelector('pre').innerText;
-      var label = btn.dataset.copyLabel || 'Copy';
-      navigator.clipboard.writeText(text).then(function () {
-        btn.textContent = (label === '复制' ? '已复制 ✓' : 'Copied ✓');
-        btn.classList.add('done');
-        setTimeout(function () { btn.textContent = label; btn.classList.remove('done'); }, 2000);
-      });
-    });
-  });
-</script>
+      function apply() {
+        document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en';
+        document.querySelectorAll('.i18n').forEach(function (el) { el.hidden = el.dataset.lang !== lang; });
+        document.querySelectorAll('[data-set-lang]').forEach(function (button) { button.setAttribute('aria-pressed', String(button.dataset.setLang === lang)); });
+        document.querySelectorAll('[data-set-os]').forEach(function (button) { button.setAttribute('aria-pressed', String(button.dataset.setOs === os)); });
+        document.querySelectorAll('.os').forEach(function (el) { el.hidden = !(el.classList.contains(os + '-only')); });
+      }
+      function announce(text) { var el = document.getElementById('status'); el.textContent = text; el.hidden = false; window.clearTimeout(announce.timer); announce.timer = window.setTimeout(function () { el.hidden = true; }, 2200); }
+      function fallbackCopy(text) { var area = document.createElement('textarea'); area.value = text; area.setAttribute('readonly', ''); area.style.position = 'fixed'; area.style.opacity = '0'; document.body.appendChild(area); area.select(); var ok = document.execCommand('copy'); document.body.removeChild(area); if (!ok) throw new Error('copy failed'); }
+
+      document.querySelectorAll('[data-set-lang]').forEach(function (button) { button.addEventListener('click', function () { lang = button.dataset.setLang; localStorage.setItem('agentos-course-language-v1', lang); apply(); }); });
+      document.querySelectorAll('[data-set-os]').forEach(function (button) { button.addEventListener('click', function () { os = button.dataset.setOs; localStorage.setItem('agentos-course-os-v1', os); apply(); }); });
+      document.querySelectorAll('[data-copy]').forEach(function (button) { button.addEventListener('click', async function () {
+        var source = document.getElementById(button.dataset.copy);
+        var original = button.textContent.trim();
+        try { var text = source.innerText.trim(); if (navigator.clipboard && window.isSecureContext) await navigator.clipboard.writeText(text); else fallbackCopy(text); button.classList.add('copied'); button.textContent = lang === 'zh' ? '已复制 ✓' : 'Copied ✓'; announce(lang === 'zh' ? '已复制，切换到 Codex 粘贴' : 'Copied. Switch to Codex and paste.'); }
+        catch (_) { button.textContent = lang === 'zh' ? '请手动选取文字' : 'Select the text manually'; announce(lang === 'zh' ? '浏览器没有允许复制' : 'Clipboard permission was blocked'); }
+        window.setTimeout(function () { button.classList.remove('copied'); button.textContent = original; }, 2300);
+      }); });
+      apply();
+    }());
+  </script>
 </body>
 </html>

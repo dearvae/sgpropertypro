@@ -20,6 +20,8 @@ const BASE_URL = process.env.BASE_URL || `http://localhost:${PREVIEW_PORT}`
 
 const ROUTES = [
   { path: '/', name: '首页' },
+  { path: '/ai-agent/', name: 'AI 课前准备', static: true, selector: '#step-1-title' },
+  { path: '/ai-agent/class/', name: 'AI 课堂跟做', static: true, selector: '#setup-title' },
   { path: '/login', name: '登录' },
   { path: '/register', name: '注册' },
   { path: '/invite', name: '邀请' },
@@ -43,7 +45,7 @@ async function waitForServer(url, maxAttempts = 30) {
   return false
 }
 
-async function checkRoute(page, { path, name }) {
+async function checkRoute(page, { path, name, static: isStatic = false, selector = '#root' }) {
   const url = BASE_URL + path
   const errors = []
 
@@ -71,9 +73,10 @@ async function checkRoute(page, { path, name }) {
       return { ok: false, path, name, error: `HTTP ${resp.status()}` }
     }
     await new Promise((r) => setTimeout(r, 500))
-    const hasRoot = await page.locator('#root').count() > 0
-    if (!hasRoot) {
-      return { ok: false, path, name, error: '未找到 #root 容器' }
+    const expectedSelector = isStatic ? selector : '#root'
+    const hasExpectedRoot = await page.locator(expectedSelector).count() > 0
+    if (!hasExpectedRoot) {
+      return { ok: false, path, name, error: `未找到 ${expectedSelector}` }
     }
     if (errors.length > 0) {
       return {
