@@ -20,8 +20,9 @@ const BASE_URL = process.env.BASE_URL || `http://localhost:${PREVIEW_PORT}`
 
 const ROUTES = [
   { path: '/', name: '首页' },
-  { path: '/ai-agent/', name: 'AI 课前准备', static: true, selector: '#step-1-title' },
-  { path: '/ai-agent/class/', name: 'AI 课堂跟做', static: true, selector: '#setup-title' },
+  { path: '/ai-agent/', name: 'AI 课前准备 (Claude)', static: true, selector: '#langToggle' },
+  { path: '/ai-agent-codex/', name: 'AI 课前准备 (Codex)', static: true, selector: '#step-1-title' },
+  { path: '/ai-agent-codex/class/', name: 'AI 课堂跟做 (Codex)', static: true, selector: '#setup-title' },
   { path: '/login', name: '登录' },
   { path: '/register', name: '注册' },
   { path: '/invite', name: '邀请' },

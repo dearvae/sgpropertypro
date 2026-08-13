@@ -21,7 +21,7 @@ function assert(condition, message) {
 async function waitForServer(maxAttempts = 40) {
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     try {
-      const response = await fetch(`${BASE_URL}/ai-agent/`, { method: 'HEAD' })
+      const response = await fetch(`${BASE_URL}/ai-agent-codex/`, { method: 'HEAD' })
       if (response.ok) return true
     } catch (_) {}
     await new Promise((resolvePromise) => setTimeout(resolvePromise, 250))
@@ -72,11 +72,11 @@ async function run() {
       page.on('pageerror', (error) => pageErrors.push(error.message))
       page.on('console', (message) => { if (message.type() === 'error') pageErrors.push(message.text()) })
 
-      let response = await page.goto(`${BASE_URL}/ai-agent/`, { waitUntil: 'networkidle' })
+      let response = await page.goto(`${BASE_URL}/ai-agent-codex/`, { waitUntil: 'networkidle' })
       assert(response?.status() === 200, 'Pre-class page did not return HTTP 200')
       assert(await page.locator('#step-1-title').isVisible(), 'Pre-class main content is not visible')
       assert(await page.locator('input[type="password"]').count() === 0, 'Pre-class page asks for a password')
-      assert(await page.locator('a[href="/ai-agent/class/"]').count() >= 1, 'Pre-class page does not link to class page')
+      assert(await page.locator('a[href="/ai-agent-codex/class/"]').count() >= 1, 'Pre-class page does not link to class page')
 
       await page.locator('[data-set-os="win"]').click()
       assert(await page.locator('.win-only').isVisible(), 'Windows guidance did not appear')
@@ -93,7 +93,7 @@ async function run() {
       assert(await page.locator('.mac-only').isVisible(), 'Mac guidance did not appear')
       await page.screenshot({ path: join(EVIDENCE_DIR, 'preclass-desktop-mac-zh.png'), fullPage: true })
 
-      response = await page.goto(`${BASE_URL}/ai-agent/class/`, { waitUntil: 'networkidle' })
+      response = await page.goto(`${BASE_URL}/ai-agent-codex/class/`, { waitUntil: 'networkidle' })
       assert(response?.status() === 200, 'Class page did not return HTTP 200')
       assert(await page.locator('#setup-title').isVisible(), 'Class setup content is not visible')
       assert(await page.locator('input[type="password"]').count() === 0, 'Class page asks for a password')
@@ -142,20 +142,20 @@ async function run() {
 
       const heroContext = await browser.newContext({ viewport: { width: 1440, height: 1000 }, locale: 'en-US' })
       const heroPage = await heroContext.newPage()
-      await heroPage.goto(`${BASE_URL}/ai-agent/class/`, { waitUntil: 'networkidle' })
+      await heroPage.goto(`${BASE_URL}/ai-agent-codex/class/`, { waitUntil: 'networkidle' })
       await heroPage.locator('[data-set-lang="en"]').click()
       await heroPage.screenshot({ path: join(EVIDENCE_DIR, 'class-desktop-hero-en.png') })
       await heroContext.close()
 
       const mobile = await browser.newContext({ viewport: { width: 390, height: 844 }, locale: 'zh-CN' })
       const mobilePage = await mobile.newPage()
-      await mobilePage.goto(`${BASE_URL}/ai-agent/class/`, { waitUntil: 'networkidle' })
+      await mobilePage.goto(`${BASE_URL}/ai-agent-codex/class/`, { waitUntil: 'networkidle' })
       const classOverflow = await mobilePage.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
       assert(classOverflow <= 1, `Class page has ${classOverflow}px horizontal overflow at 390px`)
       assert(await mobilePage.locator('#setup-title').isVisible(), 'Mobile class setup is not visible')
       await mobilePage.screenshot({ path: join(EVIDENCE_DIR, 'class-mobile-hero-zh.png') })
       await mobilePage.screenshot({ path: join(EVIDENCE_DIR, 'class-mobile-zh.png'), fullPage: true })
-      await mobilePage.goto(`${BASE_URL}/ai-agent/`, { waitUntil: 'networkidle' })
+      await mobilePage.goto(`${BASE_URL}/ai-agent-codex/`, { waitUntil: 'networkidle' })
       const preclassOverflow = await mobilePage.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
       assert(preclassOverflow <= 1, `Pre-class page has ${preclassOverflow}px horizontal overflow at 390px`)
       await mobilePage.locator('[data-set-lang="en"]').click()

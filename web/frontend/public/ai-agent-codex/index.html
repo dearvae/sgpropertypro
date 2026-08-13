@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <meta name="description" content="Bilingual Mac and Windows preparation guide for the AgentOS SG practical class.">
+  <title>课前准备 · Pre-class Preparation</title>
+  <style>
+    :root {
+      --paper: #faf6ee;
+      --margin: #f3ecdd;
+      --ink: #1a1a1a;
+      --note: #55504a;
+      --orange: #e8890c;
+      --orange-dark: #b85e00;
+      --gold: #b8963e;
+      --green: #287b3b;
+      --line: #e6ddc9;
+      --white: #fff;
+      --warning: #fff6e8;
+      --focus: #1859b7;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+      font-size: 17px;
+      line-height: 1.78;
+      -webkit-font-smoothing: antialiased;
+    }
+    button, input { font: inherit; }
+    a { color: var(--orange-dark); text-underline-offset: .18em; text-decoration-thickness: 2px; }
+    a:hover { color: var(--ink); }
+    :focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+    [hidden] { display: none !important; }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      border-bottom: 1px solid var(--line);
+      background: rgba(250, 246, 238, .97);
+      box-shadow: 0 4px 14px rgba(0, 0, 0, .08);
+    }
+    .topbar-inner {
+      width: min(980px, calc(100% - 28px));
+      min-height: 70px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+    }
+    .brand { color: var(--ink); text-decoration: none; font-weight: 850; }
+    .top-actions { display: flex; align-items: center; gap: 10px; }
+    .class-link { white-space: nowrap; font-size: 14px; font-weight: 800; }
+    .toggle {
+      display: inline-flex;
+      gap: 4px;
+      padding: 4px;
+      border-radius: 999px;
+      background: #e9e1cf;
+    }
+    .toggle button {
+      min-width: 52px;
+      min-height: 40px;
+      padding: 6px 13px;
+      border: 0;
+      border-radius: 999px;
+      background: transparent;
+      color: var(--note);
+      font-size: 14px;
+      font-weight: 850;
+      cursor: pointer;
+    }
+    .toggle button[aria-pressed="true"] { background: var(--ink); color: var(--white); }
+
+    .shell { width: min(760px, calc(100% - 36px)); margin: 0 auto; padding: 64px 0 100px; }
+    .hero { text-align: center; }
+    h1 { margin: 0; font-size: clamp(2.35rem, 7.4vw, 4.5rem); line-height: 1.03; letter-spacing: -.035em; text-wrap: balance; }
+    .hero > p { max-width: 62ch; margin: 20px auto 0; color: var(--note); font-size: clamp(1.02rem, 2.3vw, 1.2rem); }
+    .time-box {
+      width: fit-content;
+      margin: 28px auto 0;
+      padding: 11px 18px;
+      border-radius: 999px;
+      background: var(--ink);
+      color: var(--white);
+      font-weight: 800;
+      font-size: 15px;
+    }
+
+    .os-row { display: flex; justify-content: center; margin: 34px 0 0; }
+    .overview { list-style: none; display: grid; grid-template-columns: repeat(4, 1fr); gap: 9px; margin: 42px 0 0; padding: 0; }
+    .overview li { min-height: 96px; padding: 15px; border: 1px solid var(--line); border-radius: 14px; background: var(--white); }
+    .overview strong { display: block; margin-bottom: 7px; color: var(--orange-dark); font-size: 14px; }
+    .overview span { display: block; font-weight: 800; line-height: 1.25; }
+
+    .step { scroll-margin-top: 92px; margin-top: 54px; }
+    .step-title { display: flex; align-items: center; gap: 14px; margin-bottom: 15px; }
+    .step-number {
+      flex: none;
+      width: 46px;
+      height: 46px;
+      display: grid;
+      place-items: center;
+      border-radius: 14px;
+      background: var(--ink);
+      color: var(--white);
+      font-size: 20px;
+      font-weight: 900;
+    }
+    h2 { margin: 0; font-size: clamp(1.45rem, 3.7vw, 2rem); line-height: 1.25; }
+    .card { border: 1px solid var(--line); border-radius: 18px; background: var(--white); padding: clamp(22px, 4vw, 32px); }
+    .card > p:first-child { margin-top: 0; }
+    .card p:last-child { margin-bottom: 0; }
+    .action-list { margin: 0; padding-left: 1.25em; }
+    .action-list li { margin: 10px 0; }
+    .success { margin-top: 18px; padding: 15px 17px; border-radius: 13px; background: #edf8ef; color: #1d6c2f; font-weight: 800; }
+    .note { color: var(--note); font-size: 15px; }
+
+    .prompt { margin-top: 20px; overflow: hidden; border: 1.5px dashed var(--gold); border-radius: 14px; background: #fdf9f0; }
+    .prompt pre { margin: 0; padding: 22px; white-space: pre-wrap; overflow-wrap: anywhere; font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; font-size: 14px; line-height: 1.65; }
+    .prompt-actions { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 11px; border-top: 1px solid var(--line); background: var(--white); }
+    .prompt-actions small { color: var(--note); }
+    .copy-button {
+      min-height: 44px;
+      padding: 8px 20px;
+      border: 0;
+      border-radius: 999px;
+      background: var(--orange-dark);
+      color: var(--white);
+      font-weight: 850;
+      cursor: pointer;
+    }
+    .copy-button:hover { background: #8e4700; }
+    .copy-button.copied { background: var(--green); }
+    .optional { background: var(--warning); border-color: #edd7ad; }
+    .privacy { margin-top: 58px; padding: 28px; border-radius: 18px; background: var(--ink); color: var(--white); }
+    .privacy h2 { margin-bottom: 10px; }
+    .privacy ul { margin: 0; padding-left: 1.2em; }
+    .privacy li { margin: 8px 0; }
+    .cta { margin-top: 28px; text-align: center; }
+    .cta a { display: inline-flex; align-items: center; justify-content: center; min-height: 52px; padding: 11px 24px; border-radius: 999px; background: var(--orange-dark); color: var(--white); font-weight: 900; text-decoration: none; }
+    .cta a:hover { background: #8e4700; color: var(--white); }
+    .status { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 40; max-width: calc(100% - 28px); padding: 10px 18px; border-radius: 999px; background: var(--ink); color: var(--white); font-weight: 750; box-shadow: 0 8px 24px rgba(49, 37, 18, .14); }
+
+    @media (max-width: 680px) {
+      body { font-size: 16px; }
+      .class-link { display: none; }
+      .shell { width: min(100% - 24px, 760px); padding-top: 46px; }
+      .overview { grid-template-columns: 1fr 1fr; }
+      .overview li { min-height: 86px; }
+      .prompt pre { padding: 18px; font-size: 13px; }
+      .prompt-actions { align-items: stretch; flex-direction: column; }
+      .copy-button { width: 100%; }
+    }
+    @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="#top"><span class="i18n" data-lang="zh">课前准备</span><span class="i18n" data-lang="en" hidden>Pre-class preparation</span></a>
+      <div class="top-actions">
+        <a class="class-link" href="/ai-agent-codex/class/"><span class="i18n" data-lang="zh">打开课堂跟做页</span><span class="i18n" data-lang="en" hidden>Open class guide</span></a>
+        <div class="toggle" role="group" aria-label="Language">
+          <button type="button" data-set-lang="zh" aria-pressed="true">中文</button>
+          <button type="button" data-set-lang="en" aria-pressed="false">EN</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main id="top" class="shell">
+    <section class="hero" aria-labelledby="page-title">
+      <h1 id="page-title"><span class="i18n" data-lang="zh">上课前，<br>先把电脑准备好</span><span class="i18n" data-lang="en" hidden>Prepare your computer<br>before class</span></h1>
+      <p><span class="i18n" data-lang="zh">不需要懂程序。选好 Mac 或 Windows，然后从上往下照做。最好提前两天完成，给下载和安装留时间。</span><span class="i18n" data-lang="en" hidden>No programming knowledge is needed. Choose Mac or Windows, then work from top to bottom. Do this two days early so downloads have time to finish.</span></p>
+      <div class="time-box"><span class="i18n" data-lang="zh">大约 30–45 分钟 · MiniMax 不是必修</span><span class="i18n" data-lang="en" hidden>About 30–45 minutes · MiniMax is optional</span></div>
+      <div class="os-row">
+        <div class="toggle" role="group" aria-label="Computer type">
+          <button type="button" data-set-os="mac" aria-pressed="true">Mac</button>
+          <button type="button" data-set-os="win" aria-pressed="false">Windows</button>
+        </div>
+      </div>
+    </section>
+
+    <ol class="overview" aria-label="Preparation overview">
+      <li><strong>1</strong><span><span class="i18n" data-lang="zh">安装 ChatGPT 桌面版并打开 Codex</span><span class="i18n" data-lang="en" hidden>Install ChatGPT desktop and open Codex</span></span></li>
+      <li><strong>2</strong><span><span class="i18n" data-lang="zh">检查电脑工具</span><span class="i18n" data-lang="en" hidden>Check computer tools</span></span></li>
+      <li><strong>3</strong><span><span class="i18n" data-lang="zh">安装 3 个 Skill</span><span class="i18n" data-lang="en" hidden>Install the 3 Skills</span></span></li>
+      <li><strong>4</strong><span><span class="i18n" data-lang="zh">跑虚构首次检查</span><span class="i18n" data-lang="en" hidden>Run synthetic first-use checks</span></span></li>
+    </ol>
+
+    <section class="step" aria-labelledby="step-1-title">
+      <div class="step-title"><div class="step-number">1</div><h2 id="step-1-title"><span class="i18n" data-lang="zh">安装桌面应用，选择 Codex</span><span class="i18n" data-lang="en" hidden>Install the desktop app and choose Codex</span></h2></div>
+      <div class="card">
+        <ol class="action-list">
+          <li><span class="i18n" data-lang="zh">用电脑打开 <a href="https://chatgpt.com/download/" target="_blank" rel="noreferrer">chatgpt.com/download</a>，下载 ChatGPT 桌面应用。</span><span class="i18n" data-lang="en" hidden>On your computer, open <a href="https://chatgpt.com/download/" target="_blank" rel="noreferrer">chatgpt.com/download</a> and download the ChatGPT desktop app.</span></li>
+          <li><span class="i18n" data-lang="zh">安装、登录你自己的 ChatGPT 账号，然后在左上角选择 <strong>Codex</strong>。可用性依你的账号和工作区设置而定。</span><span class="i18n" data-lang="en" hidden>Install it, sign in to your own ChatGPT account, then choose <strong>Codex</strong> from the top-left menu. Availability depends on your account and workspace.</span></li>
+          <li><span class="i18n" data-lang="zh">新建一个 Codex 聊天，发送「请回复一句你已准备好帮我做课前设置」。</span><span class="i18n" data-lang="en" hidden>Start a Codex chat and send: “Reply with one sentence saying you are ready to help me with pre-class setup.”</span></li>
+        </ol>
+        <div class="success"><span class="i18n" data-lang="zh">成功信号：Codex 回复了你。</span><span class="i18n" data-lang="en" hidden>Success signal: Codex replies.</span></div>
+      </div>
+    </section>
+
+    <section class="step" aria-labelledby="step-2-title">
+      <div class="step-title"><div class="step-number">2</div><h2 id="step-2-title"><span class="i18n" data-lang="zh">让 Codex 检查并安装本地工具</span><span class="i18n" data-lang="en" hidden>Let Codex check and install local tools</span></h2></div>
+      <div class="card">
+        <p><span class="i18n" data-lang="zh">Codex 可能会请求运行安装命令。先看清是否只在安装下面列出的工具，然后再允许。</span><span class="i18n" data-lang="en" hidden>Codex may ask to run installation commands. Confirm they only install the tools listed below before allowing them.</span></p>
+        <div class="prompt os mac-only">
+          <pre id="tools-mac"><span class="i18n" data-lang="zh">请为这台 Mac 准备课程环境。检查 Git、Node.js LTS、npm、npx、Python 3、FFmpeg、FFprobe 和 LibreOffice。只在缺少时用 Homebrew 或官方安装方式补齐。我不熟悉电脑，请用大白话解释每个权限请求。不要打印环境变量、密钥或私人文件。安装后验证 git --version、node --version、npm --version、npx --version、python3 --version、ffmpeg -version、ffprobe -version，并确认 LibreOffice 可打开。最后只列出 ready 或 missing 的项目。</span><span class="i18n" data-lang="en" hidden>Prepare this Mac for class. Check Git, Node.js LTS, npm, npx, Python 3, FFmpeg, FFprobe, and LibreOffice. Use Homebrew or an official installer only for missing items. I am not technical, so explain each permission request in plain language. Do not print environment variables, keys, or private files. Verify git --version, node --version, npm --version, npx --version, python3 --version, ffmpeg -version, and ffprobe -version, and confirm LibreOffice opens. Finish with only a ready-or-missing list.</span></pre>
+          <div class="prompt-actions"><small>Mac</small><button class="copy-button" type="button" data-copy="tools-mac"><span class="i18n" data-lang="zh">复制 Mac 检查</span><span class="i18n" data-lang="en" hidden>Copy Mac check</span></button></div>
+        </div>
+        <div class="prompt os win-only" hidden>
+          <pre id="tools-win"><span class="i18n" data-lang="zh">请为这台 Windows 电脑准备课程环境。检查 Git、Node.js LTS、npm、npx、Python 3、FFmpeg、FFprobe 和 LibreOffice。只在缺少时用 winget 或官方安装程序补齐，必要时帮我正确设置 PATH，并告诉我何时要重新打开 Codex。我不熟悉电脑，请用大白话解释每个权限请求。不要打印环境变量、密钥或私人文件。安装后验证 git --version、node --version、npm --version、npx --version、python --version 或 py --version、ffmpeg -version、ffprobe -version，并确认 LibreOffice 可打开。最后只列出 ready 或 missing 的项目。</span><span class="i18n" data-lang="en" hidden>Prepare this Windows computer for class. Check Git, Node.js LTS, npm, npx, Python 3, FFmpeg, FFprobe, and LibreOffice. Use winget or an official installer only for missing items, fix PATH when needed, and tell me when to reopen Codex. I am not technical, so explain each permission request in plain language. Do not print environment variables, keys, or private files. Verify git --version, node --version, npm --version, npx --version, python --version or py --version, ffmpeg -version, and ffprobe -version, and confirm LibreOffice opens. Finish with only a ready-or-missing list.</span></pre>
+          <div class="prompt-actions"><small>Windows</small><button class="copy-button" type="button" data-copy="tools-win"><span class="i18n" data-lang="zh">复制 Windows 检查</span><span class="i18n" data-lang="en" hidden>Copy Windows check</span></button></div>
+        </div>
+        <div class="success"><span class="i18n" data-lang="zh">成功信号：上面的工具都显示 ready，或 Codex 清楚说明只缺哪一项。</span><span class="i18n" data-lang="en" hidden>Success signal: every tool says ready, or Codex clearly names the one missing item.</span></div>
+      </div>
+    </section>
+
+    <section class="step" aria-labelledby="step-3-title">
+      <div class="step-title"><div class="step-number">3</div><h2 id="step-3-title"><span class="i18n" data-lang="zh">安装课程的 3 个 Skill</span><span class="i18n" data-lang="en" hidden>Install the 3 course Skills</span></h2></div>
+      <div class="card">
+        <p><span class="i18n" data-lang="zh">把这条命令给 Codex，让它在终端里运行。仓库只包含脱敏的三个 Skill 和虚构/获授权素材，不含公司正式表格。</span><span class="i18n" data-lang="en" hidden>Give this command to Codex and let it run in the terminal. The repository contains only the three sanitised Skills and fictional or authorised assets, with no company formal forms.</span></p>
+        <div class="prompt"><pre id="install-command">npx skills add dearvae/agentos-sg-course-skills --skill propnex-forms --skill agent-shot --skill pg-cobroke -g -a codex -y</pre><div class="prompt-actions"><small><a href="https://github.com/dearvae/agentos-sg-course-skills" target="_blank" rel="noreferrer">dearvae/agentos-sg-course-skills</a></small><button class="copy-button" type="button" data-copy="install-command"><span class="i18n" data-lang="zh">复制安装命令</span><span class="i18n" data-lang="en" hidden>Copy install command</span></button></div></div>
+        <div class="success"><span class="i18n" data-lang="zh">成功信号：安装结果只列出 propnex-forms、agent-shot 和 pg-cobroke。</span><span class="i18n" data-lang="en" hidden>Success signal: the result lists only propnex-forms, agent-shot, and pg-cobroke.</span></div>
+      </div>
+    </section>
+
+    <section class="step" aria-labelledby="step-4-title">
+      <div class="step-title"><div class="step-number">4</div><h2 id="step-4-title"><span class="i18n" data-lang="zh">跑一次安全的首次检查</span><span class="i18n" data-lang="en" hidden>Run one safe first-use check</span></h2></div>
+      <div class="card">
+        <p><span class="i18n" data-lang="zh">这个检查只用包内虚构资料，不需要你的客户文件、声音、照片、登录或 API key。</span><span class="i18n" data-lang="en" hidden>This check uses only bundled fictional data. It does not need client files, your voice, portrait, login, or API key.</span></p>
+        <div class="prompt"><pre id="first-use-prompt">Run the first-use checks for propnex-forms, agent-shot, and pg-cobroke. Use Training mode and only bundled fictional data. Do not log in, send, upload identity media, call a paid API, or use a cloned voice.</pre><div class="prompt-actions"><small>Training mode only</small><button class="copy-button" type="button" data-copy="first-use-prompt"><span class="i18n" data-lang="zh">复制首次检查</span><span class="i18n" data-lang="en" hidden>Copy first-use check</span></button></div></div>
+        <p class="note"><span class="i18n" data-lang="zh">如果 agent-shot 说缺少本地视频依赖，这不影响上课：课上可以先用包内 Golden Sample，再在课后完成本机渲染。</span><span class="i18n" data-lang="en" hidden>If agent-shot reports a missing local video dependency, class can still proceed with the bundled Golden Sample; finish local rendering after class.</span></p>
+        <div class="success"><span class="i18n" data-lang="zh">成功信号：三个 Skill 都回报 Training mode 边界，没有请求真实资料。</span><span class="i18n" data-lang="en" hidden>Success signal: all three Skills report Training-mode boundaries and request no real data.</span></div>
+      </div>
+    </section>
+
+    <section class="step" aria-labelledby="optional-title">
+      <div class="step-title"><div class="step-number" style="background: var(--gold)">+</div><h2 id="optional-title"><span class="i18n" data-lang="zh">可选：MiniMax 以后再设置</span><span class="i18n" data-lang="en" hidden>Optional: set up MiniMax later</span></h2></div>
+      <div class="card optional">
+        <p><span class="i18n" data-lang="zh"><strong>课堂必修路线不需要 MiniMax。</strong> agent-shot 默认使用标准声音。如果你以后想用自己的声音，再使用自己的 MiniMax 账号、密钥和 voice ID。</span><span class="i18n" data-lang="en" hidden><strong>The required class path does not need MiniMax.</strong> agent-shot uses a standard voice by default. If you later want your own voice, use your own MiniMax account, key, and voice ID.</span></p>
+        <ul class="action-list"><li><span class="i18n" data-lang="zh">费用由你自己的套餐或用量决定。</span><span class="i18n" data-lang="en" hidden>Charges depend on your own plan or usage.</span></li><li><span class="i18n" data-lang="zh">密钥不发给老师，不贴在聊天里，不放进 Skill 文件夹或 GitHub。</span><span class="i18n" data-lang="en" hidden>Never send the key to the instructor, paste it into chat, or place it in the Skill folder or GitHub.</span></li><li><span class="i18n" data-lang="zh">克隆或上传声音前，Codex 必须先说明会上传什么并得到你确认。</span><span class="i18n" data-lang="en" hidden>Before voice cloning or upload, Codex must explain what leaves the computer and obtain your confirmation.</span></li></ul>
+      </div>
+    </section>
+
+    <section class="privacy" aria-labelledby="privacy-title">
+      <h2 id="privacy-title"><span class="i18n" data-lang="zh">课前不要给这些资料</span><span class="i18n" data-lang="en" hidden>Do not provide these before class</span></h2>
+      <ul><li><span class="i18n" data-lang="zh">真实客户姓名、电话、NRIC / FIN、银行或签名资料</span><span class="i18n" data-lang="en" hidden>Real client names, phones, NRIC / FIN, bank, or signature data</span></li><li><span class="i18n" data-lang="zh">公司正式表格或未授权素材</span><span class="i18n" data-lang="en" hidden>Company formal forms or unapproved assets</span></li><li><span class="i18n" data-lang="zh">API key、密码、cookie、浏览器 profile</span><span class="i18n" data-lang="en" hidden>API keys, passwords, cookies, or browser profiles</span></li></ul>
+    </section>
+
+    <div class="cta"><a href="/ai-agent-codex/class/"><span class="i18n" data-lang="zh">我准备好了，打开课堂跟做页</span><span class="i18n" data-lang="en" hidden>I'm ready — open the class guide</span></a></div>
+  </main>
+
+  <div id="status" class="status" role="status" aria-live="polite" hidden></div>
+  <script>
+    (function () {
+      var lang = localStorage.getItem('agentos-course-language-v1') || (/^zh/i.test(navigator.language || '') ? 'zh' : 'en');
+      var os = localStorage.getItem('agentos-course-os-v1') || (/Windows/i.test(navigator.userAgent) ? 'win' : 'mac');
+
+      function apply() {
+        document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en';
+        document.querySelectorAll('.i18n').forEach(function (el) { el.hidden = el.dataset.lang !== lang; });
+        document.querySelectorAll('[data-set-lang]').forEach(function (button) { button.setAttribute('aria-pressed', String(button.dataset.setLang === lang)); });
+        document.querySelectorAll('[data-set-os]').forEach(function (button) { button.setAttribute('aria-pressed', String(button.dataset.setOs === os)); });
+        document.querySelectorAll('.os').forEach(function (el) { el.hidden = !(el.classList.contains(os + '-only')); });
+      }
+      function announce(text) { var el = document.getElementById('status'); el.textContent = text; el.hidden = false; window.clearTimeout(announce.timer); announce.timer = window.setTimeout(function () { el.hidden = true; }, 2200); }
+      function fallbackCopy(text) { var area = document.createElement('textarea'); area.value = text; area.setAttribute('readonly', ''); area.style.position = 'fixed'; area.style.opacity = '0'; document.body.appendChild(area); area.select(); var ok = document.execCommand('copy'); document.body.removeChild(area); if (!ok) throw new Error('copy failed'); }
+
+      document.querySelectorAll('[data-set-lang]').forEach(function (button) { button.addEventListener('click', function () { lang = button.dataset.setLang; localStorage.setItem('agentos-course-language-v1', lang); apply(); }); });
+      document.querySelectorAll('[data-set-os]').forEach(function (button) { button.addEventListener('click', function () { os = button.dataset.setOs; localStorage.setItem('agentos-course-os-v1', os); apply(); }); });
+      document.querySelectorAll('[data-copy]').forEach(function (button) { button.addEventListener('click', async function () {
+        var source = document.getElementById(button.dataset.copy);
+        var original = button.textContent.trim();
+        try { var text = source.innerText.trim(); if (navigator.clipboard && window.isSecureContext) await navigator.clipboard.writeText(text); else fallbackCopy(text); button.classList.add('copied'); button.textContent = lang === 'zh' ? '已复制 ✓' : 'Copied ✓'; announce(lang === 'zh' ? '已复制，切换到 Codex 粘贴' : 'Copied. Switch to Codex and paste.'); }
+        catch (_) { button.textContent = lang === 'zh' ? '请手动选取文字' : 'Select the text manually'; announce(lang === 'zh' ? '浏览器没有允许复制' : 'Clipboard permission was blocked'); }
+        window.setTimeout(function () { button.classList.remove('copied'); button.textContent = original; }, 2300);
+      }); });
+      apply();
+    }());
+  </script>
+</body>
+</html>
