@@ -387,19 +387,19 @@
 
       <div class="copyblock mac-only zh">
         <button class="copybtn" data-copy-label="复制">复制</button>
-        <pre>帮我把这台电脑配好做视频的环境：Homebrew（没有就先装）、Node.js LTS、ffmpeg、poppler、whisper-cpp，并把 whisper 模型下载到 ~/.cache/whisper-models/ggml-large-v3-turbo.bin（来源 https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin，约1.6GB）。已有的跳过，缺的装上。我不懂电脑，过程里用大白话告诉我进展。装完逐一验证，全部通过就输出一行「✅ 体检通过」加各项版本号；有装不上的，列出来是哪一项、报什么错。</pre>
+        <pre>帮我把这台电脑配好做视频的环境：Homebrew（没有就先装）、Node.js LTS、ffmpeg、poppler、whisper-cpp，并把 whisper 模型下载到 ~/.cache/whisper-models/ggml-large-v3-turbo.bin（来源 https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin，约1.6GB）。再预先下载好做视频要用的 Remotion：在我的用户目录新建 remotion-setup 文件夹，进去跑 npm install remotion @remotion/cli，能跑通 npx remotion versions 就算好。已有的跳过，缺的装上。我不懂电脑，过程里用大白话告诉我进展。装完逐一验证，全部通过就输出一行「✅ 体检通过」加各项版本号；有装不上的，列出来是哪一项、报什么错。</pre>
       </div>
       <div class="copyblock win-only zh">
         <button class="copybtn" data-copy-label="复制">复制</button>
-        <pre>帮我把这台电脑配好做视频的环境，用 winget 安装：Node.js LTS、Python 3、ffmpeg、LibreOffice。装完确认这几样在命令行里能直接调用，不行就帮我把 PATH 配好。我不懂电脑，过程里用大白话告诉我进展。装完逐一验证，全部通过就输出一行「✅ 体检通过」加各项版本号；有装不上的，列出来是哪一项、报什么错。</pre>
+        <pre>帮我把这台电脑配好做视频的环境，用 winget 安装：Node.js LTS、Python 3、ffmpeg、LibreOffice。装完确认这几样在命令行里能直接调用，不行就帮我把 PATH 配好。再预先下载好做视频要用的 Remotion：在我的用户目录新建 remotion-setup 文件夹，进去跑 npm install remotion @remotion/cli，能跑通 npx remotion versions 就算好。我不懂电脑，过程里用大白话告诉我进展。装完逐一验证，全部通过就输出一行「✅ 体检通过」加各项版本号；有装不上的，列出来是哪一项、报什么错。</pre>
       </div>
       <div class="copyblock mac-only en">
         <button class="copybtn" data-copy-label="Copy">Copy</button>
-        <pre>Please set up this computer for video production: Homebrew (install it first if missing), Node.js LTS, ffmpeg, poppler, whisper-cpp, and download the whisper model to ~/.cache/whisper-models/ggml-large-v3-turbo.bin (from https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin, ~1.6GB). Skip what's already installed. I'm not technical — explain progress in plain language. When done, verify each item and print one line "✅ Health check passed" with version numbers; if anything fails, list which item and the error.</pre>
+        <pre>Please set up this computer for video production: Homebrew (install it first if missing), Node.js LTS, ffmpeg, poppler, whisper-cpp, and download the whisper model to ~/.cache/whisper-models/ggml-large-v3-turbo.bin (from https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin, ~1.6GB). Also pre-download Remotion for video rendering: create a remotion-setup folder in my home directory, run npm install remotion @remotion/cli inside it, and verify npx remotion versions works. Skip what's already installed. I'm not technical — explain progress in plain language. When done, verify each item and print one line "✅ Health check passed" with version numbers; if anything fails, list which item and the error.</pre>
       </div>
       <div class="copyblock win-only en">
         <button class="copybtn" data-copy-label="Copy">Copy</button>
-        <pre>Please set up this computer for video production using winget: Node.js LTS, Python 3, ffmpeg, LibreOffice. Make sure each is callable from the command line — fix PATH if needed (and tell me to reopen the window after). I'm not technical — explain progress in plain language. When done, verify each item and print one line "✅ Health check passed" with version numbers; if anything fails, list which item and the error.</pre>
+        <pre>Please set up this computer for video production using winget: Node.js LTS, Python 3, ffmpeg, LibreOffice. Make sure each is callable from the command line — fix PATH if needed (and tell me to reopen the window after). Also pre-download Remotion for video rendering: create a remotion-setup folder in my home directory, run npm install remotion @remotion/cli inside it, and verify npx remotion versions works. I'm not technical — explain progress in plain language. When done, verify each item and print one line "✅ Health check passed" with version numbers; if anything fails, list which item and the error.</pre>
       </div>
 
       <div class="zh">
@@ -462,7 +462,7 @@
       <p class="en">When it finishes, it checks its own work. This is what you're waiting for:</p>
       <div class="chat">
         <div class="chat-label"><span class="zh">装好之后，它会说类似这样</span><span class="en">When everything's installed, it says something like</span></div>
-        <div class="bubble ai"><span class="okline zh">✅ 体检通过</span><span class="okline en">✅ Health check passed</span><br><span class="small mac-only">node v22 · ffmpeg 7 · whisper OK<span class="zh"> · 模型已就位</span><span class="en"> · model ready</span></span><span class="small win-only">node v22 · Python 3.12 · ffmpeg 7 · LibreOffice OK</span></div>
+        <div class="bubble ai"><span class="okline zh">✅ 体检通过</span><span class="okline en">✅ Health check passed</span><br><span class="small mac-only">node v22 · ffmpeg 7 · whisper OK · Remotion OK<span class="zh"> · 模型已就位</span><span class="en"> · model ready</span></span><span class="small win-only">node v22 · Python 3.12 · ffmpeg 7 · LibreOffice · Remotion OK</span></div>
       </div>
       <p class="zh"><span class="em">看到 ✅ = 装完了，截图发我。</span></p>
       <p class="en"><span class="em">✅ means you're done — screenshot it and send it to me.</span></p>
