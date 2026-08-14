@@ -102,6 +102,36 @@
       font-weight: 800;
       font-size: 15px;
     }
+    .quick-start {
+      max-width: 880px;
+      margin: 26px auto 0;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      text-align: left;
+    }
+    .quick-start div {
+      display: grid;
+      grid-template-columns: 34px 1fr;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 14px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--white);
+      font-size: 14px;
+      font-weight: 750;
+      line-height: 1.35;
+    }
+    .quick-start strong {
+      width: 34px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: var(--orange-dark);
+      color: var(--white);
+    }
 
     .route {
       list-style: none;
@@ -167,7 +197,7 @@
     .progress-copy strong { font-size: 15px; }
     .progress-copy span { margin-top: 3px; color: var(--note); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .progress-track { height: 10px; overflow: hidden; border-radius: 999px; background: #e9e1cf; }
-    .progress-fill { display: block; width: 0; height: 100%; border-radius: inherit; background: var(--green); transition: width 260ms ease; }
+    .progress-fill { display: block; width: 100%; height: 100%; border-radius: inherit; background: var(--green); transform: scaleX(0); transform-origin: left; transition: transform 260ms ease; }
 
     .station { scroll-margin-top: 170px; margin-top: 28px; }
     .station:not(.expanded) {
@@ -300,6 +330,29 @@
     .install-piece { border: 1px solid var(--line); border-radius: 16px; background: var(--white); padding: clamp(22px, 3.4vw, 34px); }
     .install-piece h3 { margin: 0 0 6px; font-size: 1.35rem; }
     .install-piece p { margin: 0; color: var(--note); }
+    .fallback-piece { background: #fdfbf7; }
+    .real-data-option {
+      margin-top: 20px;
+      border: 1px solid #c9b98e;
+      border-radius: 14px;
+      background: var(--white);
+      overflow: hidden;
+    }
+    .real-data-option summary {
+      min-height: 52px;
+      display: flex;
+      align-items: center;
+      padding: 12px 16px;
+      color: var(--orange-dark);
+      font-weight: 850;
+      cursor: pointer;
+    }
+    .real-data-option summary::after { content: "+"; margin-left: auto; padding-left: 16px; font-size: 22px; line-height: 1; }
+    .real-data-option[open] summary::after { content: "−"; }
+    .real-data-option[open] summary { border-bottom: 1px solid var(--line); }
+    .real-data-body { padding: 16px; }
+    .real-data-body > p { margin: 0; color: var(--note); font-size: 15px; }
+    .real-data-body .prompt { margin-top: 14px; }
     .mini-note {
       margin-top: 22px;
       padding: 22px;
@@ -358,6 +411,7 @@
       .shell { width: min(100% - 24px, 1160px); padding-top: 44px; }
       h1 { font-size: clamp(2.15rem, 13vw, 3.7rem); }
       .safety-line { border-radius: 14px; }
+      .quick-start { grid-template-columns: 1fr; }
       .progress-rail { top: 72px; grid-template-columns: 1fr; gap: 8px; padding: 11px 13px; }
       .progress-copy span { font-size: 12px; }
       .route { margin-bottom: 38px; }
@@ -373,6 +427,7 @@
       .check-side { grid-template-columns: 1fr; }
       .panel + .panel { border-left: 0; border-top: 1px solid var(--line); }
       .work-side, .panel { padding: 22px 18px; }
+      .real-data-body { padding: 14px; }
       .prompt pre { padding: 18px; font-size: 13.5px; }
       .prompt-actions { align-items: stretch; flex-direction: column; }
       .copy-button { width: 100%; }
@@ -407,7 +462,7 @@
         <span class="i18n" data-lang="en" hidden>AI Class Follow-Along</span>
       </a>
       <div class="top-actions">
-        <a class="preclass-link" href="/ai-agent-codex/">
+        <a class="preclass-link" href="/ai-agent/">
           <span class="i18n" data-lang="zh">返回课前准备</span>
           <span class="i18n" data-lang="en" hidden>Pre-class preparation</span>
         </a>
@@ -426,12 +481,17 @@
         <span class="i18n" data-lang="en" hidden>One route today:<br>3 Skills, 3 wins</span>
       </h1>
       <p>
-        <span class="i18n" data-lang="zh">老师做一步，你跟一步。每站只看四件事：做什么、复制什么、看到什么算成功、卡住时怎么在 5 分钟内继续。</span>
-        <span class="i18n" data-lang="en" hidden>Follow one instructor action at a time. At every station, you only need four things: what to do, what to copy, what success looks like, and how to continue within five minutes if something is blocked.</span>
+        <span class="i18n" data-lang="zh">不用先学懂技术。每一站只做同一件事：复制橙色按钮里的内容，贴到 Claude Code，看到成功信号后打勾。</span>
+        <span class="i18n" data-lang="en" hidden>You do not need to understand the technology first. At every station: copy from the orange button, paste into Claude Code, then tick the station when you see the success signal.</span>
       </p>
+      <div class="quick-start" aria-label="Three actions at every station">
+        <div><strong>1</strong><span class="i18n" data-lang="zh">点橙色“复制”</span><span class="i18n" data-lang="en" hidden>Tap the orange Copy button</span></div>
+        <div><strong>2</strong><span class="i18n" data-lang="zh">切回 Claude Code，粘贴并发送</span><span class="i18n" data-lang="en" hidden>Return to Claude Code, paste, and send</span></div>
+        <div><strong>3</strong><span class="i18n" data-lang="zh">对照成功信号，再打勾</span><span class="i18n" data-lang="en" hidden>Compare the success signal, then tick</span></div>
+      </div>
       <div class="safety-line">
-        <span class="i18n" data-lang="zh">全程只用虚构训练资料 · 不登录 · 不发送 · 不传真实身份素材</span>
-        <span class="i18n" data-lang="en" hidden>Fictional training data only · no login · no send · no real identity upload</span>
+        <span class="i18n" data-lang="zh">建议先用练习资料走通 · 也可以让 Claude Code 读取你有权使用的真实资料</span>
+        <span class="i18n" data-lang="en" hidden>Start with practice data · or let Claude Code read authorised real files</span>
       </div>
     </section>
 
@@ -442,45 +502,45 @@
 
     <nav aria-label="Class route">
       <ol class="route">
-        <li data-route="setup" class="active"><a href="#setup"><span class="route-head"><span class="route-number">1</span><svg class="route-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5-5L12 3.6 9.6 6 7.3 3.7a4 4 0 0 0 5 5L4 17l3 3 8.3-8.3a4 4 0 0 0 5-5L18 9l-2.4-2.4 2.3-2.3Z" fill="none" stroke-width="1.8" stroke-linejoin="round"/></svg></span><span class="route-name"><span class="i18n" data-lang="zh">装好</span><span class="i18n" data-lang="en" hidden>Setup</span></span><span class="route-state" data-route-state="setup"></span></a></li>
+        <li data-route="setup" class="active"><a href="#setup"><span class="route-head"><span class="route-number">1</span><svg class="route-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5-5L12 3.6 9.6 6 7.3 3.7a4 4 0 0 0 5 5L4 17l3 3 8.3-8.3a4 4 0 0 0 5-5L18 9l-2.4-2.4 2.3-2.3Z" fill="none" stroke-width="1.8" stroke-linejoin="round"/></svg></span><span class="route-name"><span class="i18n" data-lang="zh">准备工具</span><span class="i18n" data-lang="en" hidden>Get ready</span></span><span class="route-state" data-route-state="setup"></span></a></li>
         <li data-route="forms"><a href="#forms"><span class="route-head"><span class="route-number">2</span><svg class="route-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h8l4 4v16H6Z" fill="none" stroke-width="1.8" stroke-linejoin="round"/><path d="M14 2v5h5M9 12h6M9 16h6" fill="none" stroke-width="1.8" stroke-linecap="round"/></svg></span><span class="route-name"><span class="i18n" data-lang="zh">文件<br>LOI → TA</span><span class="i18n" data-lang="en" hidden>Documents<br>LOI → TA</span></span><span class="route-state" data-route-state="forms"></span></a></li>
-        <li data-route="video"><a href="#video"><span class="route-head"><span class="route-number">3</span><svg class="route-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" fill="none" stroke-width="1.8"/><path d="m10 9 5 3-5 3Z" fill="none" stroke-width="1.8" stroke-linejoin="round"/></svg></span><span class="route-name"><span class="i18n" data-lang="zh">视频</span><span class="i18n" data-lang="en" hidden>Video</span></span><span class="route-state" data-route-state="video"></span></a></li>
-        <li data-route="cobroke"><a href="#cobroke"><span class="route-head"><span class="route-number">4</span><svg class="route-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 15.5 6 18a3.5 3.5 0 0 1-5-5l4-4a3.5 3.5 0 0 1 5 0M15.5 8.5 18 6a3.5 3.5 0 0 1 5 5l-4 4a3.5 3.5 0 0 1-5 0M8 16l8-8" fill="none" stroke-width="1.8" stroke-linecap="round"/></svg></span><span class="route-name">Co-broke</span><span class="route-state" data-route-state="cobroke"></span></a></li>
+        <li data-route="video"><a href="#video"><span class="route-head"><span class="route-number">3</span><svg class="route-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" fill="none" stroke-width="1.8"/><path d="m10 9 5 3-5 3Z" fill="none" stroke-width="1.8" stroke-linejoin="round"/></svg></span><span class="route-name"><span class="i18n" data-lang="zh">房源视频</span><span class="i18n" data-lang="en" hidden>Listing video</span></span><span class="route-state" data-route-state="video"></span></a></li>
+        <li data-route="cobroke"><a href="#cobroke"><span class="route-head"><span class="route-number">4</span><svg class="route-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 15.5 6 18a3.5 3.5 0 0 1-5-5l4-4a3.5 3.5 0 0 1 5 0M15.5 8.5 18 6a3.5 3.5 0 0 1 5 5l-4 4a3.5 3.5 0 0 1-5 0M8 16l8-8" fill="none" stroke-width="1.8" stroke-linecap="round"/></svg></span><span class="route-name"><span class="i18n" data-lang="zh">找盘草稿</span><span class="i18n" data-lang="en" hidden>Co-broke draft</span></span><span class="route-state" data-route-state="cobroke"></span></a></li>
         <li data-route="finish"><a href="#finish"><span class="route-head"><span class="route-number">5</span><svg class="route-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke-width="1.8"/><path d="m8 12 2.7 2.7L16.5 9" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="route-name"><span class="i18n" data-lang="zh">完成</span><span class="i18n" data-lang="en" hidden>Finish</span></span><span class="route-state" data-route-state="finish"></span></a></li>
       </ol>
     </nav>
 
     <section id="setup" class="station expanded" aria-labelledby="setup-title">
       <div class="station-heading">
-        <h2 id="setup-title"><span class="i18n" data-lang="zh">先让 Codex 找到这 3 个 Skill</span><span class="i18n" data-lang="en" hidden>First, let Codex find the 3 Skills</span></h2>
+        <h2 id="setup-title"><span class="i18n" data-lang="zh">先让 Claude Code 找到这 3 个 Skill</span><span class="i18n" data-lang="en" hidden>First, let Claude Code find the 3 Skills</span></h2>
         <span class="station-time"><span class="i18n" data-lang="zh">10–15 分钟</span><span class="i18n" data-lang="en" hidden>10–15 min</span></span>
       </div>
       <div class="install-stack">
         <article class="install-piece">
-          <h3><span class="i18n" data-lang="zh">A. 直接对 Codex 说</span><span class="i18n" data-lang="en" hidden>A. Ask Codex first</span></h3>
-          <p><span class="i18n" data-lang="zh">这是最简单的方法。Codex 如果知道怎么安装，它会自己完成。</span><span class="i18n" data-lang="en" hidden>This is the easiest path. If Codex can install the repository directly, it will complete the setup.</span></p>
+          <h3><span class="i18n" data-lang="zh">第一步：复制给 Claude Code</span><span class="i18n" data-lang="en" hidden>Step 1: copy this into Claude Code</span></h3>
+          <p><span class="i18n" data-lang="zh">点击橙色按钮，切回 Claude Code，粘贴后按 Enter。</span><span class="i18n" data-lang="en" hidden>Tap the orange button, return to Claude Code, paste, and press Enter.</span></p>
           <div class="prompt i18n" data-lang="zh">
-            <pre id="setup-natural-zh">请从公开 GitHub 仓库 dearvae/agentos-sg-course-skills 安装 propnex-forms、agent-shot 和 pg-cobroke 这三个 Skill 给 Codex 全局使用。安装完后告诉我它们被安装在哪里，但不要输出任何密钥或隐私资料。</pre>
-            <div class="prompt-actions"><span class="prompt-note">先复制这句</span><button class="copy-button" type="button" data-copy="setup-natural-zh" data-label="复制给 Codex">复制给 Codex</button></div>
+            <pre id="setup-natural-zh">请从公开 GitHub 仓库 dearvae/agentos-sg-course-skills 安装 propnex-forms、agent-shot 和 pg-cobroke 这三个 Skill，给 Claude Code 全局使用。安装时只选择 claude-code。安装完后告诉我它们被安装在哪里，但不要输出任何密钥或隐私资料。</pre>
+            <div class="prompt-actions"><span class="prompt-note">先复制这句</span><button class="copy-button" type="button" data-copy="setup-natural-zh" data-label="复制给 Claude Code">复制给 Claude Code</button></div>
           </div>
           <div class="prompt i18n" data-lang="en" hidden>
-            <pre id="setup-natural-en">Install the three Skills propnex-forms, agent-shot, and pg-cobroke globally for Codex from the public GitHub repository dearvae/agentos-sg-course-skills. When finished, tell me where they were installed, but do not print any keys or private information.</pre>
-            <div class="prompt-actions"><span class="prompt-note">Try this first</span><button class="copy-button" type="button" data-copy="setup-natural-en" data-label="Copy for Codex">Copy for Codex</button></div>
+            <pre id="setup-natural-en">Install the three Skills propnex-forms, agent-shot, and pg-cobroke globally for Claude Code from the public GitHub repository dearvae/agentos-sg-course-skills. Select only the claude-code agent. When finished, tell me where they were installed, but do not print any keys or private information.</pre>
+            <div class="prompt-actions"><span class="prompt-note">Try this first</span><button class="copy-button" type="button" data-copy="setup-natural-en" data-label="Copy for Claude Code">Copy for Claude Code</button></div>
           </div>
         </article>
 
-        <article class="install-piece">
-          <h3><span class="i18n" data-lang="zh">B. 如果 Codex 说不知道，复制这条命令</span><span class="i18n" data-lang="en" hidden>B. If Codex is unsure, copy this exact command</span></h3>
-          <p><span class="i18n" data-lang="zh">这条命令只会安装课程用的三个 Skill。</span><span class="i18n" data-lang="en" hidden>This command installs only the three course Skills.</span></p>
+        <article class="install-piece fallback-piece">
+          <h3><span class="i18n" data-lang="zh">只有安装失败才看这里</span><span class="i18n" data-lang="en" hidden>Only use this if installation fails</span></h3>
+          <p><span class="i18n" data-lang="zh">如果 Claude Code 说找不到安装方法，把下面这条命令贴给它。成功了就跳过这里。</span><span class="i18n" data-lang="en" hidden>If Claude Code cannot find the install method, paste this command into the same session. Skip this when Step 1 succeeds.</span></p>
           <div class="prompt">
-            <pre id="install-command">npx skills add dearvae/agentos-sg-course-skills --skill propnex-forms --skill agent-shot --skill pg-cobroke -g -a codex -y</pre>
+            <pre id="install-command">npx skills add dearvae/agentos-sg-course-skills --skill propnex-forms --skill agent-shot --skill pg-cobroke -g -a claude-code -y</pre>
             <div class="prompt-actions"><span class="prompt-note"><a href="https://github.com/dearvae/agentos-sg-course-skills" target="_blank" rel="noreferrer">GitHub repository</a></span><button class="copy-button" type="button" data-copy="install-command"><span class="i18n" data-lang="zh">复制安装命令</span><span class="i18n" data-lang="en" hidden>Copy install command</span></button></div>
           </div>
         </article>
 
         <article class="install-piece">
-          <h3><span class="i18n" data-lang="zh">C. 只做虚构首次检查</span><span class="i18n" data-lang="en" hidden>C. Run synthetic first-use checks only</span></h3>
-          <p><span class="i18n" data-lang="zh">如果某一项缺少软件，Codex 应该说清楚缺什么，而不是动用真实资料。</span><span class="i18n" data-lang="en" hidden>If a dependency is missing, Codex should name it without touching real data.</span></p>
+          <h3><span class="i18n" data-lang="zh">第二步：确认 3 个工具都能用</span><span class="i18n" data-lang="en" hidden>Step 2: check that all 3 tools work</span></h3>
+          <p><span class="i18n" data-lang="zh">第一次先用包内练习资料检查，走通后每个工作站都可以换成你自己的资料。</span><span class="i18n" data-lang="en" hidden>Use the bundled practice data for the first check. After it passes, each station lets you switch to your own files.</span></p>
           <div class="prompt">
             <pre id="first-use-prompt">Run the first-use checks for propnex-forms, agent-shot, and pg-cobroke. Use Training mode and only bundled fictional data. Do not log in, send, upload identity media, call a paid API, or use a cloned voice.</pre>
             <div class="prompt-actions"><span class="prompt-note">Training mode only</span><button class="copy-button" type="button" data-copy="first-use-prompt"><span class="i18n" data-lang="zh">复制首次检查</span><span class="i18n" data-lang="en" hidden>Copy first-use check</span></button></div>
@@ -488,7 +548,7 @@
         </article>
       </div>
       <div class="complete-row">
-        <p><span class="i18n" data-lang="zh">成功信号：Codex 找到 3 个 Skill，并把每个检查结果说清楚。</span><span class="i18n" data-lang="en" hidden>Success signal: Codex finds all 3 Skills and reports each check clearly.</span></p>
+        <p><span class="i18n" data-lang="zh">成功信号：Claude Code 找到 3 个 Skill，并把每个检查结果说清楚。</span><span class="i18n" data-lang="en" hidden>Success signal: Claude Code finds all 3 Skills and reports each check clearly.</span></p>
         <label class="check-label"><input class="progress-check" type="checkbox" data-progress="setup"><span class="i18n" data-lang="zh">安装好了</span><span class="i18n" data-lang="en" hidden>Setup done</span></label>
       </div>
     </section>
@@ -500,7 +560,7 @@
       </div>
       <div class="bench">
         <div class="work-side">
-          <h3><span class="i18n" data-lang="zh">你对 Codex 说</span><span class="i18n" data-lang="en" hidden>What you tell Codex</span></h3>
+          <h3><span class="i18n" data-lang="zh">你对 Claude Code 说</span><span class="i18n" data-lang="en" hidden>What you tell Claude Code</span></h3>
           <p><span class="i18n" data-lang="zh">先生成训练 LOI，再基于已确认资料列出 TA 还缺什么。LOI 是 demo，Skill 也支持其他交易中间文件。</span><span class="i18n" data-lang="en" hidden>Generate the training LOI, then use its confirmed record to identify what a TA still needs. The LOI is the demo; the Skill also supports other transaction working documents.</span></p>
           <div class="prompt i18n" data-lang="zh">
             <pre id="forms-prompt-zh">使用 propnex-forms 的 Training mode。运行 package doctor，只使用包内虚构的 loi-demo.json 和 training-loi.docx。先显示已提取的事实和缺失字段，生成标记 TRAINING ONLY 的 LOI 训练产物。然后 based on 这份已审核的虚构 LOI 交易记录，为 ta-private-condo 生成 TA missing-field plan。只能复用已确认事实；LOI 无法确定的每一项都留空并列出给人工确认。不得编造日期、金额、当事人、证件、租期、押金、支付细节或条款；不得表示 AI 已做法律审批。不使用公司正式表格，不签署、不发送、不上传。最后只用相对路径告诉我产物在哪里。</pre>
@@ -510,6 +570,14 @@
             <pre id="forms-prompt-en">Use propnex-forms in Training mode. Run the package doctor and use only the bundled fictional loi-demo.json and training-loi.docx. Show the extracted facts and missing fields first, then create the LOI training output marked TRAINING ONLY. Based only on that reviewed fictional LOI transaction record, generate the TA missing-field plan for ta-private-condo. Reuse confirmed facts; leave every item the LOI cannot determine blank and list it for human confirmation. Do not invent dates, amounts, parties, IDs, term, deposit, payment details, or clauses. Do not imply legal approval. Do not use a company formal form, sign, send, or upload. At the end, report output locations with relative paths only.</pre>
             <div class="prompt-actions"><span class="prompt-note">Bundled fictional files only</span><button class="copy-button" type="button" data-copy="forms-prompt-en" data-label="Copy documents task">Copy documents task</button></div>
           </div>
+          <details class="real-data-option">
+            <summary><span class="i18n" data-lang="zh">我想用自己的真实 LOI / TA 资料</span><span class="i18n" data-lang="en" hidden>I want to use my own real LOI / TA files</span></summary>
+            <div class="real-data-body">
+              <p><span class="i18n" data-lang="zh">可以。把你有权处理的文件放进 Claude Code 当前的工作文件夹，再告诉它文件名。这个网页本身不会接收文件。</span><span class="i18n" data-lang="en" hidden>You can. Put authorised files in Claude Code's current working folder, then tell it the filenames. This webpage does not receive your files.</span></p>
+              <div class="prompt i18n" data-lang="zh"><pre id="forms-real-prompt-zh">我已把自己有权处理的真实 LOI、TA 或交易资料放进当前工作文件夹。请使用 propnex-forms：先列出找到的文件、已提取事实和不确定或缺失字段，让我确认后再生成草稿。可以为这次任务使用这些真实资料；尽量在本地工作。不得编造日期、金额、当事人、证件、租期、押金、付款细节或条款，也不要表示已经完成法律审批。如果需要登录、上传到外部服务、签署或发送，请先告诉我具体动作并等我确认。</pre><div class="prompt-actions"><span class="prompt-note">真实资料可以用 · 先核对再生成</span><button class="copy-button" type="button" data-copy="forms-real-prompt-zh" data-label="复制真实文件任务">复制真实文件任务</button></div></div>
+              <div class="prompt i18n" data-lang="en" hidden><pre id="forms-real-prompt-en">I placed real LOI, TA, or transaction files that I am authorised to handle in the current working folder. Use propnex-forms. First list the files found, extracted facts, and uncertain or missing fields; wait for my review before generating a draft. You may use these real files for this task and should work locally where possible. Do not invent dates, amounts, parties, IDs, term, deposit, payment details, or clauses, and do not imply legal approval. If login, upload to an external service, signing, or sending is needed, tell me the exact action and wait for my confirmation.</pre><div class="prompt-actions"><span class="prompt-note">Real files allowed · review before generating</span><button class="copy-button" type="button" data-copy="forms-real-prompt-en" data-label="Copy real documents task">Copy real documents task</button></div></div>
+            </div>
+          </details>
         </div>
         <aside class="check-side" aria-label="Expected result and recovery">
           <div class="panel success">
@@ -533,10 +601,10 @@
     </section>
 
     <section id="video" class="station" aria-labelledby="video-title">
-      <div class="station-heading"><h2 id="video-title"><span class="i18n" data-lang="zh">工作站二：生成一条无个人身份的训练视频</span><span class="i18n" data-lang="en" hidden>Station two: make an identity-free training video</span></h2><span class="station-time"><span class="i18n" data-lang="zh">35 分钟</span><span class="i18n" data-lang="en" hidden>35 min</span></span></div>
+      <div class="station-heading"><h2 id="video-title"><span class="i18n" data-lang="zh">工作站二：生成一条房源视频</span><span class="i18n" data-lang="en" hidden>Station two: make a listing video</span></h2><span class="station-time"><span class="i18n" data-lang="zh">35 分钟</span><span class="i18n" data-lang="en" hidden>35 min</span></span></div>
       <div class="bench">
         <div class="work-side">
-          <h3><span class="i18n" data-lang="zh">你对 Codex 说</span><span class="i18n" data-lang="en" hidden>What you tell Codex</span></h3>
+          <h3><span class="i18n" data-lang="zh">你对 Claude Code 说</span><span class="i18n" data-lang="en" hidden>What you tell Claude Code</span></h3>
           <p><span class="i18n" data-lang="zh">必修路线只用标准声音。当天渲染不通，就直接打开包内 Golden Sample 继续学习。</span><span class="i18n" data-lang="en" hidden>The required path uses a standard voice only. If rendering is blocked, open the bundled Golden Sample and continue.</span></p>
           <div class="prompt i18n" data-lang="zh">
             <pre id="video-prompt-zh">使用 agent-shot 的 Training mode。运行 package doctor，在我选择的学员工作目录里 bootstrap 一个工作区，然后使用包内虚构 fixture 和 Golden Sample。只用标准声音；不要声音克隆、不要我的姓名、照片、联系方式或身份素材，不调用付费 API，不发布。如果 Node、Python、FFmpeg 和本地依赖都就绪，渲染 News-golden-neutral，然后检查 1080×1920、画面、声音、字幕和通用结尾。如果 Chromium 或依赖当天卡住，不要降低安全设置；打开包内 expected.mp4，说明哪一项没通过，让我继续课程。</pre>
@@ -546,6 +614,14 @@
             <pre id="video-prompt-en">Use agent-shot in Training mode. Run the package doctor, bootstrap a learner workspace in the folder I choose, and use only the bundled fictional fixture and Golden Sample. Use the standard voice only. Do not clone a voice, request my name, portrait, contact detail, or identity media, call a paid API, or publish. If Node, Python, FFmpeg, and the local dependencies are ready, render News-golden-neutral and check 1080×1920 picture, audio, captions, and the generic ending. If Chromium or a dependency is blocked today, do not weaken security settings; open the bundled expected.mp4, name the failed check, and let me continue the lesson.</pre>
             <div class="prompt-actions"><span class="prompt-note">Standard voice · no identity upload</span><button class="copy-button" type="button" data-copy="video-prompt-en" data-label="Copy video task">Copy video task</button></div>
           </div>
+          <details class="real-data-option">
+            <summary><span class="i18n" data-lang="zh">我想用自己的房源照片、视频或口播</span><span class="i18n" data-lang="en" hidden>I want to use my own listing photos, video, or narration</span></summary>
+            <div class="real-data-body">
+              <p><span class="i18n" data-lang="zh">把你有权使用的素材放进 Claude Code 当前的工作文件夹。建议先做本地草稿，满意后再决定是否发布。</span><span class="i18n" data-lang="en" hidden>Put authorised media in Claude Code's current working folder. Make a local draft first, then decide whether to publish.</span></p>
+              <div class="prompt i18n" data-lang="zh"><pre id="video-real-prompt-zh">我已把自己有权使用的真实房源照片、视频、文案、品牌素材放进当前工作文件夹，必要时也会放入我本人授权的口播或身份素材。请使用 agent-shot：先确认找到哪些素材，并询问缺少的房源事实、视频比例、语言和风格。可以为这次任务使用这些真实素材，先生成本地草稿。如果需要付费 API、声音克隆、上传到外部服务或发布，请先说明会使用什么、费用或去向，并等我确认。</pre><div class="prompt-actions"><span class="prompt-note">真实素材可以用 · 先做本地草稿</span><button class="copy-button" type="button" data-copy="video-real-prompt-zh" data-label="复制真实视频任务">复制真实视频任务</button></div></div>
+              <div class="prompt i18n" data-lang="en" hidden><pre id="video-real-prompt-en">I placed real listing photos, videos, copy, and brand assets that I am authorised to use in the current working folder, including identity or narration media when I have authorised it. Use agent-shot. First confirm the assets found and ask for any missing property facts, aspect ratio, language, and style. You may use these real assets for this task; create a local draft first. Before using a paid API, cloning a voice, uploading to an external service, or publishing, explain what will be used, the cost or destination, and wait for my confirmation.</pre><div class="prompt-actions"><span class="prompt-note">Real media allowed · local draft first</span><button class="copy-button" type="button" data-copy="video-real-prompt-en" data-label="Copy real video task">Copy real video task</button></div></div>
+            </div>
+          </details>
           <div class="mini-note">
             <h4><span class="i18n" data-lang="zh">可选：以后再接 MiniMax</span><span class="i18n" data-lang="en" hidden>Optional: add MiniMax later</span></h4>
             <p><span class="i18n" data-lang="zh">MiniMax 不是今天成功的必要条件。如果你要用，必须是你自己的账号和密钥，费用按你的套餐/用量计算。不把密钥发给老师，不贴进聊天，不放进 GitHub。</span><span class="i18n" data-lang="en" hidden>MiniMax is not required today. If you choose it, use your own account and key; charges follow your own plan or usage. Never send the key to the instructor, paste it into chat, or commit it to GitHub.</span></p>
@@ -562,11 +638,19 @@
     </section>
 
     <section id="cobroke" class="station" aria-labelledby="cobroke-title">
-      <div class="station-heading"><h2 id="cobroke-title"><span class="i18n" data-lang="zh">工作站三：用虚构房源练习 co-broke 草稿</span><span class="i18n" data-lang="en" hidden>Station three: practise co-broke drafts with fictional listings</span></h2><span class="station-time"><span class="i18n" data-lang="zh">25 分钟</span><span class="i18n" data-lang="en" hidden>25 min</span></span></div>
+      <div class="station-heading"><h2 id="cobroke-title"><span class="i18n" data-lang="zh">工作站三：整理找盘结果和 co-broke 草稿</span><span class="i18n" data-lang="en" hidden>Station three: organise listings and co-broke drafts</span></h2><span class="station-time"><span class="i18n" data-lang="zh">25 分钟</span><span class="i18n" data-lang="en" hidden>25 min</span></span></div>
       <div class="bench">
-        <div class="work-side"><h3><span class="i18n" data-lang="zh">你对 Codex 说</span><span class="i18n" data-lang="en" hidden>What you tell Codex</span></h3><p><span class="i18n" data-lang="zh">今天只学条件、去重、风险标记和消息草稿，不打开真实网站或 WhatsApp。</span><span class="i18n" data-lang="en" hidden>Today we learn criteria, deduplication, issue flags, and drafts only—no real site or WhatsApp.</span></p>
+        <div class="work-side"><h3><span class="i18n" data-lang="zh">你对 Claude Code 说</span><span class="i18n" data-lang="en" hidden>What you tell Claude Code</span></h3><p><span class="i18n" data-lang="zh">今天只学条件、去重、风险标记和消息草稿，不打开真实网站或 WhatsApp。</span><span class="i18n" data-lang="en" hidden>Today we learn criteria, deduplication, issue flags, and drafts only—no real site or WhatsApp.</span></p>
           <div class="prompt i18n" data-lang="zh"><pre id="cobroke-prompt-zh">使用 pg-cobroke 的 Training mode。运行 package doctor 和 deterministic fixture exercise，只使用包内 buyer-brief.json 和 listings.csv，把产物写到本地 training-output。不打开浏览器，不登录，不使用电话号码，不打开或预填 WhatsApp，不用真实房源，不发送消息。返回 shortlist.csv 和 drafts.json，然后让我自己说出重复房源、长租约、面积异常和价格异常。最后确认五条原始记录变成四个唯一单位、有一个单位对应两条 listing、三条草稿措辞不同，且每个 phone 都是 null、browser_opened 和 send_allowed 都是 false。</pre><div class="prompt-actions"><span class="prompt-note">草稿而已 · 不打开浏览器</span><button class="copy-button" type="button" data-copy="cobroke-prompt-zh" data-label="复制 co-broke 任务">复制 co-broke 任务</button></div></div>
           <div class="prompt i18n" data-lang="en" hidden><pre id="cobroke-prompt-en">Use pg-cobroke in Training mode. Run the package doctor and deterministic fixture exercise using only the bundled buyer-brief.json and listings.csv, writing outputs to local training-output. Do not open a browser, log in, use phone numbers, open or prefill WhatsApp, use real listings, or send. Return shortlist.csv and drafts.json, then let me explain the duplicate, long-tenancy, unusual-size, and unusual-price flags. Confirm five input rows become four unique units, one unit has two matching listings, the three drafts use different wording, every phone is null, and browser_opened and send_allowed are false.</pre><div class="prompt-actions"><span class="prompt-note">Draft only · no browser</span><button class="copy-button" type="button" data-copy="cobroke-prompt-en" data-label="Copy co-broke task">Copy co-broke task</button></div></div>
+          <details class="real-data-option">
+            <summary><span class="i18n" data-lang="zh">我想用自己的 buyer brief 或房源清单</span><span class="i18n" data-lang="en" hidden>I want to use my own buyer brief or listing list</span></summary>
+            <div class="real-data-body">
+              <p><span class="i18n" data-lang="zh">可以保留工作需要的真实联系方式；Claude Code 先整理和起草，不会自动发送。</span><span class="i18n" data-lang="en" hidden>Real contact details may remain when needed for work. Claude Code organises and drafts first; it does not send automatically.</span></p>
+              <div class="prompt i18n" data-lang="zh"><pre id="cobroke-real-prompt-zh">我已把自己有权处理的真实 buyer brief、房源清单或沟通记录放进当前工作文件夹。请使用 pg-cobroke：先确认筛选条件，再去重、标记租期/面积/价格等异常，并生成不同语气的 co-broke 草稿。可以为这次任务使用资料里的真实房源和工作所需联系方式，但不要自动打开或发送 WhatsApp。需要登录网站、上传到外部服务、打开对话或发送前，请告诉我具体动作并等我确认。</pre><div class="prompt-actions"><span class="prompt-note">真实房源可以用 · 只起草不自动发送</span><button class="copy-button" type="button" data-copy="cobroke-real-prompt-zh" data-label="复制真实找盘任务">复制真实找盘任务</button></div></div>
+              <div class="prompt i18n" data-lang="en" hidden><pre id="cobroke-real-prompt-en">I placed a real buyer brief, listing list, or communication records that I am authorised to handle in the current working folder. Use pg-cobroke. Confirm the criteria first, then deduplicate, flag tenancy, size, price, and other issues, and draft co-broke messages in different tones. You may use the real listings and work contact details in these files for this task, but do not automatically open or send WhatsApp. Before logging into a website, uploading to an external service, opening a conversation, or sending, tell me the exact action and wait for my confirmation.</pre><div class="prompt-actions"><span class="prompt-note">Real listings allowed · draft only, no auto-send</span><button class="copy-button" type="button" data-copy="cobroke-real-prompt-en" data-label="Copy real co-broke task">Copy real co-broke task</button></div></div>
+            </div>
+          </details>
         </div>
         <aside class="check-side" aria-label="Expected result and recovery"><div class="panel success"><h3><span class="i18n" data-lang="zh">成功时你会看到</span><span class="i18n" data-lang="en" hidden>What success looks like</span></h3><ul><li>5 → 4 <span class="i18n" data-lang="zh">个唯一单位</span><span class="i18n" data-lang="en" hidden>unique units</span></li><li><span class="i18n" data-lang="zh">1 个单位匹配 2 条 listing</span><span class="i18n" data-lang="en" hidden>1 unit matches 2 listings</span></li><li><span class="i18n" data-lang="zh">3 条不同措辞草稿</span><span class="i18n" data-lang="en" hidden>3 differently worded drafts</span></li><li><code>phone: null</code></li><li><code>browser_opened: false</code><br><code>send_allowed: false</code></li></ul></div>
           <div class="panel recovery"><h3><span class="i18n" data-lang="zh">卡住：5 分钟退路</span><span class="i18n" data-lang="en" hidden>Blocked: 5-minute fallback</span></h3><p><span class="i18n" data-lang="zh">如果真实网站或登录不通，更应该回到包内 CSV，因为课堂目标不是证明网站稳定。</span><span class="i18n" data-lang="en" hidden>If a real site or login is unavailable, return to the bundled CSV; the class goal is not to prove a website is stable.</span></p><div id="cobroke-recovery" class="compact-prompt"><span class="i18n" data-lang="zh">不要使用真实网站或登录。切回包内 CSV 和 buyer brief，完成条件、去重、风险标记和草稿。只告诉我通过了什么、缺什么、下一条命令，并确认不打开浏览器、不发送。</span><span class="i18n" data-lang="en" hidden>Do not use a real site or login. Switch to the bundled CSV and buyer brief, then complete criteria, deduplication, issue flags, and drafts. Report only what passed, what is missing, the single next command, and confirm no browser and no send.</span></div><div class="compact-actions"><button class="copy-button" type="button" data-copy="cobroke-recovery"><span class="i18n" data-lang="zh">复制退路</span><span class="i18n" data-lang="en" hidden>Copy fallback</span></button></div></div></aside>
@@ -578,7 +662,7 @@
       <div class="station-heading"><h2 id="finish-title"><span class="i18n" data-lang="zh">终点：带着边界回去工作</span><span class="i18n" data-lang="en" hidden>Finish: take the safety boundaries with you</span></h2><span class="station-time"><span class="i18n" data-lang="zh">10 分钟</span><span class="i18n" data-lang="en" hidden>10 min</span></span></div>
       <div class="rules">
         <div><h2><span class="i18n" data-lang="zh">今天你已经会的</span><span class="i18n" data-lang="en" hidden>What you can now do</span></h2><ul><li><span class="i18n" data-lang="zh">用同一份已确认交易记录衔接 LOI、TA 和其他中间文件</span><span class="i18n" data-lang="en" hidden>Connect an LOI, TA, and other working documents through one reviewed transaction record</span></li><li><span class="i18n" data-lang="zh">用标准声音和虚构资料生成视频</span><span class="i18n" data-lang="en" hidden>Make a training video with fictional data and a standard voice</span></li><li><span class="i18n" data-lang="zh">在不发消息的前提下练习找盘、去重和 co-broke 草稿</span><span class="i18n" data-lang="en" hidden>Practise shortlist, deduplication, and co-broke drafts without sending</span></li></ul></div>
-        <div><h2><span class="i18n" data-lang="zh">真实工作前必须停一次</span><span class="i18n" data-lang="en" hidden>Pause before real work</span></h2><ul><li><span class="i18n" data-lang="zh">真实客户资料、公司正式表格和身份素材必须由你授权</span><span class="i18n" data-lang="en" hidden>You must authorise real client data, company forms, and identity media</span></li><li><span class="i18n" data-lang="zh">AI 是草稿助手，不是交易条款发明者或法律审批者</span><span class="i18n" data-lang="en" hidden>AI drafts from supplied facts; it does not invent terms or provide legal approval</span></li><li><span class="i18n" data-lang="zh">真实登录、上传、付费 API、打开对话和发送都要分别确认</span><span class="i18n" data-lang="en" hidden>Real login, upload, paid API, conversation opening, and sending each need separate approval</span></li></ul><p><a class="finish-link" href="https://github.com/dearvae/agentos-sg-course-skills" target="_blank" rel="noreferrer"><span class="i18n" data-lang="zh">打开公开 Skill 仓库</span><span class="i18n" data-lang="en" hidden>Open the public Skill repository</span></a></p><label class="check-label"><input class="progress-check" type="checkbox" data-progress="finish"><span class="i18n" data-lang="zh">我已理解这些边界</span><span class="i18n" data-lang="en" hidden>I understand these boundaries</span></label></div>
+        <div><h2><span class="i18n" data-lang="zh">可以使用自己的真实资料</span><span class="i18n" data-lang="en" hidden>You can use your own real files</span></h2><ul><li><span class="i18n" data-lang="zh">上传你本人或客户已授权用于工作的文件和素材</span><span class="i18n" data-lang="en" hidden>Attach files and media that you or your client have authorised for the work</span></li><li><span class="i18n" data-lang="zh">密码和 API Key 不贴进聊天；交易资料先核对，AI 不替你编条款</span><span class="i18n" data-lang="en" hidden>Do not paste passwords or API keys; review transaction facts and do not let AI invent terms</span></li><li><span class="i18n" data-lang="zh">发送、发布或产生费用前，再看一眼并确认</span><span class="i18n" data-lang="en" hidden>Review and confirm before sending, publishing, or incurring a charge</span></li></ul><p><a class="finish-link" href="https://github.com/dearvae/agentos-sg-course-skills" target="_blank" rel="noreferrer"><span class="i18n" data-lang="zh">打开公开 Skill 仓库</span><span class="i18n" data-lang="en" hidden>Open the public Skill repository</span></a></p><label class="check-label"><input class="progress-check" type="checkbox" data-progress="finish"><span class="i18n" data-lang="zh">我已经会使用了</span><span class="i18n" data-lang="en" hidden>I am ready to use it</span></label></div>
       </div>
     </section>
   </main>
@@ -617,8 +701,8 @@
 
       function stationName(key) {
         var names = state.lang === 'zh'
-          ? { setup: '装好 3 个 Skill', forms: '文件 LOI → TA', video: '视频', cobroke: 'Co-broke', finish: '完成与边界' }
-          : { setup: 'Set up 3 Skills', forms: 'Documents LOI → TA', video: 'Video', cobroke: 'Co-broke', finish: 'Finish and boundaries' };
+          ? { setup: '准备 3 个工具', forms: '文件 LOI → TA', video: '房源视频', cobroke: '找盘草稿', finish: '完成' }
+          : { setup: 'Get 3 tools ready', forms: 'Documents LOI → TA', video: 'Listing video', cobroke: 'Co-broke draft', finish: 'Finish' };
         return names[key];
       }
 
@@ -670,7 +754,7 @@
           : (state.lang === 'zh' ? '当前：' : 'Current: ') + stationName(state.current);
         track.setAttribute('aria-valuenow', String(complete));
         track.setAttribute('aria-valuetext', count.textContent);
-        fill.style.width = (complete / routeOrder.length * 100) + '%';
+        fill.style.transform = 'scaleX(' + (complete / routeOrder.length) + ')';
       }
 
       function announce(message) {
@@ -725,7 +809,7 @@
             button.classList.remove('copy-error');
             button.classList.add('copied');
             button.innerHTML = copyIcon + (state.lang === 'zh' ? '已复制 ✓' : 'Copied ✓');
-            announce(state.lang === 'zh' ? '已复制，切换到 Codex 粘贴即可' : 'Copied. Switch to Codex and paste.');
+            announce(state.lang === 'zh' ? '已复制，切换到 Claude Code 粘贴即可' : 'Copied. Switch to Claude Code and paste.');
           } catch (_) {
             button.classList.remove('copied');
             button.classList.add('copy-error');
