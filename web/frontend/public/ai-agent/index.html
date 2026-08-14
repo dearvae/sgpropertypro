@@ -325,12 +325,14 @@
       <div class="zh">
         <div class="bigstep"><span class="b">1</span><p>用电脑打开 <strong>claude.com/download</strong>，下载 <strong>Claude Desktop</strong>，像装微信一样装好、打开。</p></div>
         <div class="bigstep"><span class="b">2</span><p>用你的邮箱<strong>注册账号</strong>，然后<strong>订阅</strong>：先选 <strong>Pro（US$20/月）</strong>就行，跟着页面提示付款。用着不够以后随时能升 Max（US$100/月）。</p></div>
-        <div class="bigstep"><span class="b">3</span><p>随便发它一句话，它回你了，这步就成了 ✓</p></div>
+        <div class="bigstep"><span class="b">3</span><p>第一次打开可能停在「<strong>Code</strong>」标签页，发消息时它会让你<strong>选一个文件夹</strong>——这不是出错。在「文档」里<strong>新建一个文件夹</strong>（就叫 <strong>AI工作台</strong>），选中它就行。以后课上做的东西全放这个文件夹里。</p></div>
+        <div class="bigstep"><span class="b">4</span><p>随便发它一句话，它回你了，这步就成了 ✓</p></div>
       </div>
       <div class="en">
         <div class="bigstep"><span class="b">1</span><p>On your computer, open <strong>claude.com/download</strong>, download <strong>Claude Desktop</strong>, and install it like any other app.</p></div>
         <div class="bigstep"><span class="b">2</span><p><strong>Sign up</strong> with your email, then <strong>subscribe</strong>: start with <strong>Pro (US$20/mo)</strong> and follow the payment prompts. You can always upgrade to Max (US$100/mo) later.</p></div>
-        <div class="bigstep"><span class="b">3</span><p>Send it any message. If it replies, this step is done ✓</p></div>
+        <div class="bigstep"><span class="b">3</span><p>On first launch it may open in the <strong>Code</strong> tab, and when you send a message it asks you to <strong>choose a folder</strong> — that's normal, not an error. Create a <strong>new folder</strong> in Documents (call it <strong>AI-Workspace</strong>) and select it. Everything we build in class lives in that folder.</p></div>
+        <div class="bigstep"><span class="b">4</span><p>Send it any message. If it replies, this step is done ✓</p></div>
       </div>
 
       <div class="chat">
@@ -364,36 +366,87 @@
           </g>
         </svg>
       </div>
+      <div class="callout mac-only zh">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 2 L18.5 17 H1.5 Z" fill="#e8890c"/><rect x="9.1" y="8" width="1.8" height="4.6" rx="0.9" fill="#fff"/><circle cx="10" cy="14.6" r="1.1" fill="#fff"/></svg>
+        <div><strong>Mac 同学注意</strong>：过程中电脑可能弹出一个系统窗口，让你安装 <strong>Git</strong>（或「命令行开发者工具」）——<strong>点「安装 / Install」就好</strong>，等它装完，Claude 会自己接着干活。</div>
+      </div>
+      <div class="callout win-only zh">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 2 L18.5 17 H1.5 Z" fill="#e8890c"/><rect x="9.1" y="8" width="1.8" height="4.6" rx="0.9" fill="#fff"/><circle cx="10" cy="14.6" r="1.1" fill="#fff"/></svg>
+        <div><strong>Windows 同学注意</strong>：让它干活时，Claude 可能提示<strong>「需要下载 / 安装 Git」</strong>——这是正常的，去下载装上就行：跟着它给的链接（或打开 <strong>git-scm.com/download/win</strong>）下载安装包，双击安装，<strong>有选择的地方一直点「Next」</strong>装到完。装完把 Claude Desktop 关掉重开，再把刚才那段话重新发一遍。</div>
+      </div>
       <p class="zh">做视频还需要装几个小工具。<strong>你不用认识它们，也不用自己装</strong>——点「复制」，粘贴到 Claude 的聊天框里，发送：</p>
+      <div class="callout mac-only en">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 2 L18.5 17 H1.5 Z" fill="#e8890c"/><rect x="9.1" y="8" width="1.8" height="4.6" rx="0.9" fill="#fff"/><circle cx="10" cy="14.6" r="1.1" fill="#fff"/></svg>
+        <div><strong>Mac users</strong>: at some point a system window may pop up asking to install <strong>Git</strong> (or the "command line developer tools") — <strong>just click Install</strong>. Once it finishes, Claude picks up where it left off.</div>
+      </div>
+      <div class="callout win-only en">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 2 L18.5 17 H1.5 Z" fill="#e8890c"/><rect x="9.1" y="8" width="1.8" height="4.6" rx="0.9" fill="#fff"/><circle cx="10" cy="14.6" r="1.1" fill="#fff"/></svg>
+        <div><strong>Windows users</strong>: when you ask it to work, Claude may say it needs you to <strong>download / install Git</strong> — that's normal. Just install it: follow the link it gives (or open <strong>git-scm.com/download/win</strong>), download the installer, double-click it, and <strong>click "Next" through every choice</strong> until it finishes. Then quit and reopen Claude Desktop, and send the message again.</div>
+      </div>
       <p class="en">Making videos needs a few small tools. <strong>You don't need to know what they are or install them yourself</strong> — hit Copy, paste into Claude's chat box, and send:</p>
 
       <div class="copyblock mac-only zh">
         <button class="copybtn" data-copy-label="复制">复制</button>
-        <pre>帮我把这台电脑配好做视频的环境：Homebrew（没有就先装）、Node.js LTS、ffmpeg、poppler、whisper-cpp，并把 whisper 模型下载到 ~/.cache/whisper-models/ggml-large-v3-turbo.bin（来源 https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin，约1.6GB）。已有的跳过，缺的装上。我不懂电脑，过程里用大白话告诉我进展。装完逐一验证，全部通过就输出一行「✅ 体检通过」加各项版本号；有装不上的，列出来是哪一项、报什么错。</pre>
+        <pre>帮我把这台电脑配好做视频的环境：Homebrew（没有就先装）、Node.js LTS、ffmpeg、poppler、whisper-cpp，并把 whisper 模型下载到 ~/.cache/whisper-models/ggml-large-v3-turbo.bin（来源 https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin，约1.6GB）。再预先下载好做视频要用的 Remotion：在我的用户目录新建 remotion-setup 文件夹，进去跑 npm install remotion @remotion/cli，能跑通 npx remotion versions 就算好。已有的跳过，缺的装上。我不懂电脑，过程里用大白话告诉我进展。装完逐一验证，全部通过就输出一行「✅ 体检通过」加各项版本号；有装不上的，列出来是哪一项、报什么错。</pre>
       </div>
       <div class="copyblock win-only zh">
         <button class="copybtn" data-copy-label="复制">复制</button>
-        <pre>帮我把这台电脑配好做视频的环境，用 winget 安装：Node.js LTS、Python 3、ffmpeg、LibreOffice。装完确认这几样在命令行里能直接调用，不行就帮我把 PATH 配好。我不懂电脑，过程里用大白话告诉我进展。装完逐一验证，全部通过就输出一行「✅ 体检通过」加各项版本号；有装不上的，列出来是哪一项、报什么错。</pre>
+        <pre>帮我把这台电脑配好做视频的环境，用 winget 安装：Node.js LTS、Python 3、ffmpeg、LibreOffice。装完确认这几样在命令行里能直接调用，不行就帮我把 PATH 配好。再预先下载好做视频要用的 Remotion：在我的用户目录新建 remotion-setup 文件夹，进去跑 npm install remotion @remotion/cli，能跑通 npx remotion versions 就算好。我不懂电脑，过程里用大白话告诉我进展。装完逐一验证，全部通过就输出一行「✅ 体检通过」加各项版本号；有装不上的，列出来是哪一项、报什么错。</pre>
       </div>
       <div class="copyblock mac-only en">
         <button class="copybtn" data-copy-label="Copy">Copy</button>
-        <pre>Please set up this computer for video production: Homebrew (install it first if missing), Node.js LTS, ffmpeg, poppler, whisper-cpp, and download the whisper model to ~/.cache/whisper-models/ggml-large-v3-turbo.bin (from https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin, ~1.6GB). Skip what's already installed. I'm not technical — explain progress in plain language. When done, verify each item and print one line "✅ Health check passed" with version numbers; if anything fails, list which item and the error.</pre>
+        <pre>Please set up this computer for video production: Homebrew (install it first if missing), Node.js LTS, ffmpeg, poppler, whisper-cpp, and download the whisper model to ~/.cache/whisper-models/ggml-large-v3-turbo.bin (from https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin, ~1.6GB). Also pre-download Remotion for video rendering: create a remotion-setup folder in my home directory, run npm install remotion @remotion/cli inside it, and verify npx remotion versions works. Skip what's already installed. I'm not technical — explain progress in plain language. When done, verify each item and print one line "✅ Health check passed" with version numbers; if anything fails, list which item and the error.</pre>
       </div>
       <div class="copyblock win-only en">
         <button class="copybtn" data-copy-label="Copy">Copy</button>
-        <pre>Please set up this computer for video production using winget: Node.js LTS, Python 3, ffmpeg, LibreOffice. Make sure each is callable from the command line — fix PATH if needed (and tell me to reopen the window after). I'm not technical — explain progress in plain language. When done, verify each item and print one line "✅ Health check passed" with version numbers; if anything fails, list which item and the error.</pre>
+        <pre>Please set up this computer for video production using winget: Node.js LTS, Python 3, ffmpeg, LibreOffice. Make sure each is callable from the command line — fix PATH if needed (and tell me to reopen the window after). Also pre-download Remotion for video rendering: create a remotion-setup folder in my home directory, run npm install remotion @remotion/cli inside it, and verify npx remotion versions works. I'm not technical — explain progress in plain language. When done, verify each item and print one line "✅ Health check passed" with version numbers; if anything fails, list which item and the error.</pre>
       </div>
 
       <div class="zh">
-        <p>然后<span class="em">等它干完</span>，中间你只需要做两件事：</p>
+        <p>然后<span class="em">等它干完</span>，中间你只需要做三件事：</p>
         <div class="bigstep"><span class="b">a</span><p>它问「<strong>允许吗 / 是否继续</strong>」→ 点<strong>允许 / 是</strong></p></div>
         <div class="bigstep"><span class="b">b</span><p>它让你<strong>输密码</strong> → 输你<strong>电脑的开机密码</strong>（这是电脑在跟你确认，正常）</p></div>
+        <div class="bigstep"><span class="b">c</span><p>它弹出<strong>权限确认</strong> → 点 <strong>Approve / 允许</strong>就可以。嫌它问得多，也可以点输入框旁边的模式按钮，切到 <strong>Auto</strong> 档——权限它自己处理，不再一直问（见下图）</p></div>
       </div>
       <div class="en">
-        <p>Then <span class="em">let it work</span>. You only need to do two things along the way:</p>
+        <p>Then <span class="em">let it work</span>. You only need to do three things along the way:</p>
         <div class="bigstep"><span class="b">a</span><p>It asks "<strong>Allow? / Continue?</strong>" → click <strong>Allow / Yes</strong></p></div>
         <div class="bigstep"><span class="b">b</span><p>It asks for a <strong>password</strong> → type your <strong>computer login password</strong> (that's your computer double-checking — normal)</p></div>
+        <div class="bigstep"><span class="b">c</span><p>It shows a <strong>permission prompt</strong> → just click <strong>Approve</strong>. If it asks too often, click the mode button next to the input box and switch to <strong>Auto</strong> — it handles permissions itself (see below)</p></div>
       </div>
+      <div class="shot">
+        <svg viewBox="0 0 380 336" style="width:100%;max-width:380px;display:block;margin:0 auto;" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" aria-hidden="true">
+          <rect x="10" y="8" width="310" height="256" rx="14" fill="#ffffff" stroke="#e6ddc9" stroke-width="1.5"/>
+          <text x="28" y="34" font-size="12" fill="#8a8375">Mode</text>
+          <text x="28" y="60" font-size="14.5" font-weight="700" fill="#1a1a1a">Manual</text>
+          <text x="28" y="77" font-size="10.5" fill="#8a8375">Always ask before making changes</text>
+          <text x="304" y="62" font-size="12" fill="#8a8375" text-anchor="end">1</text>
+          <text x="28" y="104" font-size="14.5" font-weight="700" fill="#1a1a1a">Accept edits</text>
+          <text x="28" y="121" font-size="10.5" fill="#8a8375">Automatically accept all file edits</text>
+          <text x="304" y="106" font-size="12" fill="#8a8375" text-anchor="end">2</text>
+          <text x="28" y="148" font-size="14.5" font-weight="700" fill="#1a1a1a">Plan</text>
+          <text x="28" y="165" font-size="10.5" fill="#8a8375">Create a plan before making changes</text>
+          <text x="304" y="150" font-size="12" fill="#8a8375" text-anchor="end">3</text>
+          <rect x="18" y="174" width="294" height="42" rx="9" fill="#fff6e8"/>
+          <text x="28" y="192" font-size="14.5" font-weight="700" fill="#1a1a1a">Auto</text>
+          <text x="28" y="209" font-size="10.5" fill="#8a8375">Claude handles permission decisions</text>
+          <path d="M276 188 l5 6 9 -12" fill="none" stroke="#2f6fed" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <text x="304" y="194" font-size="12" fill="#8a8375" text-anchor="end">4</text>
+          <circle cx="342" cy="192" r="11" fill="#e8890c"/>
+          <text x="342" y="196.5" font-size="12" font-weight="800" fill="#fff" text-anchor="middle">2</text>
+          <text x="28" y="236" font-size="14.5" font-weight="700" fill="#1a1a1a">Bypass permissions</text>
+          <text x="28" y="253" font-size="10.5" fill="#8a8375">Accepts all permissions</text>
+          <text x="304" y="238" font-size="12" fill="#8a8375" text-anchor="end">5</text>
+          <rect x="10" y="282" width="310" height="42" rx="11" fill="#f7f3ea" stroke="#e6ddc9" stroke-width="1.5"/>
+          <rect x="22" y="291" width="58" height="24" rx="7" fill="#e9e1cf"/>
+          <text x="51" y="307" font-size="12.5" font-weight="700" fill="#1a1a1a" text-anchor="middle">Auto</text>
+          <text x="96" y="308" font-size="15" fill="#8a8375">+</text>
+          <circle cx="126" cy="303" r="11" fill="#e8890c"/>
+          <text x="126" y="307.5" font-size="12" font-weight="800" fill="#fff" text-anchor="middle">1</text>
+        </svg>
+        <div class="cap"><span class="zh">示意图：① 点输入框旁边的模式按钮 ② 选 Auto（界面如有小改动，以软件为准）</span><span class="en">Illustration: &#9312; click the mode button next to the input box &#9313; pick Auto (actual UI may vary slightly)</span></div>
+      </div>
+
     </div>
   </section>
 
@@ -409,7 +462,7 @@
       <p class="en">When it finishes, it checks its own work. This is what you're waiting for:</p>
       <div class="chat">
         <div class="chat-label"><span class="zh">装好之后，它会说类似这样</span><span class="en">When everything's installed, it says something like</span></div>
-        <div class="bubble ai"><span class="okline zh">✅ 体检通过</span><span class="okline en">✅ Health check passed</span><br><span class="small mac-only">node v22 · ffmpeg 7 · whisper OK<span class="zh"> · 模型已就位</span><span class="en"> · model ready</span></span><span class="small win-only">node v22 · Python 3.12 · ffmpeg 7 · LibreOffice OK</span></div>
+        <div class="bubble ai"><span class="okline zh">✅ 体检通过</span><span class="okline en">✅ Health check passed</span><br><span class="small mac-only">node v22 · ffmpeg 7 · whisper OK · Remotion OK<span class="zh"> · 模型已就位</span><span class="en"> · model ready</span></span><span class="small win-only">node v22 · Python 3.12 · ffmpeg 7 · LibreOffice · Remotion OK</span></div>
       </div>
       <p class="zh"><span class="em">看到 ✅ = 装完了，截图发我。</span></p>
       <p class="en"><span class="em">✅ means you're done — screenshot it and send it to me.</span></p>
